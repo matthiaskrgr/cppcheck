@@ -397,7 +397,7 @@ class MatchCompiler:
             if len(res) == 4:
                 varId = res[3]
 
-            res = re.match(r'\s*"([^"]*)"\s*$', raw_pattern)
+            res = re.match(r'\s*"(([^"]|\\")*)"\s*$', raw_pattern)
             if res is None:
                 break  # Non-const pattern - bailout
 
