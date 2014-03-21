@@ -476,6 +476,7 @@ std::string Preprocessor::removeComments(const std::string &str, const std::stri
     bool inPreprocessorLine = false;
     std::vector<std::string> suppressionIDs;
     bool fallThroughComment = false;
+    bool isStyleEnabled = (_settings && _settings->isEnabled("style"));
 
     for (std::string::size_type i = hasbom(str) ? 3U : 0U; i < str.length(); ++i) {
         unsigned char ch = static_cast<unsigned char>(str[i]);
@@ -628,7 +629,7 @@ std::string Preprocessor::removeComments(const std::string &str, const std::stri
 
                 // First check for a "fall through" comment match, but only
                 // add a suppression if the next token is 'case' or 'default'
-                if (_settings && _settings->isEnabled("style") && _settings->experimental && fallThroughComment) {
+                if (isStyleEnabled && _settings->experimental && fallThroughComment) {
                     std::string::size_type j = str.find_first_not_of("abcdefghijklmnopqrstuvwxyz", i);
                     std::string tok = str.substr(i, j - i);
                     if (tok == "case" || tok == "default")
@@ -2870,6 +2871,7 @@ bool Preprocessor::validateCfg(const std::string &code, const std::string &cfg)
     }
 
     // check if any empty macros are used in code
+    bool isInformationEnabled = (_settings &&_settings->isEnabled("information"));
     for (std::set<std::string>::const_iterator it = macros.begin(); it != macros.end(); ++it) {
         const std::string &macro = *it;
         std::string::size_type pos = 0;
@@ -2901,7 +2903,7 @@ bool Preprocessor::validateCfg(const std::string &code, const std::string &cfg)
                 if (pos2 < code.size() && (std::isalnum((unsigned char)code[pos2]) || code[pos2] == '_'))
                     continue;
                 // macro is used in code, return false
-                if (_settings->isEnabled("information"))
+                if (isInformationEnabled)
                     validateCfgError(cfg, macro);
                 return false;
             }
