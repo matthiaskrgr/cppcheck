@@ -1516,7 +1516,10 @@ void Tokenizer::simplifyTypedef()
 
 void Tokenizer::simplifyMulAndParens()
 {
-    for (Token *tok = list.front()->tokAt(3); tok; tok = tok->next()) {
+    Token * listFront = list.front();
+    if (!listFront)
+        return;
+    for (Token *tok = listFront->tokAt(3); tok; tok = tok->next()) {
         if (tok->isName()) {
             //fix ticket #2784 - improved by ticket #3184
             unsigned int closedpars = 0;

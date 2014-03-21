@@ -293,13 +293,19 @@ void Token::replace(Token *replaceThis, Token *start, Token *end)
 const Token *Token::tokAt(int index) const
 {
     const Token *tok = this;
-    int num = std::abs(index);
-    while (num > 0 && tok) {
-        if (index > 0)
+    if (index > 0) {
+        do {
             tok = tok->next();
-        else
+            --index;
+        } while (index && tok);
+        return tok;
+    }
+    if (index < 0) {
+        do {
             tok = tok->previous();
-        --num;
+            ++index;
+        } while (index && tok);
+        return tok;
     }
     return tok;
 }
