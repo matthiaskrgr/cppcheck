@@ -21,6 +21,7 @@
 #define tokenH
 //---------------------------------------------------------------------------
 
+#include <cassert>
 #include <list>
 #include <string>
 #include <vector>
@@ -534,7 +535,14 @@ public:
     /**
      * Links two elements against each other.
      **/
-    static void createMutualLinks(Token *begin, Token *end);
+    static void createMutualLinks(Token *begin, Token *end)
+    {
+        assert(begin != nullptr);
+        assert(end != nullptr);
+        assert(begin != end);
+        begin->link(end);
+        end->link(begin);
+    }
 
     /**
      * This can be called only for tokens that are strings, else

@@ -98,7 +98,7 @@ unsigned int Tokenizer::sizeOfType(const Token *type) const
 
 //---------------------------------------------------------------------------
 
-Token *Tokenizer::copyTokens(Token *dest, const Token *first, const Token *last, bool one_line)
+Token *Tokenizer::copyTokens(Token *dest, const Token *first, const Token *last)
 {
     std::stack<Token *> links;
     Token *tok2 = dest;
@@ -123,21 +123,12 @@ Token *Tokenizer::copyTokens(Token *dest, const Token *first, const Token *last,
         tok2->varId(tok->varId());
 
         // Check for links and fix them up
-        if (tok2->str() == "(" || tok2->str() == "[" || tok2->str() == "{")
+        if (Token::Match(tok2, "(|[|{"))
             links.push(tok2);
-        else if (tok2->str() == ")" || tok2->str() == "]" || tok2->str() == "}") {
-            if (links.empty())
-                return tok2;
-
-            Token * link = links.top();
-
-            tok2->link(link);
-            link->link(tok2);
-
+        else if (!links.empty() && Token::Match(tok2, ")|]|}")) {
+            Token::createMutualLinks(tok2, links.top());
             links.pop();
         }
-        if (!one_line && tok->next())
-            linenrs += tok->next()->linenr() - tok->linenr();
     }
     return tok2;
 }
@@ -5154,28 +5145,23 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
         if (tok->previous() && !Token::Match(tok->previous(), "{|}|;|)|public:|protected:|private:"))
             continue;
 
-        Token *type0 = tok;
-        if (!Token::Match(type0, "::| %type%"))
+        Token *typefirst = tok;
+        if (!Token::Match(typefirst, "::| %type%"))
             continue;
-        if (Token::Match(type0, "else|return|public:|protected:|private:"))
+        if (Token::Match(typefirst, "else|return|public:|protected:|private:"))
             continue;
 
         bool isconst = false;
         bool isstatic = false;
-        Token *tok2 = type0;
-        unsigned int typelen = 1;
+        Token *tok2 = typefirst;
 
-        if (tok2->str() == "::") {
+        if (tok2->str() == "::")
             tok2 = tok2->next();
-            typelen++;
-        }
 
         //check if variable is declared 'const' or 'static' or both
         while (tok2) {
-            if (!Token::Match(tok2, "const|static") && Token::Match(tok2, "%type% const|static")) {
+            if (!Token::Match(tok2, "const|static") && Token::Match(tok2, "%type% const|static"))
                 tok2 = tok2->next();
-                ++typelen;
-            }
 
             if (tok2->str() == "const")
                 isconst = true;
@@ -5183,10 +5169,8 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
             else if (tok2->str() == "static")
                 isstatic = true;
 
-            else if (Token::Match(tok2, "%type% :: %type%")) {
+            else if (Token::Match(tok2, "%type% :: %type%"))
                 tok2 = tok2->next();
-                ++typelen;
-            }
 
             else
                 break;
@@ -5195,23 +5179,18 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
                 break;
 
             tok2 = tok2->next();
-            ++typelen;
         }
 
         // strange looking variable declaration => don't split up.
         if (Token::Match(tok2, "%type% *| %var% , %type% *| %var%"))
             continue;
 
-        if (Token::Match(tok2, "struct|union|class %type%")) {
+        if (Token::Match(tok2, "struct|union|class %type%"))
             tok2 = tok2->next();
-            ++typelen;
-        }
 
         // check for qualification..
-        if (Token::Match(tok2,  ":: %type%")) {
-            ++typelen;
+        if (Token::Match(tok2,  ":: %type%"))
             tok2 = tok2->next();
-        }
 
         //skip combinations of templates and namespaces
         while (Token::Match(tok2, "%type% <") || Token::Match(tok2, "%type% ::")) {
@@ -5219,7 +5198,6 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
                 tok2 = nullptr;
                 break;
             }
-            typelen += 2;
             tok2 = tok2->tokAt(2);
             if (tok2 && tok2->previous()->str() == "::")
                 continue;
@@ -5227,8 +5205,6 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
             unsigned int parens = 0;
 
             for (Token *tok3 = tok2; tok3; tok3 = tok3->next()) {
-                ++typelen;
-
                 if (tok3->str() == "<" && !parens) {
                     ++indentlevel;
                 } else if (tok3->str() == ">" && !parens) {
@@ -5256,11 +5232,11 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
                 }
             }
 
-            if (Token::Match(tok2,  ":: %type%")) {
-                ++typelen;
+            if (Token::Match(tok2,  ":: %type%"))
                 tok2 = tok2->next();
-            }
         }
+
+        Token const * typeLast=tok2;
 
         //pattern: "%type% *| ... *| const| %var% ,|="
         if (Token::Match(tok2, "%type%") ||
@@ -5270,7 +5246,7 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
             if (!tok2->previous() || tok2->previous()->str() != ">")
                 varName = varName->next();
             else
-                --typelen;
+                typeLast=tok2->previous();
             //skip all the pointer part
             while (varName && varName->str() == "*") {
                 ispointer = true;
@@ -5279,10 +5255,11 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
 
             while (Token::Match(varName, "%type% %type%")) {
                 if (varName->str() != "const") {
-                    ++typelen;
+                    typeLast=varName;
                 }
                 varName = varName->next();
             }
+
             //non-VLA case
             if (Token::Match(varName, "%var% ,|=")) {
                 if (varName->str() != "operator") {
@@ -5336,7 +5313,7 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
         if (tok2->str() == ",") {
             tok2->str(";");
             //TODO: should we have to add also template '<>' links?
-            list.insertTokens(tok2, type0, typelen);
+            copyTokens(tok2, typefirst, typeLast);
         }
 
         else {
@@ -5351,7 +5328,7 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
 
                 else if (std::strchr(";,", tok2->str()[0])) {
                     // "type var ="   =>   "type var; var ="
-                    const Token *VarTok = type0->tokAt((int)typelen);
+                    const Token *VarTok = typeLast->next();
                     while (Token::Match(VarTok, "*|&|const"))
                         VarTok = VarTok->next();
                     list.insertTokens(eq, VarTok, 2);
@@ -5360,7 +5337,7 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
                     // "= x, "   =>   "= x; type "
                     if (tok2->str() == ",") {
                         tok2->str(";");
-                        list.insertTokens(tok2, type0, typelen);
+                        copyTokens(tok2, typefirst, typeLast);
                     }
                     break;
                 }

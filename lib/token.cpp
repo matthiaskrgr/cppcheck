@@ -19,7 +19,6 @@
 #include "token.h"
 #include "errorlogger.h"
 #include "check.h"
-#include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -1080,15 +1079,6 @@ void Token::eraseTokens(Token *begin, const Token *end)
     while (begin->next() && begin->next() != end) {
         begin->deleteNext();
     }
-}
-
-void Token::createMutualLinks(Token *begin, Token *end)
-{
-    assert(begin != nullptr);
-    assert(end != nullptr);
-    assert(begin != end);
-    begin->link(end);
-    end->link(begin);
 }
 
 void Token::printOut(const char *title) const
