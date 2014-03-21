@@ -805,7 +805,7 @@ bool TemplateSimplifier::simplifyNumericCalculations(Token *tok)
 {
     bool ret = false;
     // (1-2)
-    while (tok->tokAt(4) && tok->next()->isNumber() && tok->tokAt(3)->isNumber()) { // %any% %num% %any% %num% %any%
+    while (Token::Match(tok, "%any% %num% %any% %num% %any%")) {
         const Token* op = tok->tokAt(2);
         const Token* after = tok->tokAt(4);
         if (Token::Match(tok, "* %num% /") && (tok->strAt(3) != "0") && tok->next()->str() == MathLib::multiply(tok->strAt(3), MathLib::divide(tok->next()->str(), tok->strAt(3)))) {
