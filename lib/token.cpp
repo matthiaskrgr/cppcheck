@@ -31,6 +31,59 @@
 
 bool Token::_isCPP = true;
 
+// use strEqual only for several comparisons of the similar strings for
+// example in one if-condition.
+// otherwise prever std::string::operator==()
+template <int n>
+inline bool strEqual(char const * a, char const * b)
+{
+    return (a[0]==b[0]) && strEqual<n-1>(a+1, b+1);
+}
+
+template <>
+inline bool strEqual<0>(char const *, char const *)
+{
+    return true;
+}
+
+template <int n>
+inline bool strEqual(char const * a, char const(& b)[n])
+{
+    return strEqual<n>(a, &b[0]);
+}
+
+template <int n>
+inline bool strEqual(std::string const & a, char const(& b)[n])
+{
+    return strEqual(a.c_str(), b);
+}
+
+// charEqulOneOf is a helper function for strEqualOneOf
+template <int n>
+inline bool charEqualOneOf(char c, char const * b)
+{
+    return c==b[n] || charEqualOneOf<n-1>(c, b);
+}
+
+template <>
+inline bool charEqualOneOf<0>(char c, char const * b)
+{
+    return c==b[0];
+}
+
+template <int n>
+inline bool charEqualOneOf(char c, char const(& b)[n])
+{
+    return charEqualOneOf<n-1>(c, &b[0]);
+}
+
+// strEqualOneOf does the length check and the comparison in one function
+template <int n>
+inline bool strEqualOneOf(std::string const & a, char const(& b)[n])
+{
+    return a.length()==1 && charEqualOneOf(a[0], b);
+}
+
 Token::Token(Token **t) :
     tokensBack(t),
     _next(0),
@@ -69,7 +122,7 @@ Token::~Token()
 void Token::update_property_info()
 {
     if (!_str.empty()) {
-        if (_str == "true" || _str == "false")
+        if (strEqual(_str, "true") || strEqual(_str, "false"))
             _type = eBoolean;
         else if (_str[0] == '_' || std::isalpha((unsigned char)_str[0])) { // Name
             if (_varId)
@@ -82,39 +135,39 @@ void Token::update_property_info()
             _type = eString;
         else if (_str.length() > 1 && _str[0] == '\'' && _str[_str.length()-1] == '\'')
             _type = eChar;
-        else if (_str == "="   ||
-                 _str == "+="  ||
-                 _str == "-="  ||
-                 _str == "*="  ||
-                 _str == "/="  ||
-                 _str == "%="  ||
-                 _str == "&="  ||
-                 _str == "^="  ||
-                 _str == "|="  ||
-                 _str == "<<=" ||
-                 _str == ">>=")
+        else if (strEqual(_str, "=") ||
+                 strEqual(_str, "+=") ||
+                 strEqual(_str, "-=") ||
+                 strEqual(_str, "*=") ||
+                 strEqual(_str, "/=") ||
+                 strEqual(_str, "%=") ||
+                 strEqual(_str, "&=") ||
+                 strEqual(_str, "^=") ||
+                 strEqual(_str, "|=") ||
+                 strEqual(_str, "<<=") ||
+                 strEqual(_str, ">>="))
             _type = eAssignmentOp;
-        else if (_str.size() == 1 && _str.find_first_of(",[]()?:") != std::string::npos)
+        else if (strEqualOneOf(_str, ",[]()?:"))
             _type = eExtendedOp;
-        else if (_str=="<<" || _str==">>" || (_str.size()==1 && _str.find_first_of("+-*/%") != std::string::npos))
+        else if (strEqual(_str, "<<") || strEqual(_str, ">>") || (_str.size()==1 && _str.find_first_of("+-*/%") != std::string::npos))
             _type = eArithmeticalOp;
-        else if (_str.size() == 1 && _str.find_first_of("&|^~") != std::string::npos)
+        else if (strEqualOneOf(_str, "&|^~"))
             _type = eBitOp;
-        else if (_str == "&&" ||
-                 _str == "||" ||
-                 _str == "!")
+        else if (strEqual(_str, "&&") ||
+                 strEqual(_str, "||") ||
+                 strEqual(_str, "!"))
             _type = eLogicalOp;
-        else if ((_str == "==" ||
-                  _str == "!=" ||
-                  _str == "<"  ||
-                  _str == "<=" ||
-                  _str == ">"  ||
-                  _str == ">=") && !_link)
+        else if ((strEqual(_str, "==") ||
+                  strEqual(_str, "!=") ||
+                  strEqual(_str, "<") ||
+                  strEqual(_str, "<=") ||
+                  strEqual(_str, ">") ||
+                  strEqual(_str, ">=")) && !_link)
             _type = eComparisonOp;
-        else if (_str == "++" ||
-                 _str == "--")
+        else if (strEqual(_str, "++") ||
+                 strEqual(_str, "--"))
             _type = eIncDecOp;
-        else if (_str.size() == 1 && (_str.find_first_of("{}") != std::string::npos || (_link && _str.find_first_of("<>") != std::string::npos)))
+        else if (strEqualOneOf(_str, "{}") || (_link && strEqualOneOf(_str, "<>")))
             _type = eBracket;
         else
             _type = eOther;
@@ -132,13 +185,18 @@ void Token::update_property_isStandardType()
     if (_str.size() < 3)
         return;
 
-    static const char * const stdtype[] = {"int", "char", "bool", "long", "short", "float", "double", "wchar_t", "size_t", "void", 0};
-    for (int i = 0; stdtype[i]; i++) {
-        if (_str == stdtype[i]) {
-            _isStandardType = true;
-            _type = eType;
-            break;
-        }
+    if (strEqual(_str, "int")   ||
+        strEqual(_str, "char")  ||
+        strEqual(_str, "bool")  ||
+        strEqual(_str, "long")  ||
+        strEqual(_str, "short")  ||
+        strEqual(_str, "float")  ||
+        strEqual(_str, "double")  ||
+        strEqual(_str, "size_t")  ||
+        strEqual(_str, "char")  ||
+        strEqual(_str, "void")) {
+        _isStandardType = true;
+        _type = eType;
     }
 }
 
