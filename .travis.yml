@@ -24,6 +24,9 @@ before_install:
 # install needed deps
  - sudo apt-get update -qq
  - sudo apt-get install -qq python-pygments libqt4-core libqt4-gui libqt4-dev qt4-dev-tools qt4-qmake libxml2-utils libpcre3 gdb
+ - sudo apt-get install -qq g++-4.4
+ - export CXX="g++-4.4" CC="gcc-4.4"
+
 
 script:
 # compile cppcheck, default build
