@@ -37,7 +37,9 @@ before_install:
 
 script:
 # run scan-build
-  - if [[ "$SCAN_BUILD" == "yes" ]]; then unset UNSET CXXFLAGS ; scan-build --status-bugs make cppcheck test -j 2 ; scan-build --status-bugs make reduce ; scan-build --status-bugs make dmake; exit; fi
+  - STATUS=true
+  - if [[ "$SCAN_BUILD" == "yes" ]]; then unset CXXFLAGS ; scan-build --status-bugs make cppcheck test -j 2  || STATUS=false ; scan-build --status-bugs make reduce  || STATUS=false ; scan-build --status-bugs make dmake || STATUS=false; fi
+  - $STATUS
 # download 3.14-rc6 kernel, compile cppcheck, run cppcheck on the kernel to look for crashes in cppcheck. if this is done, terminate build to prevent it from timing out
   - if [[ "$CHECK_KERNEL" == "yes" ]] && [[ "$CC" == "gcc" ]]; then wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.14.tar.xz; mkdir kernel; tar -xJf linux-3.14.tar.xz -C kernel & make -j 4 & wait; touch /tmp/kernel.cppcheck; ./cppcheck kernel --max-configs=1 -j 2 |& tee /tmp/kernel.cppcheck; ! grep "process crashed with signal 11" /tmp/kernel.cppcheck; exit; fi
 # compile cppcheck, default build
