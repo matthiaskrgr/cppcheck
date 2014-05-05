@@ -24,6 +24,12 @@ matrix:
 # do notify immediately about it when a job of a build fails.
   fast_finish: true
 
+  exclude:
+    - compiler: clang
+      env: GCC=4.4
+      env: GCC=4.6
+      env: GCC=4.7
+      env: GCC=4.8
 
 before_install:
 # install needed deps
