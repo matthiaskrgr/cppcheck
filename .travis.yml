@@ -1,17 +1,14 @@
 language: cpp
 
 -compiler:
-   - clang
-   - gcc
+  - clang
+  - gcc
 
 env:
   global:
 #   unfortunately we need this to stay within 50min timelimit given by travis.
 #   this also turns off the debug/warning cxxflags
     - CXXFLAGS="-O2 -Wunreachable-code"
-
-
-
 
 matrix:
 # do notify immediately about it when a job of a build fails.
