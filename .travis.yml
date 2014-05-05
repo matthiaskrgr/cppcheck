@@ -27,8 +27,11 @@ matrix:
   exclude:
     - compiler: clang
       env: GCC=4.4
+    - compiler: clang
       env: GCC=4.6
+    - compiler: clang
       env: GCC=4.7
+    - compiler: clang
       env: GCC=4.8
 
 before_install:
