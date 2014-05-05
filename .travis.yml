@@ -8,13 +8,13 @@ env:
   global:
 #   unfortunately we need this to stay within 50min timelimit given by travis.
 #   this also turns off the debug/warning cxxflags
-    - CXXFLAGS="-O2 -Wunreachable-code"
+    - CXXFLAGS="-O2 -Wunreachable-code -march=native -mtune=native"
   matrix:
 #    special CXXFLAGS for maximum speed, overrides global CXXFLAGS, CHECK_KERNEL is the var that controls if we download and check the kernel in that travis job
     - MAKEFLAGS="HAVE_RULES=yes" SRCDIR=build VERIFY=1
     - SRCDIR=build VERIFY=1
     -
-    - CXXFLAGS="-O3 -march=native -mtune=native" SRCDIR=build CHECK_KERNEL=yes
+    - CXXFLAGS="-O2 -march=native -mtune=native" SRCDIR=build CHECK_KERNEL=yes
 
 matrix:
 # do notify immediately about it when a job of a build fails.
@@ -22,10 +22,10 @@ matrix:
 # exclude kernel checking with clang binary, not needed
   exclude:
     - compiler: clang
-      env: CXXFLAGS="-O3 -march=native -mtune=native" SRCDIR=build CHECK_KERNEL=yes
+      env: CXXFLAGS="-O2 -march=native -mtune=native" SRCDIR=build CHECK_KERNEL=yes
 # kernel check can time out during travis rush hour, so make failure of it less grave...
   allow_failures:
-    - env: CXXFLAGS="-O3 -march=native -mtune=native" SRCDIR=build CHECK_KERNEL=yes
+    - env: CXXFLAGS="-O2 -march=native -mtune=native" SRCDIR=build CHECK_KERNEL=yes
 
 before_install:
 # install needed deps
