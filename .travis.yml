@@ -1,9 +1,5 @@
 language: cpp
 
--compiler:
-   - clang
-   - gcc
-
 env:
   global:
 #   unfortunately we need this to stay within 50min timelimit given by travis.
