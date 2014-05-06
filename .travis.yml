@@ -12,13 +12,25 @@ env:
 
   matrix:
 #    special CXXFLAGS for maximum speed, overrides global CXXFLAGS, CHECK_KERNEL is the var that controls if we download and check the kernel in that travis job
-    - MAKEFLAGS="HAVE_RULES=yes" SRCDIR=build VERIFY=1
-    - SRCDIR=build VERIFY=1
-    -
+    - MAKEFLAGS="HAVE_RULES=yes" SRCDIR=build VERIFY=1 GCC=4.4
+    - SRCDIR=build VERIFY=1 GCC=4.4
     - GCC=4.4
+#
+    - MAKEFLAGS="HAVE_RULES=yes" SRCDIR=build VERIFY=1 GCC=4.6
+    - SRCDIR=build VERIFY=1 GCC=4.6
     - GCC=4.6
+#
+    - MAKEFLAGS="HAVE_RULES=yes" SRCDIR=build VERIFY=1 GCC=4.7
+    - SRCDIR=build VERIFY=1 GCC=4.7
     - GCC=4.7
+#
+    - MAKEFLAGS="HAVE_RULES=yes" SRCDIR=build VERIFY=1 GCC=4.8
+    - SRCDIR=build VERIFY=1 GCC=4.8
     - GCC=4.8
+
+# note: we need to exclude every single of these ^
+
+# or just use different branches??
 
 matrix:
 # do notify immediately about it when a job of a build fails.
