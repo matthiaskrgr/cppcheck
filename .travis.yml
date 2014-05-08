@@ -33,11 +33,11 @@ matrix:
 before_install:
 # install needed deps
  - sudo apt-get update  -qq
- - sudo apt-get install -qq python-pygments libqt4-core libqt4-gui libqt4-dev qt4-dev-tools qt4-qmake libxml2-utils libpcre3 gdb clang
+ - sudo apt-get install -qq python-pygments libqt4-core libqt4-gui libqt4-dev qt4-dev-tools qt4-qmake libxml2-utils libpcre3 gdb clang curl
 
 script:
 # run scan-build
-  - if [[ "$SCAN_BUILD" == "yes" ]]; then STATUS=true; unset CXXFLAGS; scan-build -enable-checker alpha.core.SizeofPtr,alpha.security.ArrayBoundV2,alpha.unix.cstring.BufferOverlap,alpha.unix.cstring.NotNullTerminated,alpha.unix.cstring.OutOfBounds,alpha.core.SizeofPtr,alpha.cplusplus.NewDeleteLeaks,alpha.cplusplus.VirtualCall,alpha.deadcode.UnreachableCode --status-bugs make cppcheck test -j 2 || STATUS=false; scan-build --status-bugs make reduce || STATUS=false; scan-build --status-bugs make dmake || STATUS=false; $STATUS; exit; fi
+  - if [[ "$SCAN_BUILD" == "yes" ]]; then STATUS=true; unset CXXFLAGS; curl http://sourceforge.net/apps/trac/cppcheck/raw-attachment/ticket/5308/patch_clang.diff | patch -p1; scan-build -enable-checker alpha.core.BoolAssignment,alpha.core.CastSize,alpha.core.FixedAddr,alpha.core.IdenticalExpr,alpha.core.PointerArithm,alpha.core.PointerSub,alpha.core.SizeofPtr,alpha.cplusplus.NewDeleteLeaks,alpha.cplusplus.VirtualCall,alpha.security.ArrayBoundV2,alpha.security.MallocOverflow,alpha.security.ReturnPtrRange,alpha.unix.Chroot,alpha.unix.PthreadLock,alpha.unix.SimpleStream,alpha.unix.Stream,alpha.unix.cstring.BufferOverlap,alpha.unix.cstring.NotNullTerminated,alpha.unix.cstring.OutOfBounds,security.FloatLoopCounter,security.insecureAPI.rand --status-bugs make cppcheck test -j 2 || STATUS=false; scan-build --status-bugs make reduce || STATUS=false; scan-build --status-bugs make dmake || STATUS=false; $STATUS; exit; fi
 # download 3.14-rc6 kernel, compile cppcheck, run cppcheck on the kernel to look for crashes in cppcheck. if this is done, terminate build to prevent it from timing out
   - if [[ "$CHECK_KERNEL" == "yes" ]] && [[ "$CC" == "gcc" ]]; then wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.14.tar.xz; mkdir kernel; tar -xJf linux-3.14.tar.xz -C kernel & make -j 4 & wait; touch /tmp/kernel.cppcheck; ./cppcheck kernel --max-configs=1 -j 2 |& tee /tmp/kernel.cppcheck; ! grep "process crashed with signal 11" /tmp/kernel.cppcheck; exit; fi
 # compile cppcheck, default build
