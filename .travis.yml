@@ -59,7 +59,7 @@ script:
 # download 3.14-rc6 kernel, compile cppcheck, run cppcheck on the kernel to look for crashes in cppcheck. if this is done, terminate build to prevent it from timing out
   - if [[ "$CHECK_KERNEL" == "yes" ]] && [[ "$CC" == "gcc" ]]; then wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.14.tar.xz; mkdir kernel; tar -xJf linux-3.14.tar.xz -C kernel & make -j 4 & wait; touch /tmp/kernel.cppcheck; ./cppcheck kernel --max-configs=1 -j 2 |& tee /tmp/kernel.cppcheck; ! grep "process crashed with signal" /tmp/kernel.cppcheck; exit; fi
 # clone clang and check it, skip INPUTS because it takes too long
-  - if [[ "$CHECK_CLANG" == "yes" ]] && [[ "$CC" == "gcc" ]]; then wget "https://github.com/llvm-mirror/clang/archive/0ddd258c374240c22a53e3e71200048ec3a64284.zip" & make -j 4 & wait; ; unzip 0ddd258c374240c22a53e3e71200048ec3a64284.zip; touch /tmp/clang.cppcheck; ./cppcheck clang-0ddd258c374240c22a53e3e71200048ec3a64284 --max-configs=1 -iclang-0ddd258c374240c22a53e3e71200048ec3a64284/INPUTS -j 2 |& tee /tmp/clang.cppcheck; ! grep "process crashed with signal" /tmp/clang.cppcheck; exit; fi 
+  - if [[ "$CHECK_CLANG" == "yes" ]] && [[ "$CC" == "gcc" ]]; then wget "https://github.com/llvm-mirror/clang/archive/0ddd258c374240c22a53e3e71200048ec3a64284.zip" & make -j 4 & wait; unzip 0ddd258c374240c22a53e3e71200048ec3a64284.zip; touch /tmp/clang.cppcheck; ./cppcheck clang-0ddd258c374240c22a53e3e71200048ec3a64284 --max-configs=1 -iclang-0ddd258c374240c22a53e3e71200048ec3a64284/INPUTS -j 2 |& tee /tmp/clang.cppcheck; ! grep "process crashed with signal" /tmp/clang.cppcheck; exit; fi 
 # compile cppcheck, default build
   - make -j4
   - make test -j4
