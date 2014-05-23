@@ -13,7 +13,7 @@ env:
 #    special CXXFLAGS for maximum speed, overrides global CXXFLAGS, CHECK_KERNEL is the var that controls if we download and check the kernel in that travis job
     - CXXFLAGS="-O3 -march=native -mtune=native" SRCDIR=build CHECK_KERNEL=yes
     - CXXFLAGS="-O3 -march=native -mtune=native" SRCDIR=build CHECK_CLANG=yes
-    - CXXFLAGS="-O3 -march=native -mtune=native" SRCDIR=build CHECK_GCC=yes
+#    - CXXFLAGS="-O3 -march=native -mtune=native" SRCDIR=build CHECK_GCC=yes
     - SCAN_BUILD=yes
 #    - CXXFLAGS="${CXXFLAGS} -fsanitize=address -fno-omit-frame-pointer" CXX="g++-4.9"
     - CXXFLAGS="${CXXFLAGS} -fsanitize=undefined -fno-omit-frame-pointer"
@@ -37,8 +37,8 @@ matrix:
       env: CXXFLAGS="${CXXFLAGS} -fsanitize=address -fno-omit-frame-pointer" CXX="g++-4.9"
     - compiler: gcc
       env: CXXFLAGS="${CXXFLAGS} -fsanitize=undefined -fno-omit-frame-pointer"
-    - compiler: clang
-      env: CXXFLAGS="-O3 -march=native -mtune=native" SRCDIR=build CHECK_GCC=yes
+#    - compiler: clang
+#      env: CXXFLAGS="-O3 -march=native -mtune=native" SRCDIR=build CHECK_GCC=yes
 # these may fail:
   allow_failures:
     - env: SCAN_BUILD=yes
@@ -52,14 +52,14 @@ before_install:
 
 script:
 # check gcc
-  - if [[ "$CHECK_GCC" == "yes" ]] && [[ "$CC" == "gcc" ]]; then git clone git://gcc.gnu.org/git/gcc.git --depth=1 -b master & make -j 4 & wait; cd gcc; git checkout 760f023b3f8b560f12059744ffbacb194c9c6dbb ; cd ../ ; touch /tmp/gcc.cppcheck; ./cppcheck gcc --max-configs=1 -j 2 |& tee /tmp/gcc.cppcheck; ! grep "process crashed with signal" /tmp/gcc.cppcheck; exit; fi 
+#  - if [[ "$CHECK_GCC" == "yes" ]] && [[ "$CC" == "gcc" ]]; then git clone git://gcc.gnu.org/git/gcc.git --depth=1 -b master & make -j 4 & wait; cd gcc; git checkout 760f023b3f8b560f12059744ffbacb194c9c6dbb ; cd ../ ; touch /tmp/gcc.cppcheck; ./cppcheck gcc --max-configs=1 -j 2 |& tee /tmp/gcc.cppcheck; ! grep "process crashed with signal" /tmp/gcc.cppcheck; exit; fi 
 # run scan-build
   - SCANFLAGS="alpha.core.BoolAssignment,alpha.core.CastSize,alpha.core.FixedAddr,alpha.core.IdenticalExpr,alpha.core.PointerArithm,alpha.core.PointerSub,alpha.core.SizeofPtr,alpha.cplusplus.NewDeleteLeaks,alpha.cplusplus.VirtualCall,alpha.security.ArrayBoundV2,alpha.security.MallocOverflow,alpha.security.ReturnPtrRange,alpha.unix.Chroot,alpha.unix.PthreadLock,alpha.unix.SimpleStream,alpha.unix.Stream,alpha.unix.cstring.BufferOverlap,alpha.unix.cstring.NotNullTerminated,alpha.unix.cstring.OutOfBounds,security.FloatLoopCounter,security.insecureAPI.rand"
   - if [[ "$SCAN_BUILD" == "yes" ]]; then STATUS=true; unset CXXFLAGS; curl http://sourceforge.net/apps/trac/cppcheck/raw-attachment/ticket/5308/patch_clang.diff | patch -p1; scan-build -enable-checker ${SCANFLAGS} --status-bugs make test -j 2 || STATUS=false; scan-build --status-bugs -enable-checker ${SCANFLAGS} make reduce || STATUS=false; scan-build --status-bugs -enable-checker ${SCANFLAGS} make dmake || STATUS=false; $STATUS; exit; fi
 # download 3.14-rc6 kernel, compile cppcheck, run cppcheck on the kernel to look for crashes in cppcheck. if this is done, terminate build to prevent it from timing out
   - if [[ "$CHECK_KERNEL" == "yes" ]] && [[ "$CC" == "gcc" ]]; then wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.14.tar.xz; mkdir kernel; tar -xJf linux-3.14.tar.xz -C kernel & make -j 4 & wait; touch /tmp/kernel.cppcheck; ./cppcheck kernel --max-configs=1 -j 2 |& tee /tmp/kernel.cppcheck; ! grep "process crashed with signal" /tmp/kernel.cppcheck; exit; fi
 # clone clang and check it, skip INPUTS because it takes too long
-  - if [[ "$CHECK_CLANG" == "yes" ]] && [[ "$CC" == "gcc" ]]; then git clone http://llvm.org/git/clang.git --depth=1 & make -j 4 & wait; cd clang ; git checkout fd754157c9567390f724a496fe87103b321074a8; cd ../ ; touch /tmp/clang.cppcheck; ./cppcheck clang --max-configs=1 -iclang/INPUTS -j 2 |& tee /tmp/clang.cppcheck; ! grep "process crashed with signal" /tmp/clang.cppcheck; exit; fi 
+  - if [[ "$CHECK_CLANG" == "yes" ]] && [[ "$CC" == "gcc" ]]; then wget "https://github.com/llvm-mirror/clang/archive/0ddd258c374240c22a53e3e71200048ec3a64284.zip" & make -j 4 & wait; mkdir clang ; unzip 0ddd258c374240c22a53e3e71200048ec3a64284.zip clang/ ; touch /tmp/clang.cppcheck; ./cppcheck clang --max-configs=1 -iclang/INPUTS -j 2 |& tee /tmp/clang.cppcheck; ! grep "process crashed with signal" /tmp/clang.cppcheck; exit; fi 
 # compile cppcheck, default build
   - make -j4
   - make test -j4
