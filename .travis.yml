@@ -17,6 +17,7 @@ env:
     - SCAN_BUILD=yes
 #    - CXXFLAGS="${CXXFLAGS} -fsanitize=address -fno-omit-frame-pointer" CXX="g++-4.9"
     - CXXFLAGS="${CXXFLAGS} -fsanitize=undefined -fno-omit-frame-pointer"
+    - CXXFLAGS="${CXXFLAGS} -O3 -DCHECK_INTERNAL" VERIFY=1 SRCDIR=build
 # regular:
     - MAKEFLAGS="HAVE_RULES=yes" SRCDIR=build VERIFY=1
     - SRCDIR=build VERIFY=1
