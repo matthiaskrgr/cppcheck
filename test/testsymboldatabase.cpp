@@ -220,6 +220,7 @@ private:
         TEST_CASE(symboldatabase40); // ticket #5153
         TEST_CASE(symboldatabase41); // ticket #5197 (unknown macro)
         TEST_CASE(symboldatabase42); // only put variables in variable list
+        TEST_CASE(symboldatabase43); // #4738
 
         TEST_CASE(isImplicitlyVirtual);
 
@@ -240,6 +241,10 @@ private:
 
         TEST_CASE(nothrowAttributeFunction);
         TEST_CASE(nothrowDeclspecFunction);
+
+        TEST_CASE(varTypesIntegral); // known integral
+        TEST_CASE(varTypesFloating); // known floating
+        TEST_CASE(varTypesOther);    // (un)known
     }
 
     void array() const {
@@ -1859,6 +1864,13 @@ private:
         ASSERT_EQUALS(0U, fscope ? fscope->varlist.size() : ~0U);  // "x" is not a variable
     }
 
+    void symboldatabase43() { // ticket #4738
+        check("void f() {\n"
+              "    new int;\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void isImplicitlyVirtual() {
         {
             GET_SYMBOL_DB("class Base {\n"
@@ -2238,6 +2250,158 @@ private:
         }
     }
 
+    void varTypesIntegral() {
+        GET_SYMBOL_DB("void f() { bool b; char c; unsigned char uc; short s; unsigned short us; int i; unsigned u; unsigned int ui; long l; unsigned long ul; long long ll; }");
+        const Variable *b = db->getVariableFromVarId(1);
+        ASSERT(b != nullptr);
+        if (b) {
+            ASSERT_EQUALS("b", b->nameToken()->str());
+            ASSERT_EQUALS(true, b->isIntegralType());
+            ASSERT_EQUALS(false, b->isFloatingType());
+        }
+        const Variable *c = db->getVariableFromVarId(2);
+        ASSERT(c != nullptr);
+        if (c) {
+            ASSERT_EQUALS("c", c->nameToken()->str());
+            ASSERT_EQUALS(true, c->isIntegralType());
+            ASSERT_EQUALS(false, c->isFloatingType());
+        }
+        const Variable *uc = db->getVariableFromVarId(3);
+        ASSERT(uc != nullptr);
+        if (uc) {
+            ASSERT_EQUALS("uc", uc->nameToken()->str());
+            ASSERT_EQUALS(true, uc->isIntegralType());
+            ASSERT_EQUALS(false, uc->isFloatingType());
+        }
+        const Variable *s = db->getVariableFromVarId(4);
+        ASSERT(s != nullptr);
+        if (s) {
+            ASSERT_EQUALS("s", s->nameToken()->str());
+            ASSERT_EQUALS(true, s->isIntegralType());
+            ASSERT_EQUALS(false, s->isFloatingType());
+        }
+        const Variable *us = db->getVariableFromVarId(5);
+        ASSERT(us != nullptr);
+        if (us) {
+            ASSERT_EQUALS("us", us->nameToken()->str());
+            ASSERT_EQUALS(true, us->isIntegralType());
+            ASSERT_EQUALS(false, us->isFloatingType());
+        }
+        const Variable *i = db->getVariableFromVarId(6);
+        ASSERT(i != nullptr);
+        if (i) {
+            ASSERT_EQUALS("i", i->nameToken()->str());
+            ASSERT_EQUALS(true, i->isIntegralType());
+            ASSERT_EQUALS(false, i->isFloatingType());
+        }
+        const Variable *u = db->getVariableFromVarId(7);
+        ASSERT(u != nullptr);
+        if (u) {
+            ASSERT_EQUALS("u", u->nameToken()->str());
+            ASSERT_EQUALS(true, u->isIntegralType());
+            ASSERT_EQUALS(false, u->isFloatingType());
+        }
+        const Variable *ui = db->getVariableFromVarId(8);
+        ASSERT(ui != nullptr);
+        if (ui) {
+            ASSERT_EQUALS("ui", ui->nameToken()->str());
+            ASSERT_EQUALS(true, ui->isIntegralType());
+            ASSERT_EQUALS(false, ui->isFloatingType());
+        }
+        const Variable *l = db->getVariableFromVarId(9);
+        ASSERT(l != nullptr);
+        if (l) {
+            ASSERT_EQUALS("l", l->nameToken()->str());
+            ASSERT_EQUALS(true, l->isIntegralType());
+            ASSERT_EQUALS(false, l->isFloatingType());
+        }
+        const Variable *ul = db->getVariableFromVarId(10);
+        ASSERT(ul != nullptr);
+        if (ul) {
+            ASSERT_EQUALS("ul", ul->nameToken()->str());
+            ASSERT_EQUALS(true, ul->isIntegralType());
+            ASSERT_EQUALS(false, ul->isFloatingType());
+        }
+        const Variable *ll = db->getVariableFromVarId(11);
+        ASSERT(ll != nullptr);
+        if (ll) {
+            ASSERT_EQUALS("ll", ll->nameToken()->str());
+            ASSERT_EQUALS(true, ll->isIntegralType());
+            ASSERT_EQUALS(false, ll->isFloatingType());
+        }
+    }
+
+    void varTypesFloating() {
+        {
+            GET_SYMBOL_DB("void f() { float f; double d; long double ld; }");
+            const Variable *f = db->getVariableFromVarId(1);
+            ASSERT(f != nullptr);
+            if (f) {
+                ASSERT_EQUALS("f", f->nameToken()->str());
+                ASSERT_EQUALS(false, f->isIntegralType());
+                ASSERT_EQUALS(true, f->isFloatingType());
+            }
+            const Variable *d = db->getVariableFromVarId(2);
+            ASSERT(d != nullptr);
+            if (d) {
+                ASSERT_EQUALS("d", d->nameToken()->str());
+                ASSERT_EQUALS(false, d->isIntegralType());
+                ASSERT_EQUALS(true, d->isFloatingType());
+            }
+            const Variable *ld = db->getVariableFromVarId(3);
+            ASSERT(ld != nullptr);
+            if (ld) {
+                ASSERT_EQUALS("ld", ld->nameToken()->str());
+                ASSERT_EQUALS(false, ld->isIntegralType());
+                ASSERT_EQUALS(true, ld->isFloatingType());
+            }
+        }
+        {
+            GET_SYMBOL_DB("void f() { float * f; static const float * scf; }");
+            const Variable *f = db->getVariableFromVarId(1);
+            ASSERT(f != nullptr);
+            if (f) {
+                ASSERT_EQUALS("f", f->nameToken()->str());
+                ASSERT_EQUALS(false, f->isIntegralType());
+                ASSERT_EQUALS(false, f->isFloatingType());
+            }
+            const Variable *scf = db->getVariableFromVarId(2);
+            ASSERT(scf != nullptr);
+            if (scf) {
+                ASSERT_EQUALS("scf", scf->nameToken()->str());
+                ASSERT_EQUALS(false, scf->isIntegralType());
+                ASSERT_EQUALS(false, scf->isFloatingType());
+            }
+        }
+        {
+            GET_SYMBOL_DB("void f() { float fa[42]; }");
+            const Variable *fa = db->getVariableFromVarId(1);
+            ASSERT(fa != nullptr);
+            if (fa) {
+                ASSERT_EQUALS("fa", fa->nameToken()->str());
+                ASSERT_EQUALS(false, fa->isIntegralType());
+                ASSERT_EQUALS(false, fa->isFloatingType());
+            }
+        }
+    }
+
+    void varTypesOther() {
+        GET_SYMBOL_DB("void f() { class A {} a; void *b;  }");
+        const Variable *a = db->getVariableFromVarId(1);
+        ASSERT(a != nullptr);
+        if (a) {
+            ASSERT_EQUALS("a", a->nameToken()->str());
+            ASSERT_EQUALS(false, a->isIntegralType());
+            ASSERT_EQUALS(false, a->isFloatingType());
+        }
+        const Variable *b = db->getVariableFromVarId(2);
+        ASSERT(b != nullptr);
+        if (b) {
+            ASSERT_EQUALS("b", b->nameToken()->str());
+            ASSERT_EQUALS(false, b->isIntegralType());
+            ASSERT_EQUALS(false, b->isFloatingType());
+        }
+    }
 };
 
 REGISTER_TEST(TestSymbolDatabase)

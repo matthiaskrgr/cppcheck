@@ -19,7 +19,6 @@
 #include "templatesimplifier.h"
 #include "mathlib.h"
 #include "token.h"
-#include "tokenlist.h"
 #include "tokenize.h"
 #include "errorlogger.h"
 #include "settings.h"
@@ -251,6 +250,13 @@ unsigned int TemplateSimplifier::templateParameters(const Token *tok)
             tok = tok->next();
         if (!tok)
             return 0;
+
+        // Skip casts
+        if (tok->str() == "(") {
+            tok = tok->link();
+            if (tok)
+                tok = tok->next();
+        }
 
         // skip std::
         if (tok && tok->str() == "::")
@@ -558,7 +564,7 @@ void TemplateSimplifier::useDefaultArgumentValues(const std::list<Token *> &temp
             }
 
             // next template parameter
-            if (tok->str() == ",")
+            if (tok->str() == "," && (1 == templateParmDepth)) // Ticket #5823: Properly count parameters
                 ++templatepar;
 
             // default parameter value?
@@ -583,17 +589,10 @@ void TemplateSimplifier::useDefaultArgumentValues(const std::list<Token *> &temp
                 continue;
 
             // count the parameters..
-            unsigned int usedpar = 1;
-            for (tok = tok->tokAt(3); tok; tok = tok->tokAt(2)) {
-                if (tok->str() == ">")
-                    break;
+            tok = tok->next();
+            unsigned int usedpar = TemplateSimplifier::templateParameters(tok);
+            tok = tok->findClosingBracket();
 
-                if (tok->str() == ",")
-                    ++usedpar;
-
-                else
-                    break;
-            }
             if (tok && tok->str() == ">") {
                 tok = tok->previous();
                 std::list<Token *>::const_iterator it = eq.begin();

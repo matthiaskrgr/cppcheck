@@ -24,7 +24,6 @@
 #include <string>
 #include <list>
 #include <vector>
-#include <deque>
 #include <set>
 #include <algorithm>
 
@@ -471,6 +470,23 @@ public:
     bool isStlType(const char* const(&stlTypes)[array_length]) const {
         return isStlType() && std::binary_search(stlTypes, stlTypes + array_length, _start->strAt(2));
     }
+
+    /**
+    * Determine whether it's a floating number type
+    * @return true if the type is known and it's a floating type (float, double and long double)
+    */
+    bool isFloatingType() const {
+        return (typeStartToken()->str() == "float" || typeStartToken()->str() == "double") && !isArrayOrPointer() ;
+    }
+
+    /**
+     * Determine whether it's an integral number type
+     * @return true if the type is known and it's an integral type (bool, char, short, int, long long and their unsigned counter parts)
+     */
+    bool isIntegralType() const {
+        return typeStartToken()->str() == "bool" || typeStartToken()->str() == "char" || typeStartToken()->str() == "short" || typeStartToken()->str() == "int" || typeStartToken()->str() == "long";
+    }
+
 
 private:
     // only symbol database can change the type

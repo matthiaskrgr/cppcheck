@@ -23,11 +23,11 @@
 #include "token.h"
 #include "settings.h"
 #include "errorlogger.h"
-#include "check.h"
 
 #include <string>
-#include <sstream>
+#include <ostream>
 #include <climits>
+#include <iostream>
 
 //---------------------------------------------------------------------------
 
@@ -2578,7 +2578,7 @@ static const Token* skipPointers(const Token* tok)
 
 bool Scope::isVariableDeclaration(const Token* tok, const Token*& vartok, const Token*& typetok) const
 {
-    if (tok && tok->str() == "throw" && check->_tokenizer->isCPP())
+    if (tok && (tok->str() == "throw" || tok->str() == "new") && check->_tokenizer->isCPP())
         return false;
 
     const Token* localTypeTok = skipScopeIdentifiers(tok);

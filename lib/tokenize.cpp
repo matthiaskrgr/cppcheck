@@ -2065,8 +2065,6 @@ void Tokenizer::arraySize()
     }
 }
 
-static Token *skipTernaryOp(Token *);
-
 static Token *skipTernaryOp(Token *tok)
 {
     if (!tok || tok->str() != "?")
@@ -2211,7 +2209,7 @@ void Tokenizer::simplifyLabelsCaseDefault()
                 if (Token::Match(tok->next(),"[:{};]"))
                     break;
             }
-            if (tok->str() != "case" && tok->next()->str() == ":") {
+            if (tok->str() != "case" && tok->next() && tok->next()->str() == ":") {
                 tok = tok->next();
                 if (tok->next()->str() != ";")
                     tok->insertToken(";");
@@ -7060,7 +7058,7 @@ bool Tokenizer::simplifyRedundantParentheses()
         }
 
         if (Token::Match(tok->previous(), "[(!*;{}] ( %var% )") &&
-            (tok->next()->varId() != 0 || Token::Match(tok->tokAt(3), "[+-/=]"))) {
+            (tok->next()->varId() != 0 || Token::Match(tok->tokAt(3), "[+-/=]")) && !tok->next()->isStandardType()) {
             // We have "( var )", remove the parentheses
             tok->deleteThis();
             tok->deleteNext();
@@ -7572,7 +7570,9 @@ void Tokenizer::simplifyEnum()
                                 endtoken = endtoken->next();
                                 if (Token::Match(endtoken, "*|,|::|typename"))
                                     endtoken = endtoken->next();
-                            } while (Token::Match(endtoken, "%var%|%num% *| [,>]") || Token::Match(endtoken, "%var%|%num% :: %any%"));
+                                if (endtoken->str() == "<" && TemplateSimplifier::templateParameters(endtoken))
+                                    endtoken = endtoken->findClosingBracket();
+                            } while (Token::Match(endtoken, "%var%|%num% *| [,>]") || Token::Match(endtoken, "%var%|%num% ::|< %any%"));
                             if (endtoken->str() == ">") {
                                 enumValueEnd = endtoken;
                                 if (Token::simpleMatch(endtoken, "> ( )"))

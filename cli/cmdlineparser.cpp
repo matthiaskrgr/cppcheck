@@ -18,10 +18,12 @@
 
 #include "cmdlineparser.h"
 #include "cppcheck.h"
+#include "cppcheckexecutor.h"
 #include "filelister.h"
 #include "path.h"
 #include "settings.h"
 #include "timer.h"
+#include "check.h"
 
 #include <algorithm>
 #include <iostream>
@@ -135,6 +137,11 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
         // (Experimental) exception handling inside cppcheck client
         else if (std::strcmp(argv[i], "--exception-handling") == 0)
             _settings->exceptionHandling = true;
+        else if (std::strncmp(argv[i], "--exception-handling=", 21) == 0) {
+            _settings->exceptionHandling = true;
+            const std::string exceptionOutfilename=&(argv[i][21]);
+            CppCheckExecutor::setExceptionOutput(exceptionOutfilename);
+        }
 
         // Inconclusive checking (still in testing phase)
         else if (std::strcmp(argv[i], "--inconclusive") == 0)
@@ -497,8 +504,35 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
 
         // --library
         else if (std::strncmp(argv[i], "--library=", 10) == 0) {
-            if (!_settings->library.load(argv[0], argv[i]+10)) {
-                PrintMessage("cppcheck: Failed to load library configuration file '" + std::string(argv[i]+10) + "'");
+            Library::Error err = _settings->library.load(argv[0], argv[i]+10);
+            std::string errmsg;
+            switch (err.errorcode) {
+            case Library::ErrorCode::OK:
+                break;
+            case Library::ErrorCode::FILE_NOT_FOUND:
+                errmsg = "File not found";
+                break;
+            case Library::ErrorCode::BAD_XML:
+                errmsg = "Bad XML";
+                break;
+            case Library::ErrorCode::BAD_ELEMENT:
+                errmsg = "Unexpected element";
+                break;
+            case Library::ErrorCode::MISSING_ATTRIBUTE:
+                errmsg = "Missing attribute";
+                break;
+            case Library::ErrorCode::BAD_ATTRIBUTE:
+                errmsg = "Bad attribute";
+                break;
+            case Library::ErrorCode::BAD_ATTRIBUTE_VALUE:
+                errmsg = "Bad attribute value";
+                break;
+            }
+            if (!err.reason.empty())
+                errmsg += " '" + err.reason + "'";
+
+            if (!errmsg.empty()) {
+                PrintMessage("cppcheck: Failed to load library configuration file '" + std::string(argv[i]+10) + "'. " + errmsg);
                 return false;
             }
         }

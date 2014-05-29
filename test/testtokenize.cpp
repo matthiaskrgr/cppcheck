@@ -373,6 +373,7 @@ private:
         TEST_CASE(removeParentheses18);      // 'float(*a)[2]' => 'float *a[2]'
         TEST_CASE(removeParentheses19);      // ((typeof(x) *)0)
         TEST_CASE(removeParentheses20);      // Ticket #5479: a<b<int>>(2);
+        TEST_CASE(removeParentheses21);      // Don't "simplify" casts
 
         TEST_CASE(tokenize_double);
         TEST_CASE(tokenize_strings);
@@ -585,6 +586,8 @@ private:
         TEST_CASE(astunaryop);
         TEST_CASE(astfunction);
         TEST_CASE(asttemplate);
+        TEST_CASE(astcast);
+        TEST_CASE(astlambda);
 
         TEST_CASE(startOfExecutableScope);
     }
@@ -5695,6 +5698,10 @@ private:
         ASSERT_EQUALS("a < b < int > > ( 2 ) ;", tokenizeAndStringify("a<b<int>>(2);", false));
     }
 
+    void removeParentheses21() {
+        ASSERT_EQUALS("a = ( int ) - b ;", tokenizeAndStringify("a = ((int)-b);", false));
+    }
+
     void tokenize_double() {
         const char code[] = "void f()\n"
                             "{\n"
@@ -6554,7 +6561,7 @@ private:
         tokenizer.tokenize(istr, "test.cpp");   // shouldn't segfault
     }
 
-    void syntax_error_templates_3() { // Ticket #5605, #5759, #5762, #5774
+    void syntax_error_templates_3() { // Ticket #5605, #5759, #5762, #5774, #5823
         tokenizeAndStringify("foo() template<typename T1 = T2 = typename = unused, T5 = = unused> struct tuple Args> tuple<Args...> { } main() { foo<int,int,int,int,int,int>(); }");
         tokenizeAndStringify("( ) template < T1 = typename = unused> struct Args { } main ( ) { foo < int > ( ) ; }");
         tokenizeAndStringify("() template < T = typename = x > struct a {} { f <int> () }");
@@ -6570,6 +6577,12 @@ private:
                              "  static const int s = 0; "
                              "}; "
                              "A<int> a;");
+        tokenizeAndStringify("template<class T, class U> class A {}; "
+                             "template<class T = A<int, int> > class B {}; "
+                             "template<class T = B<int> > class C { "
+                             "    C() : _a(0), _b(0) {} "
+                             "    int _a, _b; "
+                             "};");
     }
 
     void template_member_ptr() { // Ticket #5786
@@ -10384,55 +10397,31 @@ private:
     static std::string testAst(const char code[],bool verbose=false) {
         // tokenize given code..
         const Settings settings;
-        TokenList tokenList(&settings);
+        Tokenizer tokenList(&settings, nullptr);
         std::istringstream istr(code);
-        if (!tokenList.createTokens(istr,"test.cpp"))
+        if (!tokenList.list.createTokens(istr,"test.cpp"))
             return "ERROR";
 
-        for (Token *tok = tokenList.front(); tok; tok = tok->next()) {
-            if (Token::Match(tok, "%or%|<<|>>|+|-|*|/|%|&|^ =")) {
-                tok->str(tok->str() + "=");
-                tok->deleteNext();
-            } else if (Token::simpleMatch(tok, ": :")) {
-                tok->str("::");
-                tok->deleteNext();
-            } else if (Token::Match(tok, ">|<|= =")) {
-                tok->str(tok->str() + tok->strAt(1));
-                tok->deleteNext();
-            }
-        }
-
-        // Set links..
-        std::stack<Token *> links;
-        for (Token *tok = tokenList.front(); tok; tok = tok->next()) {
-            if (Token::Match(tok, "(|[|{"))
-                links.push(tok);
-            else if (!links.empty() && Token::Match(tok,")|]|}")) {
-                Token::createMutualLinks(links.top(), tok);
-                links.pop();
-            } else if (Token::Match(tok, "< %type% >")) {
-                Token::createMutualLinks(tok, tok->tokAt(2));
-            } else if (Token::Match(tok, "< %type% * >")) {
-                Token::createMutualLinks(tok, tok->tokAt(3));
-            }
-        }
+        tokenList.combineOperators();
+        tokenList.createLinks();
+        tokenList.createLinks2();
 
         // Create AST..
-        tokenList.createAst();
+        tokenList.list.createAst();
 
         // Basic AST validation
-        for (const Token *tok = tokenList.front(); tok; tok = tok->next()) {
+        for (const Token *tok = tokenList.list.front(); tok; tok = tok->next()) {
             if (tok->astOperand2() && !tok->astOperand1() && tok->str() != ";" && tok->str() != ":")
                 return "Op2 but no Op1 for token: " + tok->str();
         }
 
         // Return stringified AST
         if (verbose)
-            return tokenList.front()->astTop()->astStringVerbose(0,0);
+            return tokenList.list.front()->astTop()->astStringVerbose(0, 0);
 
         std::string ret;
         std::set<const Token *> astTop;
-        for (const Token *tok = tokenList.front(); tok; tok = tok->next()) {
+        for (const Token *tok = tokenList.list.front(); tok; tok = tok->next()) {
             if (tok->astOperand1() && astTop.find(tok->astTop()) == astTop.end()) {
                 astTop.insert(tok->astTop());
                 if (!ret.empty())
@@ -10504,7 +10493,7 @@ private:
         ASSERT_EQUALS("ax( whilex(", testAst("a(x) while (x)"));
         ASSERT_EQUALS("ifx( i0= whilei(", testAst("if (x) { ({ int i = 0; while(i); }) };"));
         ASSERT_EQUALS("ifx( BUG_ON{!( i0= whilei(", testAst("if (x) { BUG_ON(!({int i=0; while(i);})); }"));
-        ASSERT_EQUALS("v0= while{( v0= while{( v0=", testAst("({ v = 0; }); while (({ v = 0; }) != 0); while (({ v = 0; }) != 0);"));
+        ASSERT_EQUALS("v0= while{0!=( v0= while{0!=( v0=", testAst("({ v = 0; }); while (({ v = 0; }) != 0); while (({ v = 0; }) != 0);"));
 
 
         ASSERT_EQUALS("abc.1:?1+bd.1:?+=", testAst("a =(b.c ? : 1) + 1 + (b.d ? : 1);"));
@@ -10605,6 +10594,25 @@ private:
         // This two unit tests were added to avoid a crash. The actual correct AST result for non-executable code has not been determined so far.
         ASSERT_EQUALS("Cpublica::b:::", testAst("class C : public ::a::b<bool> { };"));
         ASSERT_EQUALS("AB: f( abc+=", testAst("struct A : public B<C*> { void f() { a=b+c; } };"));
+    }
+
+    void astcast() const {
+        ASSERT_EQUALS("ac&(=", testAst("a = (long)&c;"));
+        ASSERT_EQUALS("ac*(=", testAst("a = (Foo*)*c;"));
+        ASSERT_EQUALS("ac-(=", testAst("a = (long)-c;"));
+        ASSERT_EQUALS("ac(=", testAst("a = (some<strange, type>)c;"));
+        ASSERT_EQUALS("afoveon_avgimage((foveon_avgimage((+=", testAst("a = foveon_avg(((short(*)[4]) image)) + foveon_avg(((short(*)[4]) image));"));
+
+        ASSERT_EQUALS("ab-(=", testAst("a = ((int)-b)")); // Multiple subsequent unary operators (cast and -)
+    }
+
+    void astlambda() const {
+        ASSERT_EQUALS("([(return 0return", testAst("return [](){ return 0; }();"));
+        ASSERT_EQUALS("([(return 0return", testAst("return []() -> int { return 0; }();"));
+        ASSERT_EQUALS("([(return 0return", testAst("return [something]() -> int { return 0; }();"));
+        ASSERT_EQUALS("([cd,(return 0return", testAst("return [](int a, int b) -> int { return 0; }(c, d);"));
+
+        ASSERT_EQUALS("x([= 0return", testAst("x = [](){return 0; };"));
     }
 
     void compileLimits() {
