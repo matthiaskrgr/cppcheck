@@ -25,7 +25,7 @@ env:
 matrix:
 # do notify immediately about it when a job of a build fails.
   fast_finish: true
-# exclude kernel checking with clang binary, not needed
+# exclude clang checking with clang binary, not needed
   exclude:
     - compiler: clang
       env: CXXFLAGS="-O3 -march=native -mtune=native" SRCDIR=build CHECK_KERNEL=yes
@@ -69,7 +69,7 @@ script:
   - make -j4
 # building gui generates some more files that cppcheck can check, so check the repo *after* building gui
   - cd ../
-# use same hack as for kernel to work around cppchecks broken exit status with -j 2 ; create file, tee everything to the file and stdout, grep for errors in the file
+# use same hack as for clang to work around cppchecks broken exit status with -j 2 ; create file, tee everything to the file and stdout, grep for errors in the file
   - touch /tmp/cppcheck.cppcheck
   - ./cppcheck --error-exitcode=1 -Ilib --enable=style,performance,portability,warning,internal --suppressions-list=.travis_suppressions . -j 2 |& tee /tmp/cppcheck.cppcheck
   - sh -c "! grep '^\[' /tmp/cppcheck.cppcheck"
@@ -103,6 +103,8 @@ script:
   - ./tools/test_showtimetop5.sh
 # check the files in cgf dir with xmllint
   - xmllint --noout cfg/*
+# check matchcompiler
+  - ./tools/test_matchcompiler.py
 # check if Makefile needs to be regenerated
   - git clean -dfx
   - make dmake
