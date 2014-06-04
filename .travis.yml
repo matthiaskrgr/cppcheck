@@ -12,8 +12,6 @@ env:
   matrix:
 #    special CXXFLAGS for maximum speed, overrides global CXXFLAGS, CHECK_KERNEL is the var that controls if we download and check the kernel in that travis job
     - MAKEFLAGS="HAVE_RULES=yes" SRCDIR=build VERIFY=1
-    - SRCDIR=build VERIFY=1
-    - CXXFLAGS="${CXXFLAGS} -DCHECK_INTERNAL"
     - CXXFLAGS="${CXXFLAGS} -fsanitize=undefined -fsanitzize=address" FSAN=yes
 
 matrix:
@@ -29,7 +27,7 @@ before_install:
 # install needed deps
  - sudo apt-get update -qq
  - sudo apt-get install -qq python-pygments libqt4-core libqt4-gui libqt4-dev qt4-dev-tools qt4-qmake libxml2-utils libpcre3 gdb
- - if [[ "$FSAN" == "yes"  ]]; then sudo apt-get install python-software-properties ppa:ubuntu-toolchain-r/test ; sudo add-apt-repository ppa:ubuntu-toolchain-r/test ; sudo apt-get update ; sudo apt-get install gcc-4.9 ; sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 50 ; fi
+ - if [[ "$FSAN" == "yes"  ]]; then sudo apt-get install python-software-properties ; sudo add-apt-repository ppa:ubuntu-toolchain-r/test ; sudo apt-get update ; sudo apt-get install gcc-4.9 ; sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 50 ; fi
 
 script:
 # compile cppcheck, default build
