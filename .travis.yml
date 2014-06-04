@@ -29,7 +29,6 @@ before_install:
 # install needed deps
  - sudo apt-get update -qq
  - sudo apt-get install -qq python-pygments libqt4-core libqt4-gui libqt4-dev qt4-dev-tools qt4-qmake libxml2-utils libpcre3 gdb
- - sudo add-apt-repository 
  - if [[ "$FSAN" == "yes"  ]]; then sudo apt-get install python-software-properties ppa:ubuntu-toolchain-r/test ; sudo add-apt-repository ppa:ubuntu-toolchain-r/test ; sudo apt-get update ; sudo apt-get install gcc-4.9 ; sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 50 ; fi
 
 script:
