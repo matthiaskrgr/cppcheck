@@ -61,19 +61,23 @@ body {
 #menu {
     float: left;
     margin-top: 5px;
-    text-align: left;
-    width: 150px;
+    text-align: right;
+    width: 30px;
     height: 75%;
-    position: fixed;
-    overflow: auto;
-    z-index: 1;
+    overflow: none;
+    margin-left: 20px;
+    font-color: white;
+    
+}
+
+#menu:hover {
+width: 100px;
 }
 
 #menu > a {
     display: block;
     margin-left: 10px;
     font: 12px;
-    z-index: 1;
 }
 
 .highlighttable {
@@ -92,8 +96,8 @@ body {
     margin: 5px;
     margin-left: 10px;
     padding: 0 10px 10px 10px;
-    width: 80%;
-    padding-left: 150px;
+    width: 50%;
+ /*    padding-left: 10px; */
 }
 
 .linenos {
