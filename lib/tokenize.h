@@ -48,14 +48,15 @@ public:
         m_timerResults = tr;
     }
 
-    /** @return the source file path. e.g. "file.cpp" */
-    const std::string& getSourceFilePath() const;
-
     /** Is the code C. Used for bailouts */
-    bool isC() const;
+    bool isC() const {
+        return list.isC();
+    }
 
     /** Is the code CPP. Used for bailouts */
-    bool isCPP() const;
+    bool isCPP() const {
+        return list.isCPP();
+    }
 
     /**
      * Check if inner scope ends with a call to a noreturn function
@@ -84,12 +85,13 @@ public:
      *
      * @param FileName The filename
      * @param configuration E.g. "A" for code where "#ifdef A" is true
+     * @param noSymbolDB_AST Disable creation of SymbolDatabase and AST
      * @return false if source code contains syntax errors
      */
     bool tokenize(std::istream &code,
                   const char FileName[],
-                  const std::string &configuration = "");
-
+                  const std::string &configuration = "",
+                  bool noSymbolDB_AST = false);
     /**
      * tokenize condition and run simple simplifications on it
      * @param code code

@@ -582,12 +582,14 @@ private:
         // AST data
         TEST_CASE(astexpr);
         TEST_CASE(astpar);
+        TEST_CASE(astnewdelete);
         TEST_CASE(astbrackets);
         TEST_CASE(astunaryop);
         TEST_CASE(astfunction);
         TEST_CASE(asttemplate);
         TEST_CASE(astcast);
         TEST_CASE(astlambda);
+        TEST_CASE(astGarbage);
 
         TEST_CASE(startOfExecutableScope);
     }
@@ -4795,6 +4797,9 @@ private:
                       tokenizeDebugListing("class C {\n"
                                            "    C(int&& a);\n"
                                            "};"));
+
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: void foo ( int & & ) ;\n", tokenizeDebugListing("void foo(int&&);"));
     }
 
     void varid_arrayFuncPar() {
@@ -10467,9 +10472,7 @@ private:
 
         ASSERT_EQUALS("a\"\"=", testAst("a=\"\""));
         ASSERT_EQUALS("a\'\'=", testAst("a=\'\'"));
-        testAst("char a[1]=\"\";"); // don't crash
-        testAst("int f(char argv[]);"); // don't crash
-        testAst("--"); // don't crash
+        ASSERT_EQUALS("a1[\"\"=", testAst("char a[1]=\"\";"));
 
         ASSERT_EQUALS("'X''a'>", testAst("('X' > 'a')"));
         ASSERT_EQUALS("'X''a'>", testAst("(L'X' > L'a')"));
@@ -10497,6 +10500,23 @@ private:
 
 
         ASSERT_EQUALS("abc.1:?1+bd.1:?+=", testAst("a =(b.c ? : 1) + 1 + (b.d ? : 1);"));
+
+        ASSERT_EQUALS("catch.(", testAst("try {} catch (...) {}"));
+
+        ASSERT_EQUALS("FooBar(", testAst("void Foo(Bar&);"));
+        ASSERT_EQUALS("FooBar(", testAst("void Foo(Bar& &);")); // Rvalue reference - simplified from && to & & by real tokenizer
+        ASSERT_EQUALS("DerivedDerived::(", testAst("Derived::~Derived() {}"));
+    }
+
+    void astnewdelete() const {
+        ASSERT_EQUALS("aintnew=", testAst("a = new int;"));
+        ASSERT_EQUALS("aintnew=", testAst("a = new int[4];"));
+        ASSERT_EQUALS("aFoonew=", testAst("a = new Foo(bar);"));
+        ASSERT_EQUALS("aFoonew=", testAst("a = new Foo<bar>();"));
+        ASSERT_EQUALS("adelete", testAst("delete a;"));
+        ASSERT_EQUALS("adelete", testAst("delete (a);"));
+        ASSERT_EQUALS("adelete", testAst("delete[] a;"));
+        ASSERT_EQUALS("ab.3c-(delete", testAst("delete[] a.b(3 - c);"));
     }
 
     void astpar() const { // parentheses
@@ -10547,6 +10567,9 @@ private:
         ASSERT_EQUALS("QT_WA{{,( QT_WA{{,( x1=",
                       testAst("QT_WA({},{x=0;});" // don't hang
                               "QT_WA({x=1;},{x=2;});"));
+
+        // function pointer
+        TODO_ASSERT_EQUALS("todo", "va_argapvoid((,(*0=", testAst("*va_arg(ap, void(**) ()) = 0;"));
     }
 
     void astbrackets() const { // []
@@ -10580,10 +10603,11 @@ private:
         ASSERT_EQUALS("1f2(+3+", testAst("1+f(2)+3"));
         ASSERT_EQUALS("1f23,(+4+", testAst("1+f(2,3)+4"));
         ASSERT_EQUALS("1f2a&,(+", testAst("1+f(2,&a)"));
-        testAst("extern unsigned f(const char *);"); // don't crash
-        testAst("extern void f(const char *format, ...);"); // don't crash
-        testAst("extern int for_each_commit_graft(int (*)(int*), void *);"); // don't crash
-        testAst("for (;;) {}"); // don't crash
+        ASSERT_EQUALS("fargv[(", testAst("int f(char argv[]);"));
+        ASSERT_EQUALS("fchar(", testAst("extern unsigned f(const char *);"));
+        ASSERT_EQUALS("fcharformat*.,(", testAst("extern void f(const char *format, ...);"));
+        ASSERT_EQUALS("for_each_commit_graftint((void,(", testAst("extern int for_each_commit_graft(int (*)(int*), void *);"));
+        ASSERT_EQUALS("for;;(", testAst("for (;;) {}"));
         ASSERT_EQUALS("xsizeofvoid(=", testAst("x=sizeof(void*)"));
     }
 
@@ -10642,6 +10666,14 @@ private:
         const std::string code = preprocessor.getcode(filedata, "", "");
 
         tokenizeAndStringify(code.c_str()); // just survive...
+    }
+
+    void astGarbage() {
+        testAst("--"); // don't crash
+
+        testAst("N 1024 float a[N], b[N + 3], c[N]; void N; (void) i;\n"
+                "int #define for (i = avx_test i < c[i]; i++)\n"
+                "b[i + 3] = a[i] * {}"); // Don't hang (#5787)
     }
 
     bool isStartOfExecutableScope(int offset, const char code[]) {

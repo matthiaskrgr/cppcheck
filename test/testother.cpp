@@ -61,6 +61,7 @@ private:
         TEST_CASE(strPlusChar1);     // "/usr" + '/'
         TEST_CASE(strPlusChar2);     // "/usr" + ch
         TEST_CASE(strPlusChar3);     // ok: path + "/sub" + '/'
+        TEST_CASE(strPlusChar4);     // ast
 
         TEST_CASE(varScope1);
         TEST_CASE(varScope2);
@@ -195,6 +196,8 @@ private:
         TEST_CASE(checkCommaSeparatedReturn);
 
         TEST_CASE(checkComparisonFunctionIsAlwaysTrueOrFalse);
+
+        TEST_CASE(integerOverflow) // #5895
     }
 
     void check(const char code[], const char *filename = nullptr, bool experimental = false, bool inconclusive = true, bool posix = false, bool runSimpleChecks=true, Settings* settings = 0) {
@@ -446,6 +449,16 @@ private:
               "       r += 3;\n"
               "       if (r > w) {}\n"
               "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // #5874 - array
+        check("void testOppositeConditions2() {\n"
+              "  int array[2] = { 0, 0 };\n"
+              "  if (array[0] < 2) {\n"
+              "    array[0] += 5;\n"
+              "    if (array[0] > 2) {}\n"
+              "  }\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }
@@ -891,6 +904,10 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void strPlusChar4() {
+        // don't crash
+        strPlusChar("int test() { int +; }");
+    }
 
 
     void varScope(const char code[]) {
@@ -6343,6 +6360,14 @@ private:
                              "    }\n"
                              "}\n");
         TODO_ASSERT_EQUALS("", "[test.cpp:7]: (performance, inconclusive) Use const reference for 'temp' to avoid unnecessary data copying.\n", errout.str());
+
+        // #5890 - crash: wesnoth desktop_util.cpp / unicode.hpp
+        check_redundant_copy("typedef std::vector<char> X;\n"
+                             "X f<X>(const X &in) {\n"
+                             "    const X s = f<X>(in);\n"
+                             "    return f<X>(s);\n"
+                             "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void checkNegativeShift() {
@@ -7221,6 +7246,16 @@ private:
         check("bool f(int x, int y){\n"
               "   return isgreaterequal(x,y) && islessequal(x,y) && islessgreater(x,y) && isgreater(x,y) && isless(x,y);\n"
               "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void integerOverflow() { // 5895
+        // no signed integer overflow should happen
+        check("#define A 0x89504e470d0a1a0a\n"
+              "#define B 0x8a4d4e470d0a1a0a\n"
+              "void f(unsigned long long ull) {\n"
+              "    if (ull == A || ull == B);\n"
+              "}\n");
         ASSERT_EQUALS("", errout.str());
     }
 };

@@ -81,10 +81,12 @@ bool CppCheckExecutor::parseFromArgs(CppCheck *cppcheck, int argc, const char* c
             std::cout << ErrorLogger::ErrorMessage::getXMLFooter(settings._xml_version) << std::endl;
         }
 
-        if (parser.ExitAfterPrinting())
-            std::exit(EXIT_SUCCESS);
+        if (parser.ExitAfterPrinting()) {
+            settings.terminate();
+            return true;
+        }
     } else {
-        std::exit(EXIT_FAILURE);
+        return false;
     }
 
     // Check that all include paths exist
@@ -172,6 +174,9 @@ int CppCheckExecutor::check(int argc, const char* const argv[])
 
     if (!parseFromArgs(&cppCheck, argc, argv)) {
         return EXIT_FAILURE;
+    }
+    if (settings.terminated()) {
+        return EXIT_SUCCESS;
     }
 
     if (cppCheck.settings().exceptionHandling) {
@@ -483,10 +488,10 @@ int CppCheckExecutor::check_internal(CppCheck& cppcheck, int /*argc*/, const cha
 {
     Settings& settings = cppcheck.settings();
     _settings = &settings;
-    bool std = (settings.library.load(argv[0], "std.cfg").errorcode == Library::ErrorCode::OK);
+    bool std = (settings.library.load(argv[0], "std.cfg").errorcode == Library::OK);
     bool posix = true;
     if (settings.standards.posix)
-        posix = (settings.library.load(argv[0], "posix.cfg").errorcode == Library::ErrorCode::OK);
+        posix = (settings.library.load(argv[0], "posix.cfg").errorcode == Library::OK);
 
     if (!std || !posix) {
         const std::list<ErrorLogger::ErrorMessage::FileLocation> callstack;

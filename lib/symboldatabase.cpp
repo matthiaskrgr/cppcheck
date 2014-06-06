@@ -49,7 +49,7 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok ? tok->next() : nullptr) {
         // #5593 suggested to add here:
         if (_errorLogger)
-            _errorLogger->reportProgress(_tokenizer->getSourceFilePath(),
+            _errorLogger->reportProgress(_tokenizer->list.getSourceFilePath(),
                                          "SymbolDatabase",
                                          tok->progressValue());
         // Locate next class
@@ -2612,7 +2612,7 @@ bool Scope::isVariableDeclaration(const Token* tok, const Token*& vartok, const 
         typetok = localTypeTok;
     } else if ((isLocal() || type == Scope::eFunction) &&
                Token::Match(localVarTok, "%var% (") &&
-               Token::simpleMatch(localVarTok->next()->link(), ") ;")) {
+               Token::simpleMatch(localVarTok->next()->link(), ") ;") && localVarTok->varId()) {
         vartok = localVarTok;
         typetok = localTypeTok;
     } else if (type == eCatch &&

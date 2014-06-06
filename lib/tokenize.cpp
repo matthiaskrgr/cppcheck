@@ -1581,7 +1581,8 @@ void Tokenizer::simplifyMulAndParens()
 
 bool Tokenizer::tokenize(std::istream &code,
                          const char FileName[],
-                         const std::string &configuration)
+                         const std::string &configuration,
+                         bool noSymbolDB_AST)
 {
     // make sure settings specified
     assert(_settings);
@@ -1598,21 +1599,22 @@ bool Tokenizer::tokenize(std::istream &code,
 
     Token::isCPP(isCPP());
     if (simplifyTokenList1(FileName)) {
-        createSymbolDatabase();
+        if (!noSymbolDB_AST) {
+            createSymbolDatabase();
 
-        // Use symbol database to identify rvalue references. Split && to & &. This is safe, since it doesn't delete any tokens (which might be referenced by symbol database)
-        for (std::size_t i = 0; i < _symbolDatabase->getVariableListSize(); i++) {
-            const Variable* var = _symbolDatabase->getVariableFromVarId(i);
-            if (var && var->isRValueReference()) {
-                const_cast<Token*>(var->typeEndToken())->str("&");
-                const_cast<Token*>(var->typeEndToken())->insertToken("&");
-                const_cast<Token*>(var->typeEndToken()->next())->scope(var->typeEndToken()->scope());
+            // Use symbol database to identify rvalue references. Split && to & &. This is safe, since it doesn't delete any tokens (which might be referenced by symbol database)
+            for (std::size_t i = 0; i < _symbolDatabase->getVariableListSize(); i++) {
+                const Variable* var = _symbolDatabase->getVariableFromVarId(i);
+                if (var && var->isRValueReference()) {
+                    const_cast<Token*>(var->typeEndToken())->str("&");
+                    const_cast<Token*>(var->typeEndToken())->insertToken("&");
+                    const_cast<Token*>(var->typeEndToken()->next())->scope(var->typeEndToken()->scope());
+                }
             }
+
+            list.createAst();
+            ValueFlow::setValues(&list, _errorLogger, _settings);
         }
-
-        list.createAst();
-
-        ValueFlow::setValues(&list, _errorLogger, _settings);
 
         return true;
     }
@@ -3491,6 +3493,14 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
 
     elseif();
 
+    // Simplify nameless rValue references - named ones are simplified later
+    for (Token* tok = list.front(); tok; tok = tok->next()) {
+        if (Token::Match(tok, "&& [,)]")) {
+            tok->str("&");
+            tok->insertToken("&");
+        }
+    }
+
     validate();
     return true;
 }
@@ -5198,21 +5208,6 @@ bool Tokenizer::simplifyFunctionReturn()
     return ret;
 }
 
-
-static void incdec(std::string &value, const std::string &op)
-{
-    int ivalue = 0;
-    std::istringstream istr(value);
-    istr >> ivalue;
-    if (op == "++")
-        ++ivalue;
-    else if (op == "--")
-        --ivalue;
-    std::ostringstream ostr;
-    ostr << ivalue;
-    value = ostr.str();
-}
-
 void Tokenizer::simplifyVarDecl(bool only_k_r_fpar)
 {
     simplifyVarDecl(list.front(), nullptr, only_k_r_fpar);
@@ -6918,7 +6913,7 @@ bool Tokenizer::simplifyKnownVariablesSimplify(Token **tok2, Token *tok3, unsign
                 tok3->varId(valueVarId);
                 tok3->deleteNext();
             }
-            incdec(value, op);
+            value = MathLib::incdec(value, op);
             if (!Token::simpleMatch((*tok2)->tokAt(-2), "for (")) {
                 (*tok2)->tokAt(2)->str(value);
                 (*tok2)->tokAt(2)->varId(valueVarId);
@@ -6928,7 +6923,7 @@ bool Tokenizer::simplifyKnownVariablesSimplify(Token **tok2, Token *tok3, unsign
 
         if (indentlevel == indentlevel3 && Token::Match(tok3->next(), "++|-- %varid%", varid) && MathLib::isInt(value) &&
             !Token::Match(tok3->tokAt(3), "[.[]")) {
-            incdec(value, tok3->next()->str());
+            value = MathLib::incdec(value, tok3->next()->str());
             (*tok2)->tokAt(2)->str(value);
             (*tok2)->tokAt(2)->varId(valueVarId);
             if (Token::Match(tok3, "[;{}] %any% %any% ;")) {
@@ -7155,7 +7150,7 @@ void Tokenizer::simplifyReference()
         if (start) {
             tok = start;
             // replace references in this scope..
-            Token * const end = tok->next()->link();
+            Token * const end = tok->link();
             for (Token *tok2 = tok; tok2 && tok2 != end; tok2 = tok2->next()) {
                 // found a reference..
                 if (Token::Match(tok2, "[;{}] %type% & %var% (|= %var% )| ;")) {
@@ -7174,6 +7169,7 @@ void Tokenizer::simplifyReference()
                     tok2->deleteNext(6+(tok->strAt(6)==")" ? 1 : 0));
                 }
             }
+            tok = end;
         }
     }
 }
@@ -10508,25 +10504,6 @@ void Tokenizer::simplifyMathExpressions()
             }
         }
     }
-}
-
-const std::string& Tokenizer::getSourceFilePath() const
-{
-    if (list.getFiles().empty()) {
-        static const std::string empty;
-        return empty;
-    }
-    return list.getFiles()[0];
-}
-
-bool Tokenizer::isC() const
-{
-    return _settings->enforcedLang == Settings::C || (_settings->enforcedLang == Settings::None && Path::isC(getSourceFilePath()));
-}
-
-bool Tokenizer::isCPP() const
-{
-    return _settings->enforcedLang == Settings::CPP || (_settings->enforcedLang == Settings::None && Path::isCPP(getSourceFilePath()));
 }
 
 void Tokenizer::reportError(const Token* tok, const Severity::SeverityType severity, const std::string& id, const std::string& msg, bool inconclusive) const

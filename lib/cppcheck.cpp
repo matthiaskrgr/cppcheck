@@ -160,6 +160,10 @@ unsigned int CppCheck::processFile(const std::string& filename, const std::strin
             preprocessor.preprocess(fin, filedata, configurations, filename, _settings._includePaths);
         }
 
+        // Unhandled chars found during preprocessing => abort checking this file
+        if (preprocessor.foundUnhandledChars())
+            return 0;
+
         if (_settings.checkConfiguration) {
             return 0;
         }
@@ -376,7 +380,7 @@ void CppCheck::checkFile(const std::string &code, const char FileName[])
         if (!_simplify)
             return;
 
-        Timer timer3("Tokenizer::simplifyTokenList", _settings._showtime, &S_timerResults);
+        Timer timer3("Tokenizer::simplifyTokenList2", _settings._showtime, &S_timerResults);
         result = _tokenizer.simplifyTokenList2();
         timer3.Stop();
         if (!result)
@@ -409,7 +413,7 @@ void CppCheck::checkFile(const std::string &code, const char FileName[])
             ErrorLogger::ErrorMessage::FileLocation loc2;
             loc2.setfile(Path::toNativeSeparators(FileName));
             locationList.push_back(loc2);
-            loc.setfile(_tokenizer.getSourceFilePath());
+            loc.setfile(_tokenizer.list.getSourceFilePath());
         }
         locationList.push_back(loc);
         const ErrorLogger::ErrorMessage errmsg(locationList,
@@ -477,7 +481,7 @@ void CppCheck::executeRules(const std::string &tokenlist, const Tokenizer &token
 
             // determine location..
             ErrorLogger::ErrorMessage::FileLocation loc;
-            loc.setfile(tokenizer.getSourceFilePath());
+            loc.setfile(tokenizer.list.getSourceFilePath());
             loc.line = 0;
 
             std::size_t len = 0;

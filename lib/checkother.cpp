@@ -2182,12 +2182,11 @@ void CheckOther::strPlusChar()
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-            if (tok->str() == "+" && tok->astOperand2()) {
-                if (tok->astOperand1()->type() == Token::eString) { // string literal...
+            if (tok->str() == "+") {
+                if (tok->astOperand1() && (tok->astOperand1()->type() == Token::eString)) { // string literal...
                     if (tok->astOperand2() && (tok->astOperand2()->type() == Token::eChar || isChar(tok->astOperand2()->variable()))) // added to char variable or char constant
                         strPlusCharError(tok);
                 }
-
             }
         }
     }
@@ -3190,6 +3189,8 @@ void CheckOther::checkRedundantCopy()
             continue;
 
         const Token* tok = startTok->next()->astOperand2();
+        if (!tok)
+            continue;
         if (!Token::Match(tok->previous(), "%var% ("))
             continue;
         if (!Token::Match(tok->link(), ") )| ;")) // bailout for usage like "const A a = getA()+3"
@@ -3345,6 +3346,13 @@ void CheckOther::oppositeInnerCondition()
                      (!tok->varId() && nonlocal)) {
                 if (Token::Match(tok, "%var% ++|--|="))
                     break;
+                if (Token::Match(tok,"%var% [")) {
+                    const Token *tok2 = tok->linkAt(1);
+                    while (Token::simpleMatch(tok2, "] ["))
+                        tok2 = tok2->linkAt(1);
+                    if (Token::simpleMatch(tok2, "] ="))
+                        break;
+                }
                 if (Token::Match(tok->previous(), "++|--|& %var%"))
                     break;
                 if (Token::Match(tok->previous(), "[(,] %var% [,)]")) {
