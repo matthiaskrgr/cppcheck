@@ -233,6 +233,7 @@ class CppCheckHandler(XmlContentHandler):
         if name != 'error':
             return
 
+        verbose_msg = False
         self.errors.append({
             'file': attributes.get('file', ''),
             'line': int(attributes.get('line', 0)),
@@ -245,23 +246,48 @@ class CppCheckHandler(XmlContentHandler):
         if name == 'cppcheck':
             self.versionCppcheck = attributes['version']
         if name == 'error':
-            try:
-                self.errors.append({
+            try: # inconclusive + verbose
+                self.errors.append({ 
                     'file': '',
                     'line': 0,
                     'id': attributes['id'],
                     'severity': attributes['severity'],
                     'msg': attributes['msg'],
-                    'inconclusive': attributes['inconclusive']
+                    'inconclusive': attributes['inconclusive'],
+                    'verbose': attributes['verbose'].replace("\012", "&#10;", 1)
                 })
+                verbose_msg = True
             except KeyError:
-                self.errors.append({
-                    'file': '',
-                    'line': 0,
-                    'id': attributes['id'],
-                    'severity': attributes['severity'],
-                    'msg': attributes['msg']
-                })
+                try: # inconclusive
+                    self.errors.append({
+                        'file': '',
+                        'line': 0,
+                        'id': attributes['id'],
+                        'severity': attributes['severity'],
+                        'msg': attributes['msg'],
+                        'inconclusive': attributes['inconclusive'],
+                    })
+                    verbose_msg = False
+                except KeyError:
+                    try: # verbose
+                        self.errors.append({
+                            'file': '',
+                            'line': 0,
+                            'id': attributes['id'],
+                            'severity': attributes['severity'],
+                            'msg': attributes['msg'],
+                            'verbose': attributes['verbose']
+                        })
+                        verbose_msg = True
+                    except KeyError: # none of the above
+                        self.errors.append({
+                            'file': '',
+                            'line': 0,
+                            'id': attributes['id'],
+                            'severity': attributes['severity'],
+                            'msg': attributes['msg'],
+                        })
+                        verbose_msg = False
         elif name == 'location':
             assert self.errors
             self.errors[-1]['file'] = attributes['file']
@@ -450,11 +476,19 @@ if __name__ == '__main__':
                             '\n         <tr><td></td><td>%s</td><td>%s</td><td>%s</td></tr>' %
                             (error['id'], error['severity'], error['msg']))
                     else:
-                        output_file.write(
-                            "\n       <tr><td><a href='%s#line-%d'>%d</a></td><td>%s</td><td>%s</td><td %s>%s</td></tr>" %
-                            (data['htmlfile'], error['line'], error['line'],
-                             error['id'], error['severity'], error_class,
-                             error['msg']))
+                        verbose_msg = True
+                        if verbose_msg == True:
+                            output_file.write(
+                                "\n       <tr><td><a href='%s#line-%d' >%d</a></td><td>%s</td><td>%s</td><td %s>%s title='%s' </td></tr>" %
+                                (data['htmlfile'], error['line'], error['line'],
+                                 error['id'], error['severity'], error_class,  error['verbose'],
+                                 error['msg']))
+                        else:
+                            output_file.write(
+                                "\n       <tr><td><a href='%s#line-%d'>%d</a></td><td>%s</td><td>%s</td><td %s>%s</td></tr>" %
+                                (data['htmlfile'], error['line'], error['line'],
+                                 error['id'], error['severity'], error_class,
+                                 error['msg']))
 
         output_file.write('\n       </table>')
         output_file.write(HTML_FOOTER % contentHandler.versionCppcheck)
