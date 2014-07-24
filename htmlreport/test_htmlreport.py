@@ -75,6 +75,38 @@ class TestHTMLReport(unittest.TestCase):
             self.assertTrue(
                 os.path.exists(os.path.join(output_directory, '0.html')))
 
+    def checkIncludeNoExtension(self, xml_version):
+        with runCheck(
+            os.path.join(ROOT_DIR, 'htmlreport', 'tests', 'A.c'),
+            xml_version=xml_version
+        ) as (report, output_directory):
+            self.assertIn('<html', report)
+
+            self.assertIn('Invalid number of character ({) when these macros are defined:', report)
+            self.assertIn('A_include', report)
+
+            detail_filename = os.path.join(output_directory, '0.html')
+            self.assertTrue(
+                os.path.exists(detail_filename))
+
+            with open(detail_filename) as input_file:
+                detail_contents = input_file.read()
+                self.assertIn('<html', detail_contents)
+                self.assertIn('Invalid number of character ({) when these macros are defined:', detail_contents)
+
+
+    def checkInvalidUTF8(self, xml_version):
+        with runCheck(
+            os.path.join(ROOT_DIR, 'htmlreport', 'tests', 'utf8-invalid.c'),
+            xml_version=xml_version
+        ) as (report, output_directory):
+            self.assertIn('<html', report)
+
+            self.assertNotIn('Could not generated content because pygments failed to retrieve the determine code type', report)
+            self.assertNotIn('utf8-invalid.c', report)
+
+            self.assertFalse(
+                not os.path.exists(os.path.join(output_directory, '0.html')))
 
 @contextlib.contextmanager
 def runCheck(source_filename=None, xml_version='1', xml_filename=None):

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<results>
+    <error file="A_include" line="3" id="syntaxError" severity="error" msg="Invalid number of character ({) when these macros are defined: &apos;&apos;."/>
+</results>
