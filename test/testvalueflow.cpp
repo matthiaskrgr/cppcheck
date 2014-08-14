@@ -957,6 +957,12 @@ private:
         TODO_ASSERT_EQUALS(true, false, testValueOfX(code, 3U, 0));
         ASSERT_EQUALS(false, testValueOfX(code, 4U, 0));
 
+        code = "void f() {\n"  // #6044 - hang
+               "  decal_t *decal = &decals[i++];\n"
+               "  x = (int)((decal) && (decal->color));\n"
+               "}";
+        testValueOfX(code, 0U, 0);
+
         // TODO: float
         code = "void f(float x) {\n"
                "  if (x == 0.5) {}\n"
@@ -1070,6 +1076,13 @@ private:
                "}\n";
         ASSERT_EQUALS(false, testValueOfX(code, 4U, 0));
         ASSERT_EQUALS(true,  testValueOfX(code, 4U, 9));
+
+        // hang
+        code = "void f() {\n"
+               "  for(int i = 0; i < 20; i++)\n"
+               "    n = (int)(i < 10 || abs(negWander) < abs(negTravel));\n"
+               "}";
+        testValueOfX(code,0,0); // <- dont hang
     }
 
     void valueFlowSubFunction() {

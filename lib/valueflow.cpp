@@ -827,8 +827,11 @@ static bool valueFlowForward(Token * const               startToken,
                             "no simplification of " + tok2->str() + " within " + (Token::Match(parent,"[?:]") ? "?:" : parent->str()) + " expression");
                 while (parent && parent->str() != "(")
                     parent = parent->astParent();
-                if (parent)
+                if (parent) {
                     tok2 = const_cast<Token*>(parent->link());
+                    if (Token::simpleMatch(tok2, ") ("))
+                        tok2 = tok2->linkAt(1);
+                }
                 continue;
             }
 
@@ -1267,8 +1270,13 @@ static void valueFlowForLoopSimplify(Token * const bodyStart, const unsigned int
                 const Token *parent = tok2;
                 while (parent && parent->str() == tok2->str())
                     parent = parent->astParent();
-                if (parent && parent->str() == "(")
+                // Jump to end of condition
+                if (parent && parent->str() == "(") {
                     tok2 = parent->link();
+                    // cast
+                    if (Token::simpleMatch(tok2, ") ("))
+                        tok2 = tok2->linkAt(1);
+                }
             }
 
         }
