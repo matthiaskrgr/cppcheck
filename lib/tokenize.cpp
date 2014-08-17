@@ -2202,6 +2202,8 @@ void Tokenizer::simplifyLabelsCaseDefault()
                 if (Token::Match(tok->next(),"[:{};]"))
                     break;
             }
+            if (!tok)
+                break;
             if (tok->str() != "case" && tok->next() && tok->next()->str() == ":") {
                 tok = tok->next();
                 if (tok->next()->str() != ";")
@@ -6399,6 +6401,9 @@ bool Tokenizer::simplifyKnownVariables()
                 if (indentlevel <= 0)
                     break;
             }
+
+            else if (Token::simpleMatch(tok2, "for ("))
+                tok2 = tok2->next()->link();
 
             else if (tok2->previous()->str() != "*" && !Token::Match(tok2->tokAt(-2), "* --|++") &&
                      (Token::Match(tok2, "%var% = %bool%|%char%|%num%|%str%|%var% ;") ||
