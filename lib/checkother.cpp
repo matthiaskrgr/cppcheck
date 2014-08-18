@@ -34,7 +34,7 @@ namespace {
 
 static bool astIsFloat(const Token *tok, bool unknown)
 {
-    if (tok->str() == ".")
+    if (tok->astOperand2() && (tok->str() == "." || tok->str() == "::"))
         return astIsFloat(tok->astOperand2(), unknown);
 
     if (tok->astOperand1() && tok->str() != "?" && astIsFloat(tok->astOperand1(),unknown))
@@ -157,7 +157,16 @@ bool isSameExpression(const Token *tok1, const Token *tok2, const std::set<std::
 
 static bool isOppositeCond(const Token * const cond1, const Token * const cond2, const std::set<std::string> &constFunctions)
 {
-    if (!cond1 || !cond1->isComparisonOp() || !cond2 || !cond2->isComparisonOp())
+    if (!cond1 || !cond2)
+        return false;
+
+    if (cond1->str() == "!")
+        return isSameExpression(cond1->astOperand1(), cond2, constFunctions);
+
+    if (cond2->str() == "!")
+        return isSameExpression(cond1, cond2->astOperand1(), constFunctions);
+
+    if (!cond1->isComparisonOp() || !cond2->isComparisonOp())
         return false;
 
     const std::string &comp1 = cond1->str();
@@ -1260,7 +1269,18 @@ void CheckOther::checkIncorrectLogicOperator()
         const Scope * scope = symbolDatabase->functionScopes[ii];
 
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-            if (Token::Match(tok, "&&|%oror%")) {
+            // Opposite comparisons
+            if (Token::Match(tok, "%oror%|&&") &&
+                tok->astOperand1() &&
+                tok->astOperand2() &&
+                (tok->astOperand1()->isName() || tok->astOperand2()->isName()) &&
+                isOppositeCond(tok->astOperand1(), tok->astOperand2(), _settings->library.functionpure)) {
+
+                const bool alwaysTrue(tok->str() == "||");
+                incorrectLogicOperatorError(tok, tok->expressionString(), alwaysTrue);
+            }
+
+            else if (Token::Match(tok, "&&|%oror%")) {
                 // Comparison #1 (LHS)
                 const Token *comp1 = tok->astOperand1();
                 if (comp1 && comp1->str() == tok->str())
@@ -2075,7 +2095,7 @@ void CheckOther::checkCharVariable()
                     const Token *lhs = eq->astOperand1();
                     if (lhs && lhs->str() == "*" && !lhs->astOperand2())
                         lhs = lhs->astOperand1();
-                    while (lhs && lhs->str() == ".")
+                    while (lhs && (lhs->str() == "." || lhs->str() == "::"))
                         lhs = lhs->astOperand2();
                     if (!lhs || !lhs->isName())
                         continue;
@@ -2915,7 +2935,7 @@ void CheckOther::checkSuspiciousStringCompare()
                 const Token *tokens[2] = { varTok->astOperand1(), varTok->astOperand2() };
                 for (int nr = 0; nr < 2; nr++) {
                     const Token *t = tokens[nr];
-                    while (t && t->str() == ".")
+                    while (t && (t->str() == "." || t->str() == "::"))
                         t = t->astOperand2();
                     if (t && t->variable() && t->variable()->isPointer())
                         varTok = t;
@@ -2928,7 +2948,7 @@ void CheckOther::checkSuspiciousStringCompare()
                 varTok = varTok->astOperand1();
             }
 
-            while (varTok && varTok->str() == ".")
+            while (varTok && (varTok->str() == "." || varTok->str() == "::"))
                 varTok = varTok->astOperand2();
             if (!varTok || !varTok->isName())
                 continue;

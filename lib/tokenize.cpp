@@ -2331,7 +2331,7 @@ static bool setVarIdParseDeclaration(const Token **tok, const std::map<std::stri
 
 
 static void setVarIdStructMembers(Token **tok1,
-                                  std::map<unsigned int, std::map<std::string,unsigned int> > *structMembers,
+                                  std::map<unsigned int, std::map<std::string, unsigned int> > *structMembers,
                                   unsigned int *_varId)
 {
     Token *tok = *tok1;
@@ -2345,7 +2345,7 @@ static void setVarIdStructMembers(Token **tok1,
         if (TemplateSimplifier::templateParameters(tok->next()) > 0)
             break;
 
-        std::map<std::string,unsigned int>& members = (*structMembers)[struct_varid];
+        std::map<std::string, unsigned int>& members = (*structMembers)[struct_varid];
         if (members.empty() || members.find(tok->str()) == members.end()) {
             members[tok->str()] = ++(*_varId);
             tok->varId(*_varId);
@@ -2422,7 +2422,7 @@ static void setVarIdClassFunction(const std::string &classname,
                                   Token * const startToken,
                                   const Token * const endToken,
                                   const std::map<std::string, unsigned int> &varlist,
-                                  std::map<unsigned int, std::map<std::string,unsigned int> > *structMembers,
+                                  std::map<unsigned int, std::map<std::string, unsigned int> > *structMembers,
                                   unsigned int *_varId)
 {
     for (Token *tok2 = startToken; tok2 && tok2 != endToken; tok2 = tok2->next()) {
@@ -2587,9 +2587,18 @@ void Tokenizer::setVarId()
                     continue;
 
                 const Token *tok3 = tok2->next();
-                if (!tok3->isStandardType() && tok3->str() != "void" && !Token::Match(tok3, "struct|union|class %type%") && tok3->str() != "." && (notstart.find(tok3->str()) != notstart.end() || !setVarIdParseDeclaration(&tok3, variableId, executableScope.top(), isCPP()))) {
-                    variableId[tok2->previous()->str()] = ++_varId;
-                    tok = tok2->previous();
+                if (!tok3->isStandardType() && tok3->str() != "void" && !Token::Match(tok3, "struct|union|class %type%") && tok3->str() != "." && !Token::Match(tok2->link()->previous(), "[&*]")) {
+                    bool isDecl = true;
+                    for (; tok3; tok3 = tok3->nextArgument()) {
+                        if (tok3->strAt(-2) == "&" || tok3->strAt(-2) == "*" || (notstart.find(tok3->str()) == notstart.end() && setVarIdParseDeclaration(&tok3, variableId, executableScope.top(), isCPP()))) {
+                            isDecl = false;
+                            break;
+                        }
+                    }
+                    if (isDecl) {
+                        variableId[tok2->previous()->str()] = ++_varId;
+                        tok = tok2->previous();
+                    }
                 }
             }
 
@@ -2644,7 +2653,7 @@ void Tokenizer::setVarId()
             if (Token::Match(tok2, "%var% :: %var%")) {
                 if (tok2->strAt(3) == "(")
                     allMemberFunctions.push_back(tok2);
-                else if (tok2->tokAt(2)->varId() != 0)
+                else if (tok2->strAt(3) != "::" && tok2->strAt(-1) != "::") // Support only one depth
                     allMemberVars.push_back(tok2);
             }
         }
@@ -2652,8 +2661,10 @@ void Tokenizer::setVarId()
 
     // class members..
     for (Token *tok = list.front(); tok; tok = tok->next()) {
-        if (Token::Match(tok, "class|struct %var% {|:")) {
+        if (Token::Match(tok, "namespace|class|struct %var% {|:")) {
             const std::string &classname(tok->next()->str());
+
+            bool namesp = tok->str() == "namespace";
 
             // What member variables are there in this class?
             std::map<std::string, unsigned int> varlist;
@@ -2689,6 +2700,9 @@ void Tokenizer::setVarId()
                 tok2 = tok2->tokAt(2);
                 tok2->varId(varlist[tok2->str()]);
             }
+
+            if (namesp)
+                continue;
 
             // Set variable ids in member functions for this class..
             const std::string funcpattern(classname + " :: %var% (");
@@ -2799,7 +2813,7 @@ void Tokenizer::createLinks2()
                 token->link(0);
         }
 
-        else if (token->str() == ";")
+        else if (Token::Match(token, "%oror%|&&|;"))
             while (!type.empty() && type.top()->str() == "<")
                 type.pop();
         else if (token->str() == "<" && token->previous() && token->previous()->isName() && !token->previous()->varId())

@@ -471,24 +471,18 @@ static void valueFlowBeforeCondition(TokenList *tokenlist, ErrorLogger *errorLog
         // extra logic for unsigned variables 'i>=1' => possible value can also be 0
         ValueFlow::Value val(tok, num);
         val.varId = varid;
+        if (Token::Match(tok, "<|>")) {
+            if (num != 0)
+                continue;
+            if (!var->typeStartToken()->isUnsigned())
+                continue;
+        }
         ValueFlow::Value val2;
         if (num==1U && Token::Match(tok,"<=|>=")) {
-            bool isunsigned = false;
-            for (const Token* type = var->typeStartToken(); type && type->varId() == 0U; type = type->next())
-                isunsigned |= type->isUnsigned();
-            if (isunsigned) {
+            if (var->typeStartToken()->isUnsigned()) {
                 val2 = ValueFlow::Value(tok,0);
                 val2.varId = varid;
             }
-        }
-        if (Token::Match(tok,"<|>")) {
-            if (num!=0)
-                continue;
-            bool isunsigned = false;
-            for (const Token* type = var->typeStartToken(); type && type->varId() == 0U; type = type->next())
-                isunsigned |= type->isUnsigned();
-            if (!isunsigned)
-                continue;
         }
         for (Token *tok2 = tok->previous(); ; tok2 = tok2->previous()) {
             if (!tok2) {
@@ -1377,6 +1371,8 @@ static void valueFlowForLoop(TokenList *tokenlist, ErrorLogger *errorLogger, con
         MathLib::bigint num1(0), num2(0), numAfter(0);
 
         if (valueFlowForLoop1(tok, &varid, &num1, &num2, &numAfter)) {
+            if (num1 > num2)
+                continue;
             valueFlowForLoopSimplify(bodyStart, varid, num1, tokenlist, errorLogger, settings);
             valueFlowForLoopSimplify(bodyStart, varid, num2, tokenlist, errorLogger, settings);
             valueFlowForLoopSimplifyAfter(tok, varid, numAfter, tokenlist, errorLogger, settings);

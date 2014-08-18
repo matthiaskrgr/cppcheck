@@ -299,6 +299,7 @@ private:
         TEST_CASE(varid_in_class14);
         TEST_CASE(varid_in_class15);    // #5533 - functions
         TEST_CASE(varid_in_class16);
+        TEST_CASE(varid_in_class17);    // #6056 - no varid for member functions
         TEST_CASE(varid_initList);
         TEST_CASE(varid_operator);
         TEST_CASE(varid_throw);
@@ -334,7 +335,9 @@ private:
         TEST_CASE(varidclass14);
         TEST_CASE(varidclass15);  // initializer list
         TEST_CASE(varidclass16);  // #4577
-        TEST_CASE(varid_classnameshaddowsvariablename) // #3990
+        TEST_CASE(varid_classnameshaddowsvariablename); // #3990
+
+        TEST_CASE(varidnamespace1);
 
         TEST_CASE(file1);
         TEST_CASE(file2);
@@ -4621,12 +4624,32 @@ private:
         const char code[] = "class Fred {\n"
                             "    int x;\n"
                             "    void foo(int x) { this->x = x; }\n"
-                            "}\n";
+                            "};\n";
         ASSERT_EQUALS("\n\n##file 0\n"
                       "1: class Fred {\n"
                       "2: int x@1 ;\n"
                       "3: void foo ( int x@2 ) { this . x@1 = x@2 ; }\n"
-                      "4: }\n", tokenizeDebugListing(code, false, "test.cpp"));
+                      "4: } ;\n", tokenizeDebugListing(code, false, "test.cpp"));
+    }
+
+    void varid_in_class17() { // #6056 - Set no varid for member functions
+        const char code[] = "class Fred {\n"
+                            "    int method_with_internal(X&);\n"
+                            "    int method_with_internal(X*);\n"
+                            "    int method_with_internal(int&);\n"
+                            "    int method_with_internal(A* b, X&);\n"
+                            "    int method_with_internal(X&, A* b);\n"
+                            "    int method_with_internal(const B &, int);\n"
+                            "};";
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class Fred {\n"
+                      "2: int method_with_internal ( X & ) ;\n"
+                      "3: int method_with_internal ( X * ) ;\n"
+                      "4: int method_with_internal ( int & ) ;\n"
+                      "5: int method_with_internal ( A * b@1 , X & ) ;\n"
+                      "6: int method_with_internal ( X & , A * b@2 ) ;\n"
+                      "7: int method_with_internal ( const B & , int ) ;\n"
+                      "8: } ;\n", tokenizeDebugListing(code, false, "test.cpp"));
     }
 
     void varid_initList() {
@@ -5072,8 +5095,7 @@ private:
                                  "10: A :: buf@1 [ 10 ] = 0 ;\n"
                                  "11: }\n");
 
-        const char current[] =  "\n\n##file 0\n1: class A\n2: {\n3: public:\n4: static char buf@1 [ 20 ] ;\n5: } ;\n6: char A :: buf [ 20 ] ;\n7: int main ( )\n8: {\n9: char buf@2 [ 2 ] ;\n10: A :: buf [ 10 ] = 0 ;\n11: }\n";
-        TODO_ASSERT_EQUALS(wanted, current, actual);
+        ASSERT_EQUALS(wanted, actual);
     }
 
     void varidclass7() {
@@ -5300,6 +5322,25 @@ private:
                                 "5: }\n";
         ASSERT_EQUALS(expected, tokenizeDebugListing(code));
 
+    }
+
+    void varidnamespace1() {
+        const char code[] = "namespace A {\n"
+                            "    char buf[20];\n"
+                            "}\n"
+                            "int main() {\n"
+                            "    return foo(A::buf);\n"
+                            "}";
+
+        const char expected[] = "\n\n##file 0\n"
+                                "1: namespace A {\n"
+                                "2: char buf@1 [ 20 ] ;\n"
+                                "3: }\n"
+                                "4: int main ( ) {\n"
+                                "5: return foo ( A :: buf@1 ) ;\n"
+                                "6: }\n";
+
+        ASSERT_EQUALS(expected, tokenizeDebugListing(code));
     }
 
     void file1() {
@@ -7092,6 +7133,19 @@ private:
             ASSERT_EQUALS(true, tok->tokAt(7) == tok->linkAt(5));
 
             ASSERT_EQUALS("", errout.str());
+        }
+
+        {
+            // if (a < b || c > d) { }
+            const char code[] = "if (a < b || c > d);";
+            errout.str("");
+            Settings settings;
+            Tokenizer tokenizer(&settings, this);
+            std::istringstream istr(code);
+            tokenizer.tokenize(istr, "test.cpp");
+            const Token *tok = tokenizer.tokens();
+
+            ASSERT_EQUALS(true, tok->linkAt(3) == nullptr);
         }
     }
 
