@@ -175,14 +175,7 @@ void CheckClass::constructors()
                 if (!var->isPointer() &&
                     !(var->type() && var->type()->needInitialization != Type::True) &&
                     (func->type == Function::eCopyConstructor || func->type == Function::eOperatorEqual)) {
-                    bool stdtype = false;
-                    for (const Token *type = var->typeStartToken(); type && type->isName(); type = type->next()) {
-                        if (type->isStandardType()) {
-                            stdtype = true;
-                            break;
-                        }
-                    }
-                    if (!stdtype) {
+                    if (!var->typeStartToken()->isStandardType()) {
                         if (_settings->inconclusive)
                             inconclusive = true;
                         else
@@ -962,20 +955,6 @@ void CheckClass::checkMemset()
 
                         if (derefs == 0)
                             type = var->typeScope();
-
-                        // TODO: The SymbolDatabase mix up variables in nested structs.
-                        //       So we must bailout right now if there are nested structs.
-                        bool bailout = false;
-                        for (const Token *typetok2 = var->typeStartToken(); typetok2 && typetok2 != var->typeEndToken(); typetok2 = typetok2->next()) {
-                            if (typetok2->str() == "::")
-                                bailout = true;
-                            else if (typetok2->str() == "{") {
-                                bailout = false;
-                                break;
-                            }
-                        }
-                        if (bailout)
-                            continue;
                     }
                 }
 
@@ -1058,8 +1037,8 @@ void CheckClass::checkMemsetType(const Scope *start, const Token *tok, const Sco
                 checkMemsetType(start, tok, typeScope, allocation, parsedTypes);
 
             // check for float
-            else if (var->isFloatingType() && _settings->isEnabled("portability"))
-                memsetErrorFloat(tok, tok->str(), type->classDef->str());
+            else if (tok->str() == "memset" && var->isFloatingType() && _settings->isEnabled("portability"))
+                memsetErrorFloat(tok, type->classDef->str());
         }
     }
 }
@@ -1100,10 +1079,10 @@ void CheckClass::memsetErrorReference(const Token *tok, const std::string &memfu
     reportError(tok, Severity::error, "memsetClassReference", "Using '" + memfunc + "' on " + type + " that contains a reference.");
 }
 
-void CheckClass::memsetErrorFloat(const Token *tok, const std::string &memfunc, const std::string &type)
+void CheckClass::memsetErrorFloat(const Token *tok, const std::string &type)
 {
-    reportError(tok, Severity::portability, "memsetClassFloat", "Using '" + memfunc + "' on " + type + " which contains a floating point number.\n"
-                "Using '" + memfunc + "' on " + type + " which contains a floating point number. This is not portable because memset() sets each byte of a block of memory to a specific value and"
+    reportError(tok, Severity::portability, "memsetClassFloat", "Using memset() on " + type + " which contains a floating point number.\n"
+                "Using memset() on " + type + " which contains a floating point number. This is not portable because memset() sets each byte of a block of memory to a specific value and"
                 " the actual representation of a floating-point value is implementation defined.");
 }
 

@@ -2204,7 +2204,7 @@ private:
                       "    n1::Fred fred;\n"
                       "    memset(&fred, 0, sizeof(fred));\n"
                       "}");
-        TODO_ASSERT_EQUALS("[test.cpp:10]: (error) Using 'memset' on class that contains a 'std::string'.\n", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:10]: (error) Using 'memset' on class that contains a 'std::string'.\n", errout.str());
 
         checkNoMemset("class A {\n"
                       "  virtual ~A() { }\n"
@@ -2481,7 +2481,7 @@ private:
                       "    A a;\n"
                       "    memset(&a, 0, sizeof(A));\n"
                       "}", false, true);
-        ASSERT_EQUALS("[test.cpp:6]: (portability) Using 'memset' on struct which contains a floating point number.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:6]: (portability) Using memset() on struct which contains a floating point number.\n", errout.str());
 
         checkNoMemset("struct A {\n"
                       "    float f[4];\n"
@@ -2490,7 +2490,16 @@ private:
                       "    A a;\n"
                       "    memset(&a, 0, sizeof(A));\n"
                       "}", false, true);
-        ASSERT_EQUALS("[test.cpp:6]: (portability) Using 'memset' on struct which contains a floating point number.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:6]: (portability) Using memset() on struct which contains a floating point number.\n", errout.str());
+
+        checkNoMemset("struct A {\n"
+                      "    float f[4];\n"
+                      "};\n"
+                      "void f(const A& b) {\n"
+                      "    A a;\n"
+                      "    memcpy(&a, &b, sizeof(A));\n"
+                      "}", false, true);
+        ASSERT_EQUALS("", errout.str());
 
         checkNoMemset("struct A {\n"
                       "    float* f;\n"
