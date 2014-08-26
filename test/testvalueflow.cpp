@@ -62,6 +62,8 @@ private:
         TEST_CASE(valueFlowForLoop);
         TEST_CASE(valueFlowSubFunction);
         TEST_CASE(valueFlowFunctionReturn);
+
+        TEST_CASE(garbage);
     }
 
     bool testValueOfX(const char code[], unsigned int linenr, int value) {
@@ -996,12 +998,6 @@ private:
         TODO_ASSERT_EQUALS(true, false, testValueOfX(code, 3U, 0));
         ASSERT_EQUALS(false, testValueOfX(code, 4U, 0));
 
-        code = "void f() {\n"  // #6044 - hang
-               "  decal_t *decal = &decals[i++];\n"
-               "  x = (int)((decal) && (decal->color));\n"
-               "}";
-        testValueOfX(code, 0U, 0);
-
         // TODO: float
         code = "void f(float x) {\n"
                "  if (x == 0.5) {}\n"
@@ -1240,6 +1236,15 @@ private:
                "    x = 1 * add(10+1,4);\n"
                "}";
         ASSERT_EQUALS(15, valueOfTok(code, "*").intvalue);
+    }
+
+    void garbage() {
+        // #6089
+        const char* code = "{} int foo(struct, x1, struct x2, x3, int, x5, x6, x7)\n"
+                           "{\n"
+                           "    (foo(s, , 2, , , 5, , 7)) abort()\n"
+                           "}\n";
+        ASSERT_THROW(valueOfTok(code, "*"), InternalError);
     }
 };
 

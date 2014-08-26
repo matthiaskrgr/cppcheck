@@ -2516,7 +2516,7 @@ void Tokenizer::setVarId()
             }
         } else if (tok->str() == "}") {
             // parse anonymous unions as part of the current scope
-            if (!(Token::simpleMatch(tok, "} ;") && Token::simpleMatch(tok->link()->previous(), "union {"))) {
+            if (!(Token::simpleMatch(tok, "} ;") && tok->link() && Token::simpleMatch(tok->link()->previous(), "union {"))) {
                 // Set variable ids in class declaration..
                 if (!isC() && !executableScope.top() && tok->link()) {
                     setVarIdClassDeclaration(tok->link(),
@@ -2600,7 +2600,7 @@ void Tokenizer::setVarId()
                     } else
                         decl = false;
                 } else if (isCPP() && Token::Match(prev2, "%type% {") && Token::simpleMatch(tok2->link(), "} ;")) { // C++11 initialization style
-                    if (Token::Match(prev2, "do|try|else"))
+                    if (Token::Match(prev2, "do|try|else") || Token::Match(prev2->tokAt(-2), "struct|class"))
                         continue;
                 } else
                     decl = false;
@@ -7607,15 +7607,15 @@ void Tokenizer::simplifyEnum()
             // previous value or 0 if it is the first one.
             std::map<std::string,EnumValue> enumValues;
             for (; tok1 && tok1 != end; tok1 = tok1->next()) {
-                Token * enumName = 0;
-                Token * enumValue = 0;
-                Token * enumValueStart = 0;
-                Token * enumValueEnd = 0;
-
                 if (tok1->str() == "(") {
                     tok1 = tok1->link();
                     continue;
                 }
+
+                Token * enumName = 0;
+                Token * enumValue = 0;
+                Token * enumValueStart = 0;
+                Token * enumValueEnd = 0;
 
                 if (Token::Match(tok1->previous(), ",|{ %type% ,|}")) {
                     // no value specified
@@ -7872,8 +7872,10 @@ void Tokenizer::simplifyEnum()
                                     ++indentlevel;
                                 else if (enumtok->str() == ")")
                                     --indentlevel;
-                                if (indentlevel == 0)
-                                    hasOp |= enumtok->isOp();
+                                if (indentlevel == 0 && enumtok->isOp()) {
+                                    hasOp = true;
+                                    break;
+                                }
                             }
                             if (!hasOp)
                                 tok2 = copyTokens(tok2, ev->start, ev->end);
@@ -8128,7 +8130,7 @@ void Tokenizer::eraseDeadCode(Token *begin, const Token *end)
 {
     if (!begin)
         return;
-    bool isgoto = Token::Match(begin->tokAt(-2), "goto %var% ;");
+    const bool isgoto = Token::Match(begin->tokAt(-2), "goto %var% ;");
     unsigned int indentlevel = 1,
                  indentcase = 0,
                  indentswitch = 0,

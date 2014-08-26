@@ -67,6 +67,7 @@ private:
         TEST_CASE(tokenize30);  // #5356 (segmentation fault upon invalid code)
         TEST_CASE(tokenize31);  // #3503 (Wrong handling of member function taking function pointer as argument)
         TEST_CASE(tokenize32);  // #5884 (fsanitize=undefined: left shift of negative value -10000 in lib/templatesimplifier.cpp:852:46)
+        TEST_CASE(tokenize33);  // #5780 Various crashes on valid template code
 
         // don't freak out when the syntax is wrong
         TEST_CASE(wrong_syntax1);
@@ -903,6 +904,15 @@ private:
         // Do not simplify negative integer left shifts.
         const char * code = "void f ( ) { int max_x ; max_x = -10000 << 16 ; }";
         ASSERT_EQUALS(code, tokenizeAndStringify(code));
+    }
+
+    // ##5780 Various crashes on valid template code in Tokenizer::setVarId()
+    void tokenize33() {
+        const char * code = "template<typename T, typename A = Alloc<T>> struct vector {};\n"
+                            "void z() {\n"
+                            "    vector<int> VI;\n"
+                            "}\n";
+        //ASSERT_EQUALS(code, tokenizeAndStringify(code));
     }
 
     void wrong_syntax1() {
@@ -4933,6 +4943,11 @@ private:
         ASSERT_EQUALS("\n\n##file 0\n"
                       "1: struct S3 : public S1 , public S2 { } ;\n",
                       tokenizeDebugListing("struct S3 : public S1, public S2 { };"));
+
+        // #6058
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class CPPCHECKLIB Scope { } ;\n",
+                      tokenizeDebugListing("class CPPCHECKLIB Scope { };"));
     }
 
     void varidclass1() {
@@ -10755,6 +10770,9 @@ private:
         ASSERT_EQUALS("QT_WA{{,( QT_WA{{,( x1=",
                       testAst("QT_WA({},{x=0;});" // don't hang
                               "QT_WA({x=1;},{x=2;});"));
+        ASSERT_EQUALS("xMACROtypeT=value1=,{({=",
+                      testAst("x = { MACRO( { .type=T, .value=1 } ) }")); // dont hang: MACRO({..})
+
 
         // function pointer
         TODO_ASSERT_EQUALS("todo", "va_argapvoid((,(*0=", testAst("*va_arg(ap, void(**) ()) = 0;"));
