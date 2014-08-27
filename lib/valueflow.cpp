@@ -153,6 +153,11 @@ static std::map<unsigned int, MathLib::bigint> getProgramMemory(const Token *tok
             if (vartok->varId() != 0U && programMemory.find(vartok->varId()) == programMemory.end())
                 programMemory[vartok->varId()] = MathLib::toLongNumber(numtok->str());
         }
+        if (Token::Match(tok2, "[;{}] %varid% = %var% ;", varid)) {
+            const Token *vartok = tok2->tokAt(3);
+            if (vartok->varId() != 0U)
+                programMemory[vartok->varId()] = value.intvalue;
+        }
         if (tok2->str() == "{") {
             if (indentlevel <= 0)
                 break;
@@ -227,6 +232,24 @@ static bool bailoutSelfAssignment(const Token * const tok)
                     return true;
             }
         }
+    }
+    return false;
+}
+
+static bool isReturn(const Token *tok)
+{
+    const Token *prev = tok ? tok->previous() : nullptr;
+    if (Token::simpleMatch(prev, "}") && Token::simpleMatch(prev->link()->tokAt(-2),"} else {"))
+        return isReturn(prev) && isReturn(prev->link()->tokAt(-2));
+    if (Token::simpleMatch(prev, ";")) {
+        // noreturn function
+        if (Token::simpleMatch(prev->previous(), ") ;") && Token::Match(prev->linkAt(-1)->tokAt(-2), "[;{}] %var% ("))
+            return true;
+        // return statement
+        prev = prev->previous();
+        while (prev && !Token::Match(prev,"[;{}]"))
+            prev = prev->previous();
+        return Token::Match(prev, "[;{}] return");
     }
     return false;
 }
@@ -640,8 +663,30 @@ static bool valueFlowForward(Token * const               startToken,
     for (Token *tok2 = startToken; tok2 && tok2 != endToken; tok2 = tok2->next()) {
         if (indentlevel >= 0 && tok2->str() == "{")
             ++indentlevel;
-        else if (indentlevel >= 0 && tok2->str() == "}")
+        else if (indentlevel >= 0 && tok2->str() == "}") {
             --indentlevel;
+            if (indentlevel == 0 && isReturn(tok2) && Token::simpleMatch(tok2->link()->previous(), ") {")) {
+                const Token *condition = tok2->link()->linkAt(-1)->astOperand2();
+                if (!condition) {
+                    if (settings->debugwarnings)
+                        bailout(tokenlist, errorLogger, tok2, "variable " + var->name() + " valueFlowForward, bailing out since it's unknown if conditional return is executed");
+                    return false;
+                }
+
+                bool bailoutflag = false;
+                for (std::list<ValueFlow::Value>::const_iterator it = values.begin(); it != values.end(); ++it) {
+                    if (conditionIsTrue(condition, getProgramMemory(condition->astParent(), varid, *it))) {
+                        bailoutflag = true;
+                        break;
+                    }
+                }
+                if (bailoutflag) {
+                    if (settings->debugwarnings)
+                        bailout(tokenlist, errorLogger, tok2, "variable " + var->name() + " valueFlowForward, conditional return is assumed to be executed");
+                    return false;
+                }
+            }
+        }
 
         if (Token::Match(tok2, "sizeof|typeof|typeid ("))
             tok2 = tok2->linkAt(1);
@@ -1014,6 +1059,9 @@ static void valueFlowAfterCondition(TokenList *tokenlist, ErrorLogger *errorLogg
                         bailout(tokenlist, errorLogger, after, "possible noreturn scope");
                     continue;
                 }
+
+                bool isreturn = (codeblock == 1 && isReturn(after));
+
                 if (Token::simpleMatch(after, "} else {")) {
                     after = after->linkAt(2);
                     if (Token::simpleMatch(after->tokAt(-2), ") ; }")) {
@@ -1021,8 +1069,11 @@ static void valueFlowAfterCondition(TokenList *tokenlist, ErrorLogger *errorLogg
                             bailout(tokenlist, errorLogger, after, "possible noreturn scope");
                         continue;
                     }
+                    isreturn |= (codeblock == 2 && isReturn(after));
                 }
-                valueFlowForward(after->next(), top->scope()->classEnd, var, varid, values, true, tokenlist, errorLogger, settings);
+
+                if (!isreturn)
+                    valueFlowForward(after->next(), top->scope()->classEnd, var, varid, values, true, tokenlist, errorLogger, settings);
             }
         }
     }
