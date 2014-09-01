@@ -581,13 +581,30 @@ private:
         check("void foo()\n"
               "{\n"
               "    fflush(stdin);\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) fflush() called on input stream 'stdin' results in undefined behaviour.\n", errout.str());
+              "}", false, true);
+        ASSERT_EQUALS("[test.cpp:3]: (portability) fflush() called on input stream 'stdin' may result in undefined behaviour on non-linux systems.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
               "    fflush(stdout);\n"
-              "}");
+              "}", false, true);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo(FILE*& f) {\n"
+              "    f = fopen(path, \"r\");\n"
+              "    fflush(f);\n"
+              "}", false, true);
+        ASSERT_EQUALS("[test.cpp:3]: (portability) fflush() called on input stream 'f' may result in undefined behaviour on non-linux systems.\n", errout.str());
+
+        check("void foo(FILE*& f) {\n"
+              "    f = fopen(path, \"w\");\n"
+              "    fflush(f);\n"
+              "}", false, true);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo(FILE*& f) {\n"
+              "    fflush(f);\n"
+              "}", false, true);
         ASSERT_EQUALS("", errout.str());
     }
 

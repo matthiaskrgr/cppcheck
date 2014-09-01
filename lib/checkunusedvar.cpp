@@ -691,8 +691,7 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
                      i->typeEndToken()->isStandardType() ||
                      isRecordTypeWithoutSideEffects(i->type()) ||
                      (i->isStlType() &&
-                      i->typeStartToken()->strAt(2) != "lock_guard" &&
-                      i->typeStartToken()->strAt(2) != "unique_lock"))
+                      !Token::Match(i->typeStartToken()->tokAt(2), "lock_guard|unique_lock|shared_ptr|unique_ptr|auto_ptr")))
                 type = Variables::standard;
             if (type == Variables::none || isPartOfClassStructUnion(i->typeStartToken()))
                 continue;
@@ -1057,8 +1056,10 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
         else if (tok->isAssignmentOp()) {
             for (const Token *tok2 = tok->next(); tok2 && tok2->str() != ";"; tok2 = tok2->next()) {
                 if (tok2->varId()) {
-                    if (tok2->next()->isAssignmentOp())
+                    if (tok2->strAt(1) == "=")
                         variables.write(tok2->varId(), tok);
+                    else if (tok2->next()->isAssignmentOp())
+                        variables.use(tok2->varId(), tok);
                     else
                         variables.read(tok2->varId(), tok);
                 }

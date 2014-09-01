@@ -43,8 +43,6 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
     // Store current access in each scope (depends on evaluation progress)
     std::map<const Scope*, AccessControl> access;
 
-    std::map<const Token *, Scope *> back;
-
     // find all scopes
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok ? tok->next() : nullptr) {
         // #5593 suggested to add here:
@@ -105,7 +103,6 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                     new_scope->type = Scope::eStruct;
                 }
 
-                back[tok2->link()] = scope;
                 new_scope->classDef = tok;
                 new_scope->classStart = tok2;
                 new_scope->classEnd = tok2->link();
@@ -160,8 +157,8 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
         }
 
         // Namespace and unknown macro (#3854)
-        else if (Token::Match(tok, "namespace %var% %type% (") &&
-                 _tokenizer->isCPP() &&
+        else if (_tokenizer->isCPP() &&
+                 Token::Match(tok, "namespace %var% %type% (") &&
                  tok->tokAt(2)->isUpperCaseName() &&
                  Token::simpleMatch(tok->linkAt(3), ") {")) {
             scopeList.push_back(Scope(this, tok, scope));
@@ -290,11 +287,8 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
         else {
             // check for end of scope
             if (tok == scope->classEnd) {
-                if (back.find(tok) != back.end()) {
-                    scope = back[tok];
-                    back.erase(tok);
-                } else
-                    scope = const_cast<Scope*>(scope->nestedIn);
+                access.erase(scope);
+                scope = const_cast<Scope*>(scope->nestedIn);
                 continue;
             }
 
@@ -740,7 +734,7 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                         scopeList.push_back(Scope(this, tok, scope, Scope::eElse, tok1));
                     if (tok->str() == "do")
                         scopeList.push_back(Scope(this, tok, scope, Scope::eDo, tok1));
-                    else if (tok->str() == "try")
+                    else //if (tok->str() == "try")
                         scopeList.push_back(Scope(this, tok, scope, Scope::eTry, tok1));
 
                     tok = tok1;
@@ -756,7 +750,7 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                         scopeList.push_back(Scope(this, tok, scope, Scope::eWhile, tok1));
                     else if (tok->str() == "catch") {
                         scopeList.push_back(Scope(this, tok, scope, Scope::eCatch, tok1));
-                    } else if (tok->str() == "switch")
+                    } else // if (tok->str() == "switch")
                         scopeList.push_back(Scope(this, tok, scope, Scope::eSwitch, tok1));
 
                     scope->nestedList.push_back(&scopeList.back());
@@ -767,7 +761,11 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                         scope->checkVariable(tok->tokAt(2), Throw); // check for variable declaration and add it to new scope if found
                     tok = tok1;
                 } else if (tok->str() == "{" && !tok->previous()->varId()) {
-                    if (!Token::Match(tok->previous(), "=|,")) {
+                    if (tok->strAt(-1) == ")" && tok->linkAt(-1)->strAt(-1) == "]") {
+                        scopeList.push_back(Scope(this, tok->linkAt(-1)->linkAt(-1), scope, Scope::eLambda, tok));
+                        scope->nestedList.push_back(&scopeList.back());
+                        scope = &scopeList.back();
+                    } else if (!Token::Match(tok->previous(), "=|,|(|return")) {
                         scopeList.push_back(Scope(this, tok, scope, Scope::eUnconditional, tok));
                         scope->nestedList.push_back(&scopeList.back());
                         scope = &scopeList.back();
@@ -951,8 +949,7 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
         scope = &(*it);
 
         // add all variables
-        std::list<Variable>::iterator var;
-        for (var = scope->varlist.begin(); var != scope->varlist.end(); ++var) {
+        for (std::list<Variable>::iterator var = scope->varlist.begin(); var != scope->varlist.end(); ++var) {
             unsigned int varId = var->declarationId();
             if (varId)
                 _variableList[varId] = &(*var);
@@ -965,10 +962,8 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
         }
 
         // add all function parameters
-        std::list<Function>::iterator func;
-        for (func = scope->functionList.begin(); func != scope->functionList.end(); ++func) {
-            std::list<Variable>::iterator arg;
-            for (arg = func->argumentList.begin(); arg != func->argumentList.end(); ++arg) {
+        for (std::list<Function>::iterator func = scope->functionList.begin(); func != scope->functionList.end(); ++func) {
+            for (std::list<Variable>::iterator arg = func->argumentList.begin(); arg != func->argumentList.end(); ++arg) {
                 // check for named parameters
                 if (arg->nameToken() && arg->declarationId()) {
                     const unsigned int declarationId = arg->declarationId();
@@ -1095,8 +1090,8 @@ bool SymbolDatabase::isFunction(const Token *tok, const Scope* outerScope, const
         const Token* tok2 = tok->next()->link()->next();
         if (tok2 &&
             (Token::Match(tok2, "const| ;|{|=") ||
-             (Token::Match(tok2, "%var% ;|{") && tok2->isUpperCaseName()) ||
-             (Token::Match(tok2, "%var% (") && tok2->isUpperCaseName() && tok2->next()->link()->strAt(1) == "{") ||
+             (tok2->isUpperCaseName() && Token::Match(tok2, "%var% ;|{")) ||
+             (tok2->isUpperCaseName() && Token::Match(tok2, "%var% (") && tok2->next()->link()->strAt(1) == "{") ||
              Token::Match(tok2, ": ::| %var% (|::|<|{") ||
              Token::Match(tok2, "= delete|default ;") ||
              Token::Match(tok2, "const| noexcept {|:|;|=") ||
@@ -1798,6 +1793,7 @@ static std::ostream & operator << (std::ostream & s, Scope::ScopeType type)
           type == Scope::eTry ? "Try" :
           type == Scope::eCatch ? "Catch" :
           type == Scope::eUnconditional ? "Unconditional" :
+          type == Scope::eLambda ? "Lambda" :
           "Unknown");
     return s;
 }
@@ -2484,9 +2480,6 @@ void Scope::getVariableList()
         // Is it a function?
         else if (tok->str() == "{") {
             tok = tok->link();
-            // syntax error?
-            if (!tok)
-                return;
             continue;
         }
 
@@ -2687,7 +2680,7 @@ static const Token* skipPointers(const Token* tok)
 
 bool Scope::isVariableDeclaration(const Token* tok, const Token*& vartok, const Token*& typetok) const
 {
-    if (tok && (tok->str() == "throw" || tok->str() == "new") && check->_tokenizer->isCPP())
+    if (tok && check && check->_tokenizer->isCPP() && (tok->str() == "throw" || tok->str() == "new"))
         return false;
 
     const Token* localTypeTok = skipScopeIdentifiers(tok);
@@ -3176,4 +3169,3 @@ Function * SymbolDatabase::findFunctionInScope(const Token *func, const Scope *n
 
     return const_cast<Function *>(function);
 }
-
