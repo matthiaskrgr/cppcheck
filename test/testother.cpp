@@ -1101,6 +1101,41 @@ private:
         checkOldStylePointerCast("class Base;\n"
                                  "void foo()\n"
                                  "{\n"
+                                 "    Base * b = (const Base * const) derived;\n"
+                                 "}");
+        ASSERT_EQUALS("[test.cpp:4]: (style) C-style pointer casting\n", errout.str());
+
+        checkOldStylePointerCast("class Base;\n"
+                                 "void foo()\n"
+                                 "{\n"
+                                 "    Base * b = (volatile Base *) derived;\n"
+                                 "}");
+        ASSERT_EQUALS("[test.cpp:4]: (style) C-style pointer casting\n", errout.str());
+
+        checkOldStylePointerCast("class Base;\n"
+                                 "void foo()\n"
+                                 "{\n"
+                                 "    Base * b = (volatile Base * const) derived;\n"
+                                 "}");
+        ASSERT_EQUALS("[test.cpp:4]: (style) C-style pointer casting\n", errout.str());
+
+        checkOldStylePointerCast("class Base;\n"
+                                 "void foo()\n"
+                                 "{\n"
+                                 "    Base * b = (const volatile Base *) derived;\n"
+                                 "}");
+        ASSERT_EQUALS("[test.cpp:4]: (style) C-style pointer casting\n", errout.str());
+
+        checkOldStylePointerCast("class Base;\n"
+                                 "void foo()\n"
+                                 "{\n"
+                                 "    Base * b = (const volatile Base * const) derived;\n"
+                                 "}");
+        ASSERT_EQUALS("[test.cpp:4]: (style) C-style pointer casting\n", errout.str());
+
+        checkOldStylePointerCast("class Base;\n"
+                                 "void foo()\n"
+                                 "{\n"
                                  "    Base * b = (const Base *) ( new Derived() );\n"
                                  "}");
         ASSERT_EQUALS("[test.cpp:4]: (style) C-style pointer casting\n", errout.str());
@@ -1336,9 +1371,18 @@ private:
               "    std::cout <<  sqrtf(-1) << std::endl;\n"
               "    std::cout <<  sqrtl(-1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing value -1 to sqrt() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing value -1 to sqrtf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing value -1 to sqrtl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1 to sqrt() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing value -1 to sqrtf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing value -1 to sqrtl() leads to implementation-defined result.\n", errout.str());
+
+        // implementation-defined behaviour for "finite values of x<0" only:
+        check("void foo()\n"
+              "{\n"
+              "    std::cout <<  sqrt(-0.) << std::endl;\n"
+              "    std::cout <<  sqrtf(-0.) << std::endl;\n"
+              "    std::cout <<  sqrtl(-0.) << std::endl;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -1357,9 +1401,9 @@ private:
               "    std::cout <<  logf(-2) << std::endl;\n"
               "    std::cout <<  logl(-2) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing value -2 to log() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing value -2 to logf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing value -2 to logl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -2 to log() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing value -2 to logf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing value -2 to logl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -1367,9 +1411,9 @@ private:
               "    std::cout <<  logf(-1) << std::endl;\n"
               "    std::cout <<  logl(-1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing value -1 to log() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing value -1 to logf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing value -1 to logl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1 to log() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing value -1 to logf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing value -1 to logl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -1377,9 +1421,9 @@ private:
               "    std::cout <<  logf(-1.0) << std::endl;\n"
               "    std::cout <<  logl(-1.0) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing value -1.0 to log() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing value -1.0 to logf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing value -1.0 to logl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1.0 to log() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing value -1.0 to logf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing value -1.0 to logl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -1387,9 +1431,9 @@ private:
               "    std::cout <<  logf(-0.1) << std::endl;\n"
               "    std::cout <<  logl(-0.1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing value -0.1 to log() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing value -0.1 to logf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing value -0.1 to logl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -0.1 to log() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing value -0.1 to logf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing value -0.1 to logl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -1397,9 +1441,9 @@ private:
               "    std::cout <<  logf(0.) << std::endl;\n"
               "    std::cout <<  logl(0.0) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing value 0 to log() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing value 0. to logf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing value 0.0 to logl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value 0 to log() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing value 0. to logf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing value 0.0 to logl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -1476,9 +1520,9 @@ private:
               "    std::cout <<  acosf(1.1) << std::endl;\n"
               "    std::cout <<  acosl(1.1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing value 1.1 to acos() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing value 1.1 to acosf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing value 1.1 to acosl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value 1.1 to acos() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing value 1.1 to acosf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing value 1.1 to acosl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -1486,9 +1530,9 @@ private:
               "    std::cout <<  acosf(-1.1) << std::endl;\n"
               "    std::cout <<  acosl(-1.1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing value -1.1 to acos() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing value -1.1 to acosf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing value -1.1 to acosl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1.1 to acos() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing value -1.1 to acosf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing value -1.1 to acosl() leads to implementation-defined result.\n", errout.str());
     }
 
     void mathfunctionCall_asin() {
@@ -1537,9 +1581,9 @@ private:
               "    std::cout <<  asinf(1.1) << std::endl;\n"
               "    std::cout <<  asinl(1.1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing value 1.1 to asin() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing value 1.1 to asinf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing value 1.1 to asinl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value 1.1 to asin() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing value 1.1 to asinf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing value 1.1 to asinl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -1547,9 +1591,9 @@ private:
               "    std::cout <<  asinf(-1.1) << std::endl;\n"
               "    std::cout <<  asinl(-1.1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing value -1.1 to asin() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing value -1.1 to asinf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing value -1.1 to asinl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1.1 to asin() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing value -1.1 to asinf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing value -1.1 to asinl() leads to implementation-defined result.\n", errout.str());
     }
 
     void mathfunctionCall_pow() {
@@ -1560,9 +1604,9 @@ private:
               "    std::cout <<  powf(0,-10) << std::endl;\n"
               "    std::cout <<  powl(0,-10) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing values 0 and -10 to pow() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing values 0 and -10 to powf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing values 0 and -10 to powl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing values 0 and -10 to pow() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing values 0 and -10 to powf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing values 0 and -10 to powl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -1619,9 +1663,9 @@ private:
               "    std::cout <<  atan2f(0,0) << std::endl;\n"
               "    std::cout <<  atan2l(0,0) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing values 0 and 0 to atan2() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing values 0 and 0 to atan2f() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing values 0 and 0 to atan2l() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing values 0 and 0 to atan2() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing values 0 and 0 to atan2f() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing values 0 and 0 to atan2l() leads to implementation-defined result.\n", errout.str());
     }
 
     void mathfunctionCall_fmod() {
@@ -1632,9 +1676,9 @@ private:
               "    std::cout <<  fmodf(1.0,0) << std::endl;\n"
               "    std::cout <<  fmodl(1.0,0) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Passing values 1.0 and 0 to fmod() leads to undefined result.\n"
-                      "[test.cpp:4]: (error) Passing values 1.0 and 0 to fmodf() leads to undefined result.\n"
-                      "[test.cpp:5]: (error) Passing values 1.0 and 0 to fmodl() leads to undefined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing values 1.0 and 0 to fmod() leads to implementation-defined result.\n"
+                      "[test.cpp:4]: (warning) Passing values 1.0 and 0 to fmodf() leads to implementation-defined result.\n"
+                      "[test.cpp:5]: (warning) Passing values 1.0 and 0 to fmodl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -5579,6 +5623,12 @@ private:
               "    ab->data->x = 1;\n"
               "    ab = &ab1;\n"
               "    ab->data->x = 2;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // #5964
+        check("void func(char *buffer, const char *format, int precision, unsigned value) {\n"
+              "    (precision < 0) ? sprintf(buffer, format, value) : sprintf(buffer, format, precision, value);\n"
               "}");
         ASSERT_EQUALS("", errout.str());
 

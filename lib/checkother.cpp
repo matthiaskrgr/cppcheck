@@ -368,17 +368,24 @@ void CheckOther::warningOldStylePointerCast()
             tok = scope->classStart;
         for (; tok && tok != scope->classEnd; tok = tok->next()) {
             // Old style pointer casting..
-            if (!Token::Match(tok, "( const| %type% * ) (| %var%|%num%|%bool%|%char%|%str%"))
+            if (!Token::Match(tok, "( const| %type% * const| ) (| %var%|%num%|%bool%|%char%|%str%"))
                 continue;
 
+            // skip first "const" in "const Type* const"
             if (tok->strAt(1) == "const")
+                tok = tok->next();
+            const Token* typeTok = tok ? tok->next() : nullptr;
+            if (!typeTok)
+                continue;
+            // skip second "const" in "const Type* const"
+            if (tok->strAt(3) == "const")
                 tok = tok->next();
 
             if (tok->strAt(4) == "0") // Casting nullpointers is safe
                 continue;
 
             // Is "type" a class?
-            if (_tokenizer->getSymbolDatabase()->isClassOrStruct(tok->strAt(1)))
+            if (_tokenizer->getSymbolDatabase()->isClassOrStruct(typeTok->str()))
                 cstyleCastError(tok);
         }
     }
@@ -593,7 +600,13 @@ void CheckOther::checkRedundantAssignment()
             if (tok == writtenArgumentsEnd)
                 writtenArgumentsEnd = 0;
 
-            if (tok->str() == "{" && tok->strAt(-1) != "{" && tok->strAt(-1) != "=" && tok->strAt(-4) != "case" && tok->strAt(-3) != "default") { // conditional or non-executable inner scope: Skip it and reset status
+            if (tok->str() == "?" && tok->astOperand2()) {
+                tok = Token::findmatch(tok->astOperand2(), ";|}");
+                if (!tok)
+                    break;
+                varAssignments.clear();
+                memAssignments.clear();
+            } else if (tok->str() == "{" && tok->strAt(-1) != "{" && tok->strAt(-1) != "=" && tok->strAt(-4) != "case" && tok->strAt(-3) != "default") { // conditional or non-executable inner scope: Skip it and reset status
                 tok = tok->link();
                 varAssignments.clear();
                 memAssignments.clear();
@@ -1162,9 +1175,9 @@ void CheckOther::checkUnreachableCode()
                     // that the goto jump was intended to skip some code on the first loop iteration.
                     bool labelInFollowingLoop = false;
                     if (labelName && Token::Match(secondBreak, "while|do|for")) {
-                        const Token *scope = Token::findsimplematch(secondBreak, "{");
-                        if (scope) {
-                            for (const Token *tokIter = scope; tokIter != scope->link() && tokIter; tokIter = tokIter->next()) {
+                        const Token *scope2 = Token::findsimplematch(secondBreak, "{");
+                        if (scope2) {
+                            for (const Token *tokIter = scope2; tokIter != scope2->link() && tokIter; tokIter = tokIter->next()) {
                                 if (Token::Match(tokIter, "[;{}] %any% :") && labelName->str() == tokIter->strAt(1)) {
                                     labelInFollowingLoop = true;
                                     break;
@@ -1235,7 +1248,7 @@ void CheckOther::checkUnsignedDivision()
                 if (tok->strAt(1)[0] == '-' && isUnsigned(tok->tokAt(3)->variable())) {
                     udivError(tok->next(), false);
                 }
-            } else if (Token::Match(tok->next(), "%var% / %var%") && _settings->inconclusive && warning && !ifTok) {
+            } else if (_settings->inconclusive && warning && !ifTok && Token::Match(tok->next(), "%var% / %var%")) {
                 const Variable* var1 = tok->next()->variable();
                 const Variable* var2 = tok->tokAt(3)->variable();
                 if ((isUnsigned(var1) && isSigned(var2)) || (isUnsigned(var2) && isSigned(var1))) {
@@ -1894,57 +1907,57 @@ void CheckOther::checkMathFunctions()
                 bool isInt = MathLib::isInt(tok->strAt(2));
                 bool isFloat = MathLib::isFloat(tok->strAt(2));
                 if (isNegative && isInt && MathLib::toLongNumber(tok->strAt(2)) <= 0) {
-                    mathfunctionCallError(tok); // case log(-2)
+                    mathfunctionCallWarning(tok); // case log(-2)
                 } else if (isNegative && isFloat && MathLib::toDoubleNumber(tok->strAt(2)) <= 0.) {
-                    mathfunctionCallError(tok); // case log(-2.0)
+                    mathfunctionCallWarning(tok); // case log(-2.0)
                 } else if (!isNegative && isFloat && MathLib::toDoubleNumber(tok->strAt(2)) <= 0.) {
-                    mathfunctionCallError(tok); // case log(0.0)
+                    mathfunctionCallWarning(tok); // case log(0.0)
                 } else if (!isNegative && isInt && MathLib::toLongNumber(tok->strAt(2)) <= 0) {
-                    mathfunctionCallError(tok); // case log(0)
+                    mathfunctionCallWarning(tok); // case log(0)
                 }
             }
 
             // acos( x ), asin( x )  where x is defined for interval [-1,+1], but not beyond
             else if (Token::Match(tok, "acos|acosl|acosf|asin|asinf|asinl ( %num% )") &&
                      std::fabs(MathLib::toDoubleNumber(tok->strAt(2))) > 1.0) {
-                mathfunctionCallError(tok);
+                mathfunctionCallWarning(tok);
             }
             // sqrt( x ): if x is negative the result is undefined
             else if (Token::Match(tok, "sqrt|sqrtf|sqrtl ( %num% )") &&
                      MathLib::isNegative(tok->strAt(2))) {
-                mathfunctionCallError(tok);
+                mathfunctionCallWarning(tok);
             }
             // atan2 ( x , y): x and y can not be zero, because this is mathematically not defined
             else if (Token::Match(tok, "atan2|atan2f|atan2l ( %num% , %num% )") &&
                      MathLib::isNullValue(tok->strAt(2)) &&
                      MathLib::isNullValue(tok->strAt(4))) {
-                mathfunctionCallError(tok, 2);
+                mathfunctionCallWarning(tok, 2);
             }
             // fmod ( x , y) If y is zero, then either a range error will occur or the function will return zero (implementation-defined).
             else if (Token::Match(tok, "fmod|fmodf|fmodl ( %any%")) {
                 const Token* nextArg = tok->tokAt(2)->nextArgument();
                 if (nextArg && nextArg->isNumber() && MathLib::isNullValue(nextArg->str()))
-                    mathfunctionCallError(tok, 2);
+                    mathfunctionCallWarning(tok, 2);
             }
             // pow ( x , y) If x is zero, and y is negative --> division by zero
             else if (Token::Match(tok, "pow|powf|powl ( %num% , %num% )") &&
                      MathLib::isNullValue(tok->strAt(2))  &&
                      MathLib::isNegative(tok->strAt(4))) {
-                mathfunctionCallError(tok, 2);
+                mathfunctionCallWarning(tok, 2);
             }
         }
     }
 }
 
-void CheckOther::mathfunctionCallError(const Token *tok, const unsigned int numParam)
+void CheckOther::mathfunctionCallWarning(const Token *tok, const unsigned int numParam)
 {
     if (tok) {
         if (numParam == 1)
-            reportError(tok, Severity::error, "wrongmathcall", "Passing value " + tok->strAt(2) + " to " + tok->str() + "() leads to undefined result.");
+            reportError(tok, Severity::warning, "wrongmathcall", "Passing value " + tok->strAt(2) + " to " + tok->str() + "() leads to implementation-defined result.");
         else if (numParam == 2)
-            reportError(tok, Severity::error, "wrongmathcall", "Passing values " + tok->strAt(2) + " and " + tok->strAt(4) + " to " + tok->str() + "() leads to undefined result.");
+            reportError(tok, Severity::warning, "wrongmathcall", "Passing values " + tok->strAt(2) + " and " + tok->strAt(4) + " to " + tok->str() + "() leads to implementation-defined result.");
     } else
-        reportError(tok, Severity::error, "wrongmathcall", "Passing value '#' to #() leads to undefined result.");
+        reportError(tok, Severity::warning, "wrongmathcall", "Passing value '#' to #() leads to implementation-defined result.");
 }
 
 //---------------------------------------------------------------------------

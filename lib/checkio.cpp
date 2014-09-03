@@ -38,6 +38,9 @@ namespace {
 //---------------------------------------------------------------------------
 void CheckIO::checkCoutCerrMisusage()
 {
+    if (_tokenizer->isC())
+        return;
+
     const SymbolDatabase * const symbolDatabase = _tokenizer->getSymbolDatabase();
     std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
@@ -526,7 +529,7 @@ void CheckIO::checkWrongPrintfScanfArguments()
 
             if (formatStringArgNo >= 0) {
                 // formatstring found in library. Find format string and first argument belonging to format string.
-                if (!findFormat(formatStringArgNo, tok->tokAt(2), &formatStringTok, &argListTok))
+                if (!findFormat(static_cast<unsigned int>(formatStringArgNo), tok->tokAt(2), &formatStringTok, &argListTok))
                     continue;
             } else if (windows && Token::Match(tok, "Format|AppendFormat (") &&
                        Token::Match(tok->tokAt(-2), "%var% .") && tok->tokAt(-2)->variable() &&
