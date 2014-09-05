@@ -86,7 +86,7 @@ private:
         TEST_CASE(garbageCode7);
         TEST_CASE(garbageCode8); // #5511
         TEST_CASE(garbageCode9); // #5604
-
+        TEST_CASE(garbageCode10);  // #6127
         TEST_CASE(simplifyFileAndLineMacro);  // tokenize "return - __LINE__;"
 
         TEST_CASE(foreach);     // #3690
@@ -319,6 +319,7 @@ private:
         TEST_CASE(varid_classInFunction); // #5293
         TEST_CASE(varid_pointerToArray); // #2645
         TEST_CASE(varid_cpp11initialization); // #4344
+        TEST_CASE(varid_inheritedMembers); // #4101
 
         TEST_CASE(varidclass1);
         TEST_CASE(varidclass2);
@@ -1113,6 +1114,10 @@ private:
 
     void garbageCode9() {
         ASSERT_THROW(tokenizeAndStringify("enum { e = { } } ( ) { { enum { } } } { e } ", true), InternalError);
+    }
+
+    void garbageCode10() { // #6127
+        tokenizeAndStringify("for( rl=reslist; rl!=NULL; rl=rl->next )", /*simplify=*/true);
     }
 
     void simplifyFileAndLineMacro() { // tokenize 'return - __LINE__' correctly
@@ -4948,6 +4953,86 @@ private:
         ASSERT_EQUALS("\n\n##file 0\n"
                       "1: class CPPCHECKLIB Scope { } ;\n",
                       tokenizeDebugListing("class CPPCHECKLIB Scope { };"));
+    }
+
+    void varid_inheritedMembers() {
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class A {\n"
+                      "2: int a@1 ;\n"
+                      "3: } ;\n"
+                      "4: class B : public A {\n"
+                      "5: void f ( ) ;\n"
+                      "6: } ;\n"
+                      "7: void B :: f ( ) {\n"
+                      "8: a@1 = 0 ;\n"
+                      "9: }\n",
+                      tokenizeDebugListing("class A {\n"
+                                           "    int a;\n"
+                                           "};\n"
+                                           "class B : public A {\n"
+                                           "    void f();\n"
+                                           "};\n"
+                                           "void B::f() {\n"
+                                           "    a = 0;\n"
+                                           "}"));
+
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class A {\n"
+                      "2: int a@1 ;\n"
+                      "3: } ;\n"
+                      "4: class B : A {\n"
+                      "5: void f ( ) ;\n"
+                      "6: } ;\n"
+                      "7: void B :: f ( ) {\n"
+                      "8: a@1 = 0 ;\n"
+                      "9: }\n",
+                      tokenizeDebugListing("class A {\n"
+                                           "    int a;\n"
+                                           "};\n"
+                                           "class B : A {\n"
+                                           "    void f();\n"
+                                           "};\n"
+                                           "void B::f() {\n"
+                                           "    a = 0;\n"
+                                           "}"));
+
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class A {\n"
+                      "2: int a@1 ;\n"
+                      "3: } ;\n"
+                      "4: class B : protected B , public A {\n"
+                      "5: void f ( ) ;\n"
+                      "6: } ;\n"
+                      "7: void B :: f ( ) {\n"
+                      "8: a@1 = 0 ;\n"
+                      "9: }\n",
+                      tokenizeDebugListing("class A {\n"
+                                           "    int a;\n"
+                                           "};\n"
+                                           "class B : protected B, public A {\n"
+                                           "    void f();\n"
+                                           "};\n"
+                                           "void B::f() {\n"
+                                           "    a = 0;\n"
+                                           "}"));
+
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class A {\n"
+                      "2: int a@1 ;\n"
+                      "3: } ;\n"
+                      "4: class B : public A {\n"
+                      "5: void f ( ) {\n"
+                      "6: a@1 = 0 ;\n"
+                      "7: }\n"
+                      "8: } ;\n",
+                      tokenizeDebugListing("class A {\n"
+                                           "    int a;\n"
+                                           "};\n"
+                                           "class B : public A {\n"
+                                           "    void f() {\n"
+                                           "        a = 0;\n"
+                                           "    }\n"
+                                           "};"));
     }
 
     void varidclass1() {
