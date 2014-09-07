@@ -986,9 +986,9 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
     const std::size_t functions = functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope *func = functionScopes[i];
-        for (const Token *tok = func->classStart->next(); tok != func->classEnd; tok = tok->next()) {
+        for (const Token *tok = func->classStart->next(); tok && tok != func->classEnd; tok = tok->next()) {
             // check for member variable
-            if (tok && tok->varId() && tok->next() &&
+            if (tok->varId() && tok->next() &&
                 (tok->next()->str() == "." ||
                  (tok->next()->str() == "[" && tok->linkAt(1)->strAt(1) == "."))) {
                 const Token *tok1 = tok->next()->str() == "." ? tok->tokAt(2) : tok->linkAt(1)->tokAt(2);
@@ -1174,6 +1174,7 @@ void Variable::evaluate()
     if (_start) {
         setFlag(fIsClass, !_start->isStandardType() && !isPointer() && !isReference());
         setFlag(fIsStlType, Token::simpleMatch(_start, "std ::"));
+        setFlag(fIsStlString, isStlType() && (Token::Match(_start->tokAt(2), "string|wstring|u16string|u32string !!::") || (Token::simpleMatch(_start->tokAt(2), "basic_string <") && !Token::simpleMatch(_start->linkAt(3), "> ::"))));
     }
     if (_access == Argument) {
         tok = _name;

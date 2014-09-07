@@ -139,6 +139,7 @@ private:
         TEST_CASE(template44);  // #5297 - TemplateSimplifier::simplifyCalculations not eager enough
         TEST_CASE(template45);  // #5814 - syntax error reported for valid code
         TEST_CASE(template46);  // #5816 - syntax error reported for valid code
+        TEST_CASE(template47);  // #6023 - syntax error reported for valid code
         TEST_CASE(template_unhandled);
         TEST_CASE(template_default_parameter);
         TEST_CASE(template_default_type);
@@ -304,6 +305,7 @@ private:
         TEST_CASE(simplifyTypedef106); // ticket #3619
         TEST_CASE(simplifyTypedef107); // ticket #3963 - bad code => segmentation fault
         TEST_CASE(simplifyTypedef108); // ticket #4777
+        TEST_CASE(simplifyTypedef109); // ticket #1823 - rvalue reference
 
         TEST_CASE(simplifyTypedefFunction1);
         TEST_CASE(simplifyTypedefFunction2); // ticket #1685
@@ -2421,6 +2423,12 @@ private:
             "template <class T> struct C { "
             "  enum { value = A<typename B<T>::type, int>::value }; "
             "};");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void template47() { // #6023
+        tok("template <typename T1, typename T2 = T3<T1> > class C1 {}; "
+            "class C2 : public C1<C2> {};");
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -5723,6 +5731,16 @@ private:
 
         checkSimplifyTypedef(code);
         ASSERT_EQUALS(expected, tok(code));
+    }
+
+    void simplifyTypedef109() {
+        const char code[] = "typedef int&& rref;\n"
+                            "rref var;";
+        const char expected[] = "int & & var ;";
+
+        checkSimplifyTypedef(code);
+        ASSERT_EQUALS(expected, tok(code));
+        ASSERT_EQUALS("", errout.str());
     }
 
     void simplifyTypedefFunction1() {

@@ -88,6 +88,7 @@ private:
         TEST_CASE(mathfunctionCall_asin);
         TEST_CASE(mathfunctionCall_pow);
         TEST_CASE(mathfunctionCall_atan2);
+        TEST_CASE(mathfunctionCall_precision);
 
         TEST_CASE(switchRedundantAssignmentTest);
         TEST_CASE(switchRedundantOperationTest);
@@ -1198,7 +1199,7 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
-    void checkInvalidPointerCast(const char code[], bool portability = false, bool inconclusive = false) {
+    void checkInvalidPointerCast(const char code[], bool portability = true, bool inconclusive = false) {
         // Clear the error buffer..
         errout.str("");
 
@@ -1224,36 +1225,36 @@ private:
                                 "    delete [] (double*)f;\n"
                                 "    delete [] (long double const*)(new float[10]);\n"
                                 "}");
-        TODO_ASSERT_EQUALS("[test.cpp:3]: (warning) Casting between float* and double* which have an incompatible binary data representation.\n"
-                           "[test.cpp:4]: (warning) Casting between float* and long double* which have an incompatible binary data representation.\n",
-                           "[test.cpp:3]: (warning) Casting between float* and double* which have an incompatible binary data representation.\n"
-                           "[test.cpp:4]: (warning) Casting between float* and double* which have an incompatible binary data representation.\n", errout.str());
+        TODO_ASSERT_EQUALS("[test.cpp:3]: (portability) Casting between float* and double* which have an incompatible binary data representation.\n"
+                           "[test.cpp:4]: (portability) Casting between float* and long double* which have an incompatible binary data representation.\n",
+                           "[test.cpp:3]: (portability) Casting between float* and double* which have an incompatible binary data representation.\n"
+                           "[test.cpp:4]: (portability) Casting between float* and double* which have an incompatible binary data representation.\n", errout.str());
 
         checkInvalidPointerCast("void test(const float* f) {\n"
                                 "    double *d = (double*)f;\n"
                                 "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Casting between float* and double* which have an incompatible binary data representation.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (portability) Casting between float* and double* which have an incompatible binary data representation.\n", errout.str());
 
         checkInvalidPointerCast("void test(double* d1) {\n"
                                 "    long double *ld = (long double*)d1;\n"
                                 "    double *d2 = (double*)ld;\n"
                                 "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Casting between double* and long double* which have an incompatible binary data representation.\n"
-                      "[test.cpp:3]: (warning) Casting between long double* and double* which have an incompatible binary data representation.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (portability) Casting between double* and long double* which have an incompatible binary data representation.\n"
+                      "[test.cpp:3]: (portability) Casting between long double* and double* which have an incompatible binary data representation.\n", errout.str());
 
         checkInvalidPointerCast("char* test(int* i) {\n"
                                 "    long double *d = (long double*)(i);\n"
                                 "    double *d = (double*)(i);\n"
                                 "    float *f = reinterpret_cast<float*>(i);\n"
                                 "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Casting between integer* and long double* which have an incompatible binary data representation.\n"
-                      "[test.cpp:3]: (warning) Casting between integer* and double* which have an incompatible binary data representation.\n"
-                      "[test.cpp:4]: (warning) Casting between integer* and float* which have an incompatible binary data representation.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (portability) Casting between integer* and long double* which have an incompatible binary data representation.\n"
+                      "[test.cpp:3]: (portability) Casting between integer* and double* which have an incompatible binary data representation.\n"
+                      "[test.cpp:4]: (portability) Casting between integer* and float* which have an incompatible binary data representation.\n", errout.str());
 
         checkInvalidPointerCast("float* test(unsigned int* i) {\n"
                                 "    return (float*)i;\n"
                                 "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Casting between integer* and float* which have an incompatible binary data representation.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (portability) Casting between integer* and float* which have an incompatible binary data representation.\n", errout.str());
 
         checkInvalidPointerCast("float* test(unsigned int* i) {\n"
                                 "    return (float*)i[0];\n"
@@ -1263,7 +1264,7 @@ private:
         checkInvalidPointerCast("float* test(double& d) {\n"
                                 "    return (float*)&d;\n"
                                 "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Casting between double* and float* which have an incompatible binary data representation.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (portability) Casting between double* and float* which have an incompatible binary data representation.\n", errout.str());
 
         checkInvalidPointerCast("void test(float* data) {\n"
                                 "    f.write((char*)data,sizeof(float));\n"
@@ -1689,6 +1690,41 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void mathfunctionCall_precision() {
+        check("void foo() {\n"
+              "    print(exp(x) - 1);\n"
+              "    print(log(1 + x));\n"
+              "    print(1 - erf(x));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (style) Expression 'exp(x) - 1' can be replaced by 'expm1(x)' to avoid loss of precision.\n"
+                      "[test.cpp:3]: (style) Expression 'log(1 + x)' can be replaced by 'log10(x)' to avoid loss of precision.\n"
+                      "[test.cpp:4]: (style) Expression '1 - erf(x)' can be replaced by 'erfc(x)' to avoid loss of precision.\n", errout.str());
+
+        check("void foo() {\n"
+              "    print(exp(x) - 1.0);\n"
+              "    print(log(1.0 + x));\n"
+              "    print(1.0 - erf(x));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (style) Expression 'exp(x) - 1' can be replaced by 'expm1(x)' to avoid loss of precision.\n"
+                      "[test.cpp:3]: (style) Expression 'log(1 + x)' can be replaced by 'log10(x)' to avoid loss of precision.\n"
+                      "[test.cpp:4]: (style) Expression '1 - erf(x)' can be replaced by 'erfc(x)' to avoid loss of precision.\n", errout.str());
+
+        check("void foo() {\n"
+              "    print(exp(3 + x*f(a)) - 1);\n"
+              "    print(log(x*4 + 1));\n"
+              "    print(1 - erf(34*x + f(x) - c));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (style) Expression 'exp(x) - 1' can be replaced by 'expm1(x)' to avoid loss of precision.\n"
+                      "[test.cpp:3]: (style) Expression 'log(1 + x)' can be replaced by 'log10(x)' to avoid loss of precision.\n"
+                      "[test.cpp:4]: (style) Expression '1 - erf(x)' can be replaced by 'erfc(x)' to avoid loss of precision.\n", errout.str());
+
+        check("void foo() {\n"
+              "    print(2*exp(x) - 1);\n"
+              "    print(1 - erf(x)/2.0);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void switchRedundantAssignmentTest() {
 
         check("void foo()\n"
@@ -1945,6 +1981,17 @@ private:
               "    s->dyn_ltree[0].fc.freq++;\n"
               "}\n", 0, false, false, false, false);
         ASSERT_EQUALS("", errout.str());
+
+        // Ticket #6132 "crash: daca: kvirc CheckOther::checkRedundantAssignment()"
+        check("void HttpFileTransfer :: transferTerminated ( bool bSuccess@1 ) {\n"
+              "if ( m_szCompletionCallback . isNull ( ) ) {\n"
+              "KVS_TRIGGER_EVENT ( KviEvent_OnHTTPGetTerminated , out ? out : ( g_pApp . activeConsole ( ) ) , & vParams )\n"
+              "} else {\n"
+              "KviKvsScript :: run ( m_szCompletionCallback , out ? out : ( g_pApp . activeConsole ( ) ) , & vParams ) ;\n"
+              "}\n"
+              "}\n", 0, false, false, false, true);
+        ASSERT_EQUALS("", errout.str());
+
     }
 
     void switchRedundantOperationTest() {

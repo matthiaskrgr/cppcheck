@@ -481,7 +481,7 @@ void CheckOther::invalidPointerCast()
 
             std::string fromType = analyzeType(fromTok);
             std::string toType = analyzeType(toTok);
-            if (fromType != toType && !fromType.empty() && !toType.empty() && (toType != "integer" || _settings->isEnabled("portability")) && (toTok->str() != "char" || _settings->inconclusive))
+            if (fromType != toType && !fromType.empty() && !toType.empty() && _settings->isEnabled("portability") && (toTok->str() != "char" || _settings->inconclusive))
                 invalidPointerCastError(tok, fromType, toType, toTok->str() == "char");
         }
     }
@@ -495,7 +495,7 @@ void CheckOther::invalidPointerCastError(const Token* tok, const std::string& fr
         else
             reportError(tok, Severity::portability, "invalidPointerCast", "Casting from " + from + "* to char* is not portable due to different binary data representations on different platforms.", true);
     } else
-        reportError(tok, Severity::warning, "invalidPointerCast", "Casting between " + from + "* and " + to + "* which have an incompatible binary data representation.");
+        reportError(tok, Severity::portability, "invalidPointerCast", "Casting between " + from + "* and " + to + "* which have an incompatible binary data representation.");
 }
 
 //---------------------------------------------------------------------------
@@ -594,7 +594,7 @@ void CheckOther::checkRedundantAssignment()
         std::set<unsigned int> initialized;
         const Token* writtenArgumentsEnd = 0;
 
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+        for (const Token* tok = scope->classStart->next(); tok && tok != scope->classEnd; tok = tok->next()) {
             if (tok == writtenArgumentsEnd)
                 writtenArgumentsEnd = 0;
 
@@ -1608,9 +1608,9 @@ void CheckOther::checkConstantFunctionParameter()
         //       namespace and add them to the pattern. There are
         //       streams for example (however it seems strange with
         //       const stream parameter).
-        if (Token::Match(tok, "std :: string|wstring !!::")) {
+        if (var->isStlStringType()) {
             passedByValueError(tok, var->name());
-        } else if (Token::Match(tok, "std :: %type% <") && !Token::simpleMatch(tok->linkAt(3), "> ::")) {
+        } else if (var->isStlType() && Token::Match(tok, "std :: %type% <") && !Token::simpleMatch(tok->linkAt(3), "> ::")) {
             passedByValueError(tok, var->name());
         } else if (var->type()) {  // Check if type is a struct or class.
             passedByValueError(tok, var->name());
@@ -1892,6 +1892,8 @@ void CheckOther::nanInArithmeticExpressionError(const Token *tok)
 //---------------------------------------------------------------------------
 void CheckOther::checkMathFunctions()
 {
+    bool styleC99 = _settings->isEnabled("style") && _settings->standards.c != Standards::C89 && _settings->standards.cpp != Standards::CPP03;
+
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
@@ -1943,6 +1945,18 @@ void CheckOther::checkMathFunctions()
                      MathLib::isNegative(tok->strAt(4))) {
                 mathfunctionCallWarning(tok, 2);
             }
+
+            if (styleC99) {
+                if (Token::Match(tok, "%num% - erf (") && MathLib::toDoubleNumber(tok->str()) == 1.0 && tok->next()->astOperand2() == tok->tokAt(3)) {
+                    mathfunctionCallWarning(tok, "1 - erf(x)", "erfc(x)");
+                } else if (Token::simpleMatch(tok, "exp (") && Token::Match(tok->linkAt(1), ") - %num%") && MathLib::toDoubleNumber(tok->linkAt(1)->strAt(2)) == 1.0 && tok->linkAt(1)->next()->astOperand1() == tok->next()) {
+                    mathfunctionCallWarning(tok, "exp(x) - 1", "expm1(x)");
+                } else if (Token::simpleMatch(tok, "log (") && tok->next()->astOperand2()) {
+                    const Token* plus = tok->next()->astOperand2();
+                    if (plus->str() == "+" && ((plus->astOperand1() && MathLib::toDoubleNumber(plus->astOperand1()->str()) == 1.0) || (plus->astOperand2() && MathLib::toDoubleNumber(plus->astOperand2()->str()) == 1.0)))
+                        mathfunctionCallWarning(tok, "log(1 + x)", "log10(x)");
+                }
+            }
         }
     }
 }
@@ -1956,6 +1970,11 @@ void CheckOther::mathfunctionCallWarning(const Token *tok, const unsigned int nu
             reportError(tok, Severity::warning, "wrongmathcall", "Passing values " + tok->strAt(2) + " and " + tok->strAt(4) + " to " + tok->str() + "() leads to implementation-defined result.");
     } else
         reportError(tok, Severity::warning, "wrongmathcall", "Passing value '#' to #() leads to implementation-defined result.");
+}
+
+void CheckOther::mathfunctionCallWarning(const Token *tok, const std::string& oldexp, const std::string& newexp)
+{
+    reportError(tok, Severity::style, "unpreciseMathCall", "Expression '" + oldexp + "' can be replaced by '" + newexp + "' to avoid loss of precision.");
 }
 
 //---------------------------------------------------------------------------
