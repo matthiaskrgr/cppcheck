@@ -11,7 +11,7 @@ env:
     - CXXFLAGS="-O2 -march=native -mtune=native -Wunreachable-code"
   matrix:
 #    special CXXFLAGS for maximum speed, overrides global CXXFLAGS, CHECK_CLANG is the var that controls if we download and check clang in that travis job
-    - SRCDIR=build VERIFY=1
+    - SRCDIR=build VERIFY=1 STATUS=1
 
 matrix:
 # do notify immediately about it when a job of a build fails.
@@ -29,5 +29,6 @@ script:
   - touch /tmp/clang.cppcheck
   - cd ./gcc-19222566ae645b56b5b0655a822b1370f57f1b97
   - ../cppcheck . --max-configs=1 --enable=all --inconclusive --exception-handling -igcc/go/gofrontend/runtime.cc  -igcc/testsuite/g++.dg/parse/stack1.C  -igcc/testsuite/g++.dg/template/mem-partial1.C  -igcc/testsuite/gcc.c-torture/compile/limits-externdecl.c  -igcc/testsuite/gcc.dg/binary-constants-1.c -igcc/testsuite/gcc.c-torture/compile/limits-fndefn.c  -igcc/testsuite/gcc.dg/c99-intconst-1.c  -igcc/testsuite/gcc.c-torture/compile/limits-structnest.c  -j 2 |& tee /tmp/clang.cppcheck |& grep "^Checking" ; cd ../
-  - ! grep "process crashed with signal\|Internal error\. compiled" /tmp/clang.cppcheck
+  - grep "process crashed with signal\|Internal error\. compiled" /tmp/clang.cppcheck || STATUS=0
+  - exit $STATUS
 
