@@ -75,6 +75,7 @@ private:
         TEST_CASE(varScope20);      // Ticket #5103
         TEST_CASE(varScope21);      // Ticket #5382
         TEST_CASE(varScope22);      // Ticket #5684
+        TEST_CASE(varScope23);      // Ticket #6154
 
         TEST_CASE(oldStylePointerCast);
         TEST_CASE(invalidPointerCast);
@@ -149,6 +150,8 @@ private:
 
         TEST_CASE(checkNegativeShift);
         TEST_CASE(checkTooBigShift);
+
+        TEST_CASE(checkIntegerOverflow);
 
         TEST_CASE(incompleteArrayFill);
 
@@ -1059,6 +1062,16 @@ private:
                  "   }\n"
                  "}");
         ASSERT_EQUALS("[test.cpp:2]: (style) The scope of the variable 'p' can be reduced.\n", errout.str());
+    }
+
+    void varScope23() { // #6154: Don't suggest to reduce scope if inner scope is a lambda
+        varScope("int main() {\n"
+                 "   size_t myCounter = 0;\n"
+                 "   Test myTest([&](size_t aX){\n"
+                 "       std::cout << myCounter += aX << std::endl;\n"
+                 "   });\n"
+                 "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void checkOldStylePointerCast(const char code[]) {
@@ -5396,6 +5409,29 @@ private:
 
         check("int foo(int x) {\n"
               "   return x << 2;\n"
+              "}","test.cpp",false,false,false,true,&settings);
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void checkIntegerOverflow() {
+        Settings settings;
+        settings.platform(Settings::Unix32);
+
+        check("int foo(int x) {\n"
+              "   if (x==123456) {}\n"
+              "   return x * x;\n"
+              "}","test.cpp",false,false,false,true,&settings);
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Signed integer overflow for expression 'x*x'. See condition at line 2.\n", errout.str());
+
+        check("int foo(int x) {\n"
+              "   if (x==123456) {}\n"
+              "   return -123456 * x;\n"
+              "}","test.cpp",false,false,false,true,&settings);
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Signed integer overflow for expression '-123456*x'. See condition at line 2.\n", errout.str());
+
+        check("int foo(int x) {\n"
+              "   if (x==123456) {}\n"
+              "   return 123456U * x;\n"
               "}","test.cpp",false,false,false,true,&settings);
         ASSERT_EQUALS("", errout.str());
     }
