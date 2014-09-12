@@ -59,69 +59,6 @@ bool astIsFloat(const Token *tok, bool unknown)
     return unknown;
 }
 
-static bool astGetSizeSign(const Settings *settings, const Token *tok, int *size, char *sign)
-{
-    if (!tok)
-        return false;
-    if (tok->isArithmeticalOp()) {
-        if (!astGetSizeSign(settings, tok->astOperand1(), size, sign))
-            return false;
-        return !tok->astOperand2() || astGetSizeSign(settings, tok->astOperand2(), size, sign);
-    }
-    if (tok->isNumber() && MathLib::isInt(tok->str())) {
-        if (tok->str().find("L") != std::string::npos)
-            return false;
-        MathLib::bigint value = MathLib::toLongNumber(tok->str());
-        int sz;
-        if (value >= -(1<<7) && value <= (1<<7)-1)
-            sz = 8;
-        else if (value >= -(1<<15) && value <= (1<<15)-1)
-            sz = 16;
-        else if (value >= -(1LL<<31) && value <= (1LL<<31)-1)
-            sz = 32;
-        else
-            return false;
-        if (sz < 8 * settings->sizeof_int)
-            sz = 8 * settings->sizeof_int;
-        if (*size < sz)
-            *size = sz;
-        if (tok->str().find('U') != std::string::npos)
-            *sign = 'u';
-        if (*sign != 'u')
-            *sign = 's';
-        return true;
-    }
-    if (tok->isName()) {
-        const Variable *var = tok->variable();
-        if (!var)
-            return false;
-        int sz = 0;
-        for (const Token *type = var->typeStartToken(); type; type = type->next()) {
-            if (type->str() == "*")
-                return false;  // <- FIXME: handle pointers
-            if (Token::Match(type, "char|short|int")) {
-                sz = 8 * settings->sizeof_int;
-                if (type->isUnsigned())
-                    *sign = 'u';
-                else if (*sign != 'u')
-                    *sign = 's';
-            } else if (Token::Match(type, "float|double|long")) {
-                return false;
-            } else {
-                // TODO: try to lookup type info in library
-            }
-            if (type == var->typeEndToken())
-                break;
-        }
-        if (sz == 0)
-            return false;
-        if (*size < sz)
-            *size = sz;
-        return true;
-    }
-    return false;
-}
-
 static bool isConstExpression(const Token *tok, const std::set<std::string> &constFunctions)
 {
     if (!tok)
@@ -736,7 +673,7 @@ void CheckOther::checkRedundantAssignment()
                     if (!writtenArgumentsEnd) // Indicates that we are in the first argument of strcpy/memcpy/... function
                         memAssignments.erase(tok->varId());
                 }
-            } else if (Token::Match(tok, "%var% (")) { // Function call. Global variables might be used. Reset their status
+            } else if (Token::Match(tok, "%var% (") && _settings->library.functionpure.find(tok->str()) == _settings->library.functionpure.end()) { // Function call. Global variables might be used. Reset their status
                 const bool memfunc = Token::Match(tok, "memcpy|memmove|memset|strcpy|strncpy|sprintf|snprintf|strcat|strncat|wcscpy|wcsncpy|swprintf|wcscat|wcsncat");
                 if (tok->varId()) // operator() or function pointer
                     varAssignments.erase(tok->varId());
@@ -1431,7 +1368,7 @@ void CheckOther::checkVariableScope()
 
     for (unsigned int i = 1; i < symbolDatabase->getVariableListSize(); i++) {
         const Variable* var = symbolDatabase->getVariableFromVarId(i);
-        if (!var || !var->isLocal() || (!var->isPointer() && !var->typeStartToken()->isStandardType() && !var->typeStartToken()->next()->isStandardType()))
+        if (!var || !var->isLocal() || (!var->isPointer() && !var->typeStartToken()->isStandardType()))
             continue;
 
         if (var->isConst())
@@ -2194,7 +2131,7 @@ void CheckOther::checkInvalidFree()
         // If the previously-allocated variable is passed in to another function
         // as a parameter, it might be modified, so we shouldn't report an error
         // if it is later used to free memory
-        else if (Token::Match(tok, "%var% (")) {
+        else if (Token::Match(tok, "%var% (") && _settings->library.functionpure.find(tok->str()) == _settings->library.functionpure.end()) {
             const Token* tok2 = Token::findmatch(tok->next(), "%var%", tok->linkAt(1));
             while (tok2 != nullptr) {
                 allocatedVariables.erase(tok2->varId());
@@ -2272,7 +2209,7 @@ void CheckOther::checkDoubleFree()
         }
 
         // If a variable is passed to a function, remove it from the set of previously freed variables
-        else if (Token::Match(tok, "%var% (") && !Token::Match(tok, "printf|sprintf|snprintf|fprintf|wprintf|swprintf|fwprintf")) {
+        else if (Token::Match(tok, "%var% (") && _settings->library.leakignore.find(tok->str()) == _settings->library.leakignore.end()) {
 
             // If this is a new function definition, clear all variables
             if (Token::simpleMatch(tok->next()->link(), ") {")) {
@@ -2637,7 +2574,7 @@ static bool constructorTakesReference(const Scope * const classScope)
 //---------------------------------------------------------------------------
 void CheckOther::checkRedundantCopy()
 {
-    if (!_settings->isEnabled("performance") || _tokenizer->isC())
+    if (!_settings->isEnabled("performance") || _tokenizer->isC() || !_settings->inconclusive)
         return;
 
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
@@ -2724,124 +2661,6 @@ void CheckOther::checkNegativeBitwiseShift()
 void CheckOther::negativeBitwiseShiftError(const Token *tok)
 {
     reportError(tok, Severity::error, "shiftNegative", "Shifting by a negative value is undefined behaviour");
-}
-
-//---------------------------------------------------------------------------
-// Checking for shift by too many bits
-//---------------------------------------------------------------------------
-
-void CheckOther::checkTooBigBitwiseShift()
-{
-    // unknown sizeof(int) => can't run this checker
-    if (_settings->platformType == Settings::Unspecified)
-        return;
-
-    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
-    const std::size_t functions = symbolDatabase->functionScopes.size();
-    for (std::size_t i = 0; i < functions; ++i) {
-        const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-            if (tok->str() != "<<" && tok->str() != ">>")
-                continue;
-
-            if (!tok->astOperand1() || !tok->astOperand2())
-                continue;
-
-            // get number of bits of lhs
-            const Variable *var = tok->astOperand1()->variable();
-            if (!var)
-                continue;
-            int lhsbits = 0;
-            for (const Token *type = var->typeStartToken(); type; type = type->next()) {
-                if (Token::Match(type,"char|short|int") && !type->isLong()) {
-                    lhsbits = _settings->sizeof_int * 8;
-                    break;
-                }
-                if (type == var->typeEndToken())
-                    break;
-            }
-            if (lhsbits == 0)
-                continue;
-
-            // Get biggest rhs value. preferably a value which doesn't have 'condition'.
-            const ValueFlow::Value *value = tok->astOperand2()->getValueGE(lhsbits, _settings);
-            if (!value)
-                continue;
-            if (value->condition && !_settings->isEnabled("warning"))
-                continue;
-            if (value->inconclusive && !_settings->inconclusive)
-                continue;
-            tooBigBitwiseShiftError(tok, lhsbits, *value);
-        }
-    }
-}
-
-void CheckOther::tooBigBitwiseShiftError(const Token *tok, int lhsbits, const ValueFlow::Value &rhsbits)
-{
-    std::list<const Token*> callstack;
-    callstack.push_back(tok);
-    if (rhsbits.condition)
-        callstack.push_back(rhsbits.condition);
-    std::ostringstream errmsg;
-    errmsg << "Shifting " << lhsbits << "-bit value by " << rhsbits.intvalue << " bits is undefined behaviour";
-    if (rhsbits.condition)
-        errmsg << ". See condition at line " << rhsbits.condition->linenr() << ".";
-    reportError(callstack, rhsbits.condition ? Severity::warning : Severity::error, "shiftTooManyBits", errmsg.str(), rhsbits.inconclusive);
-}
-
-//---------------------------------------------------------------------------
-// Checking for integer overflow
-//---------------------------------------------------------------------------
-
-void CheckOther::checkIntegerOverflow()
-{
-    // unknown sizeof(int) => can't run this checker
-    if (_settings->platformType == Settings::Unspecified)
-        return;
-
-    // max int value according to platform settings.
-    const MathLib::bigint maxint = (1LL << (8 * _settings->sizeof_int - 1)) - 1;
-
-    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
-    const std::size_t functions = symbolDatabase->functionScopes.size();
-    for (std::size_t i = 0; i < functions; ++i) {
-        const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-            if (!tok->isArithmeticalOp())
-                continue;
-
-            // is there a overflow result value
-            const ValueFlow::Value *value = tok->getValueGE(maxint + 1, _settings);
-            if (!value)
-                value = tok->getValueLE(-maxint - 2, _settings);
-            if (!value)
-                continue;
-
-            // get size and sign of result..
-            int  size = 0;
-            char sign = 0;
-            if (!astGetSizeSign(_settings, tok, &size, &sign))
-                continue;
-            if (sign != 's')  // only signed integer overflow is UB
-                continue;
-
-            integerOverflowError(tok, *value);
-        }
-    }
-}
-
-void CheckOther::integerOverflowError(const Token *tok, const ValueFlow::Value &value)
-{
-    const std::string expr(tok ? tok->expressionString() : "");
-    const std::string cond(value.condition ?
-                           ". See condition at line " + MathLib::toString(value.condition->linenr()) + "." :
-                           "");
-
-    reportError(tok,
-                value.condition ? Severity::warning : Severity::error,
-                "integerOverflow",
-                "Signed integer overflow for expression '"+expr+"'"+cond,
-                value.inconclusive);
 }
 
 //---------------------------------------------------------------------------

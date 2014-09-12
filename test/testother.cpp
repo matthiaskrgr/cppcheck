@@ -149,9 +149,6 @@ private:
         TEST_CASE(checkRedundantCopy);
 
         TEST_CASE(checkNegativeShift);
-        TEST_CASE(checkTooBigShift);
-
-        TEST_CASE(checkIntegerOverflow);
 
         TEST_CASE(incompleteArrayFill);
 
@@ -4779,12 +4776,14 @@ private:
             "}");
         ASSERT_EQUALS("[test.cpp:4]: (error) Memory pointed to by 'p' is freed twice.\n", errout.str());
 
+        Settings settings;
+        LOAD_LIB_2(settings.library, "std.cfg");
         check(
             "void foo(char *p) {\n"
             "  free(p);\n"
             "  printf(\"Freed memory at location %x\", p);\n"
             "  free(p);\n"
-            "}");
+            "}", nullptr, false, false, false, true, &settings);
         ASSERT_EQUALS("[test.cpp:4]: (error) Memory pointed to by 'p' is freed twice.\n", errout.str());
 
         check(
@@ -5234,12 +5233,13 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
-    void check_redundant_copy(const char code[]) {
+    void check_redundant_copy(const char code[], bool inconclusive = true) {
         // Clear the error buffer..
         errout.str("");
 
         Settings settings;
         settings.addEnabled("performance");
+        settings.inconclusive = inconclusive;
 
         // Tokenize..
         Tokenizer tokenizer(&settings, this);
@@ -5335,17 +5335,20 @@ private:
         ASSERT_EQUALS("", errout.str());
 
         // #5618
-        check_redundant_copy("class Token {\n"
-                             "public:\n"
-                             "    const std::string& str();\n"
-                             "};\n"
-                             "void simplifyArrayAccessSyntax() {\n"
-                             "    for (Token *tok = list.front(); tok; tok = tok->next()) {\n"
-                             "        const std::string temp = tok->str();\n"
-                             "        tok->str(tok->strAt(2));\n"
-                             "    }\n"
-                             "}\n");
+        const char* code5618 = "class Token {\n"
+                               "public:\n"
+                               "    const std::string& str();\n"
+                               "};\n"
+                               "void simplifyArrayAccessSyntax() {\n"
+                               "    for (Token *tok = list.front(); tok; tok = tok->next()) {\n"
+                               "        const std::string temp = tok->str();\n"
+                               "        tok->str(tok->strAt(2));\n"
+                               "    }\n"
+                               "}";
+        check_redundant_copy(code5618);
         TODO_ASSERT_EQUALS("", "[test.cpp:7]: (performance, inconclusive) Use const reference for 'temp' to avoid unnecessary data copying.\n", errout.str());
+        check_redundant_copy(code5618, false);
+        ASSERT_EQUALS("", errout.str());
 
         // #5890 - crash: wesnoth desktop_util.cpp / unicode.hpp
         check_redundant_copy("typedef std::vector<char> X;\n"
@@ -5395,44 +5398,6 @@ private:
               "{\n"
               "   std::cout << 3 << -1 ;\n"
               "}");
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void checkTooBigShift() {
-        Settings settings;
-        settings.platform(Settings::Unix32);
-
-        check("int foo(int x) {\n"
-              "   return x << 32;\n"
-              "}","test.cpp",false,false,false,true,&settings);
-        ASSERT_EQUALS("[test.cpp:2]: (error) Shifting 32-bit value by 32 bits is undefined behaviour\n", errout.str());
-
-        check("int foo(int x) {\n"
-              "   return x << 2;\n"
-              "}","test.cpp",false,false,false,true,&settings);
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void checkIntegerOverflow() {
-        Settings settings;
-        settings.platform(Settings::Unix32);
-
-        check("int foo(int x) {\n"
-              "   if (x==123456) {}\n"
-              "   return x * x;\n"
-              "}","test.cpp",false,false,false,true,&settings);
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Signed integer overflow for expression 'x*x'. See condition at line 2.\n", errout.str());
-
-        check("int foo(int x) {\n"
-              "   if (x==123456) {}\n"
-              "   return -123456 * x;\n"
-              "}","test.cpp",false,false,false,true,&settings);
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Signed integer overflow for expression '-123456*x'. See condition at line 2.\n", errout.str());
-
-        check("int foo(int x) {\n"
-              "   if (x==123456) {}\n"
-              "   return 123456U * x;\n"
-              "}","test.cpp",false,false,false,true,&settings);
         ASSERT_EQUALS("", errout.str());
     }
 
