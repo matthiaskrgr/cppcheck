@@ -75,6 +75,7 @@ private:
         TEST_CASE(varScope20);      // Ticket #5103
         TEST_CASE(varScope21);      // Ticket #5382
         TEST_CASE(varScope22);      // Ticket #5684
+        TEST_CASE(varScope23);      // Ticket #6154
 
         TEST_CASE(oldStylePointerCast);
         TEST_CASE(invalidPointerCast);
@@ -1060,6 +1061,16 @@ private:
         ASSERT_EQUALS("[test.cpp:2]: (style) The scope of the variable 'p' can be reduced.\n", errout.str());
     }
 
+    void varScope23() { // #6154: Don't suggest to reduce scope if inner scope is a lambda
+        varScope("int main() {\n"
+                 "   size_t myCounter = 0;\n"
+                 "   Test myTest([&](size_t aX){\n"
+                 "       std::cout << myCounter += aX << std::endl;\n"
+                 "   });\n"
+                 "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void checkOldStylePointerCast(const char code[]) {
         // Clear the error buffer..
         errout.str("");
@@ -1197,6 +1208,15 @@ private:
                                  "class MS : public M\n"
                                  "{ virtual void addController(C*) override {} };");
         ASSERT_EQUALS("", errout.str());
+
+        // #6164
+        checkOldStylePointerCast("class Base {};\n"
+                                 "class Derived: public Base {};\n"
+                                 "void testCC() {\n"
+                                 "  std::vector<Base*> v;\n"
+                                 "  v.push_back((Base*)new Derived);\n"
+                                 "}");
+        ASSERT_EQUALS("[test.cpp:5]: (style) C-style pointer casting\n", errout.str());
     }
 
     void checkInvalidPointerCast(const char code[], bool portability = true, bool inconclusive = false) {
@@ -4765,12 +4785,14 @@ private:
             "}");
         ASSERT_EQUALS("[test.cpp:4]: (error) Memory pointed to by 'p' is freed twice.\n", errout.str());
 
+        Settings settings;
+        LOAD_LIB_2(settings.library, "std.cfg");
         check(
             "void foo(char *p) {\n"
             "  free(p);\n"
             "  printf(\"Freed memory at location %x\", p);\n"
             "  free(p);\n"
-            "}");
+            "}", nullptr, false, false, false, true, &settings);
         ASSERT_EQUALS("[test.cpp:4]: (error) Memory pointed to by 'p' is freed twice.\n", errout.str());
 
         check(
@@ -5220,12 +5242,13 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
-    void check_redundant_copy(const char code[]) {
+    void check_redundant_copy(const char code[], bool inconclusive = true) {
         // Clear the error buffer..
         errout.str("");
 
         Settings settings;
         settings.addEnabled("performance");
+        settings.inconclusive = inconclusive;
 
         // Tokenize..
         Tokenizer tokenizer(&settings, this);
@@ -5321,17 +5344,20 @@ private:
         ASSERT_EQUALS("", errout.str());
 
         // #5618
-        check_redundant_copy("class Token {\n"
-                             "public:\n"
-                             "    const std::string& str();\n"
-                             "};\n"
-                             "void simplifyArrayAccessSyntax() {\n"
-                             "    for (Token *tok = list.front(); tok; tok = tok->next()) {\n"
-                             "        const std::string temp = tok->str();\n"
-                             "        tok->str(tok->strAt(2));\n"
-                             "    }\n"
-                             "}\n");
+        const char* code5618 = "class Token {\n"
+                               "public:\n"
+                               "    const std::string& str();\n"
+                               "};\n"
+                               "void simplifyArrayAccessSyntax() {\n"
+                               "    for (Token *tok = list.front(); tok; tok = tok->next()) {\n"
+                               "        const std::string temp = tok->str();\n"
+                               "        tok->str(tok->strAt(2));\n"
+                               "    }\n"
+                               "}";
+        check_redundant_copy(code5618);
         TODO_ASSERT_EQUALS("", "[test.cpp:7]: (performance, inconclusive) Use const reference for 'temp' to avoid unnecessary data copying.\n", errout.str());
+        check_redundant_copy(code5618, false);
+        ASSERT_EQUALS("", errout.str());
 
         // #5890 - crash: wesnoth desktop_util.cpp / unicode.hpp
         check_redundant_copy("typedef std::vector<char> X;\n"

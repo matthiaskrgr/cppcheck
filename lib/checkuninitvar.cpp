@@ -1664,17 +1664,30 @@ void CheckUninitVar::checkRhs(const Token *tok, const Variable &var, bool alloc,
 
 bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool alloc, bool cpp)
 {
-    if (vartok->previous()->str() == "return" && !alloc)
+    if (!alloc && vartok->previous()->str() == "return")
         return true;
 
     // Passing variable to typeof/__alignof__
     if (Token::Match(vartok->tokAt(-3), "typeof|__alignof__ ( * %var%"))
         return false;
 
+    // Accessing Rvalue member using "." or "->" 
+    if (vartok->strAt(1) == "." && vartok->strAt(-1) != "&") {
+        bool assignment = false;
+        const Token* parent = vartok->astParent();
+        while (parent) {
+            if (parent->str() == "=") {
+                assignment = true;
+                break;
+            }
+            parent = parent->astParent();
+        }
+        if(!assignment) 
+            return true;
+    }
+
     // Passing variable to function..
     if (Token::Match(vartok->previous(), "[(,] %var% [,)]") || Token::Match(vartok->tokAt(-2), "[(,] & %var% [,)]")) {
-        const bool address(vartok->previous()->str() == "&");
-
         // locate start parentheses in function call..
         unsigned int argumentNumber = 0;
         const Token *start = vartok;
@@ -1693,6 +1706,7 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
             if (func) {
                 const Variable *arg = func->getArgumentVar(argumentNumber);
                 if (arg) {
+                    const bool address(vartok->previous()->str() == "&");
                     const Token *argStart = arg->typeStartToken();
                     while (argStart->previous() && argStart->previous()->isName())
                         argStart = argStart->previous();
@@ -1864,7 +1878,7 @@ bool CheckUninitVar::isMemberVariableAssignment(const Token *tok, const std::str
                     return false;
             }
 
-            else if (Token::simpleMatch(ftok ? ftok->previous() : nullptr, "= * ("))
+            else if (ftok && Token::simpleMatch(ftok->previous(), "= * ("))
                 return false;
         }
         return true;

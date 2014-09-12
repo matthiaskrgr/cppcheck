@@ -673,7 +673,7 @@ void CheckOther::checkRedundantAssignment()
                     if (!writtenArgumentsEnd) // Indicates that we are in the first argument of strcpy/memcpy/... function
                         memAssignments.erase(tok->varId());
                 }
-            } else if (Token::Match(tok, "%var% (")) { // Function call. Global variables might be used. Reset their status
+            } else if (Token::Match(tok, "%var% (") && _settings->library.functionpure.find(tok->str()) == _settings->library.functionpure.end()) { // Function call. Global variables might be used. Reset their status
                 const bool memfunc = Token::Match(tok, "memcpy|memmove|memset|strcpy|strncpy|sprintf|snprintf|strcat|strncat|wcscpy|wcsncpy|swprintf|wcscat|wcsncat");
                 if (tok->varId()) // operator() or function pointer
                     varAssignments.erase(tok->varId());
@@ -1212,63 +1212,6 @@ void CheckOther::unreachableCodeError(const Token *tok, bool inconclusive)
 }
 
 //---------------------------------------------------------------------------
-// Check for unsigned divisions
-//---------------------------------------------------------------------------
-bool CheckOther::isUnsigned(const Variable* var) const
-{
-    return (var && var->typeStartToken()->isUnsigned() && !var->isPointer() && !var->isArray() && _tokenizer->sizeOfType(var->typeStartToken()) >= _settings->sizeof_int);
-}
-bool CheckOther::isSigned(const Variable* var)
-{
-    return (var && !var->typeStartToken()->isUnsigned() && var->isIntegralType() && !var->isPointer() && !var->isArray());
-}
-
-void CheckOther::checkUnsignedDivision()
-{
-    bool warning = _settings->isEnabled("warning");
-
-    const SymbolDatabase* symbolDatabase = _tokenizer->getSymbolDatabase();
-    const std::size_t functions = symbolDatabase->functionScopes.size();
-    for (std::size_t i = 0; i < functions; ++i) {
-        const Scope * scope = symbolDatabase->functionScopes[i];
-        const Token* ifTok = 0;
-        // Check for "ivar / uvar" and "uvar / ivar"
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-
-            if (Token::Match(tok, "[).]")) // Don't check members or casted variables
-                continue;
-
-            if (Token::Match(tok->next(), "%var% / %num%")) {
-                if (tok->strAt(3)[0] == '-' && isUnsigned(tok->next()->variable())) {
-                    udivError(tok->next(), false);
-                }
-            } else if (Token::Match(tok->next(), "%num% / %var%")) {
-                if (tok->strAt(1)[0] == '-' && isUnsigned(tok->tokAt(3)->variable())) {
-                    udivError(tok->next(), false);
-                }
-            } else if (_settings->inconclusive && warning && !ifTok && Token::Match(tok->next(), "%var% / %var%")) {
-                const Variable* var1 = tok->next()->variable();
-                const Variable* var2 = tok->tokAt(3)->variable();
-                if ((isUnsigned(var1) && isSigned(var2)) || (isUnsigned(var2) && isSigned(var1))) {
-                    udivError(tok->next(), true);
-                }
-            } else if (!ifTok && Token::simpleMatch(tok, "if ("))
-                ifTok = tok->next()->link()->next()->link();
-            else if (ifTok == tok)
-                ifTok = 0;
-        }
-    }
-}
-
-void CheckOther::udivError(const Token *tok, bool inconclusive)
-{
-    if (inconclusive)
-        reportError(tok, Severity::warning, "udivError", "Division with signed and unsigned operators. The result might be wrong.", true);
-    else
-        reportError(tok, Severity::error, "udivError", "Unsigned division. The result will be wrong.");
-}
-
-//---------------------------------------------------------------------------
 // memset(p, y, 0 /* bytes to fill */) <- 2nd and 3rd arguments inverted
 //---------------------------------------------------------------------------
 void CheckOther::checkMemsetZeroBytes()
@@ -1368,7 +1311,7 @@ void CheckOther::checkVariableScope()
 
     for (unsigned int i = 1; i < symbolDatabase->getVariableListSize(); i++) {
         const Variable* var = symbolDatabase->getVariableFromVarId(i);
-        if (!var || !var->isLocal() || (!var->isPointer() && !var->typeStartToken()->isStandardType() && !var->typeStartToken()->next()->isStandardType()))
+        if (!var || !var->isLocal() || (!var->isPointer() && !var->typeStartToken()->isStandardType()))
             continue;
 
         if (var->isConst())
@@ -1394,7 +1337,7 @@ void CheckOther::checkVariableScope()
         bool reduce = true;
         bool used = false; // Don't warn about unused variables
         for (; tok != var->scope()->classEnd; tok = tok->next()) {
-            if (tok->str() == "{" && tok->scope() != tok->previous()->scope() && !tok->isExpandedMacro()) {
+            if (tok->str() == "{" && tok->scope() != tok->previous()->scope() && !tok->isExpandedMacro() && tok->scope()->type != Scope::eLambda) {
                 if (used) {
                     bool used2 = false;
                     if (!checkInnerScope(tok, var, used2) || used2) {
@@ -2131,7 +2074,7 @@ void CheckOther::checkInvalidFree()
         // If the previously-allocated variable is passed in to another function
         // as a parameter, it might be modified, so we shouldn't report an error
         // if it is later used to free memory
-        else if (Token::Match(tok, "%var% (")) {
+        else if (Token::Match(tok, "%var% (") && _settings->library.functionpure.find(tok->str()) == _settings->library.functionpure.end()) {
             const Token* tok2 = Token::findmatch(tok->next(), "%var%", tok->linkAt(1));
             while (tok2 != nullptr) {
                 allocatedVariables.erase(tok2->varId());
@@ -2209,7 +2152,7 @@ void CheckOther::checkDoubleFree()
         }
 
         // If a variable is passed to a function, remove it from the set of previously freed variables
-        else if (Token::Match(tok, "%var% (") && !Token::Match(tok, "printf|sprintf|snprintf|fprintf|wprintf|swprintf|fwprintf")) {
+        else if (Token::Match(tok, "%var% (") && _settings->library.leakignore.find(tok->str()) == _settings->library.leakignore.end()) {
 
             // If this is a new function definition, clear all variables
             if (Token::simpleMatch(tok->next()->link(), ") {")) {
@@ -2574,7 +2517,7 @@ static bool constructorTakesReference(const Scope * const classScope)
 //---------------------------------------------------------------------------
 void CheckOther::checkRedundantCopy()
 {
-    if (!_settings->isEnabled("performance") || _tokenizer->isC())
+    if (!_settings->isEnabled("performance") || _tokenizer->isC() || !_settings->inconclusive)
         return;
 
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
@@ -2662,7 +2605,6 @@ void CheckOther::negativeBitwiseShiftError(const Token *tok)
 {
     reportError(tok, Severity::error, "shiftNegative", "Shifting by a negative value is undefined behaviour");
 }
-
 
 //---------------------------------------------------------------------------
 // Check for incompletely filled buffers.
