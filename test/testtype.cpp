@@ -59,12 +59,6 @@ private:
         // Check..
         CheckType checkType(&tokenizer, settings, this);
         checkType.runChecks(&tokenizer, settings, this);
-        const std::string str1(tokenizer.tokens()->stringifyList(0,true));
-        tokenizer.simplifyTokenList2();
-        const std::string str2(tokenizer.tokens()->stringifyList(0,true));
-        if (str1 != str2)
-            warn(("Unsimplified code in test case\nstr1="+str1+"\nstr2="+str2).c_str());
-        checkType.runSimplifiedChecks(&tokenizer, settings, this);
     }
 
     void checkTooBigShift() {
@@ -78,6 +72,11 @@ private:
 
         check("int foo(int x) {\n"
               "   return x << 2;\n"
+              "}",&settings);
+        ASSERT_EQUALS("", errout.str());
+
+        check("int foo(int x) {\n"
+              "   return (long long)x << 40;\n"
               "}",&settings);
         ASSERT_EQUALS("", errout.str());
     }
@@ -106,11 +105,24 @@ private:
     }
 
     void signConversion() {
-        check("unsigned int f1(signed int x, unsigned int y) {"
+        check("unsigned int f1(signed int x, unsigned int y) {" // x is signed
               "  return x * y;\n"
               "}\n"
               "void f2() { f1(-4,4); }");
         ASSERT_EQUALS("[test.cpp:1]: (warning) Suspicious code: sign conversion of x in calculation, even though x can have a negative value\n", errout.str());
+
+        check("unsigned int f1(int x) {" // x has no signedness, but it can have the value -1 so assume it's signed
+              "  return x * 5U;\n"
+              "}\n"
+              "void f2() { f1(-4); }");
+        ASSERT_EQUALS("[test.cpp:1]: (warning) Suspicious code: sign conversion of x in calculation, even though x can have a negative value\n", errout.str());
+
+        // Dont warn for + and -
+        check("void f1(int x) {"
+              "  a = x + 5U;\n"
+              "}\n"
+              "void f2() { f1(-4); }");
+        ASSERT_EQUALS("", errout.str());
     }
 };
 

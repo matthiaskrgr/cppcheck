@@ -225,7 +225,7 @@ void CheckType::checkSignConversion()
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-            if (!tok->isArithmeticalOp())
+            if (!tok->isArithmeticalOp() || Token::Match(tok,"+|-"))
                 continue;
 
             unsigned int size = 0;
@@ -248,10 +248,16 @@ void CheckType::checkSignConversion()
                     continue; // Todo: properly handle casts, function calls, etc
                 const Variable *var = tok1->variable();
                 if (var && tok1->getValueLE(-1,_settings)) {
-                    bool signedvar = false;
+                    bool signedvar = true;  // assume that variable is signed since it can have a negative value
                     for (const Token *type = var->typeStartToken();; type = type->next()) {
-                        if (type->isSigned()) {
-                            signedvar = true;
+                        if (type->isUnsigned()) {
+                            signedvar = false;
+                            break;
+                        }
+                        if (type->isSigned())
+                            break;
+                        if (type->isName() && !Token::Match(type, "char|short|int|long|const")) {
+                            signedvar = false;
                             break;
                         }
                         if (type == var->typeEndToken())

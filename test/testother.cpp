@@ -210,7 +210,7 @@ private:
             tokenizer.simplifyTokenList2();
             const std::string str2(tokenizer.tokens()->stringifyList(0,true));
             if (str1 != str2)
-                warn(("Unsimplified code in test case\nstr1="+str1+"\nstr2="+str2).c_str());
+                warnUnsimplified(str1, str2);
             checkOther.runSimplifiedChecks(&tokenizer, settings, this);
         }
     }
@@ -1208,6 +1208,15 @@ private:
                                  "class MS : public M\n"
                                  "{ virtual void addController(C*) override {} };");
         ASSERT_EQUALS("", errout.str());
+
+        // #6164
+        checkOldStylePointerCast("class Base {};\n"
+                                 "class Derived: public Base {};\n"
+                                 "void testCC() {\n"
+                                 "  std::vector<Base*> v;\n"
+                                 "  v.push_back((Base*)new Derived);\n"
+                                 "}");
+        ASSERT_EQUALS("[test.cpp:5]: (style) C-style pointer casting\n", errout.str());
     }
 
     void checkInvalidPointerCast(const char code[], bool portability = true, bool inconclusive = false) {
