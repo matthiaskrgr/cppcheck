@@ -115,9 +115,7 @@ private:
         tokenizer.simplifyTokenList2();
         const std::string str2(tokenizer.tokens()->stringifyList(0,true));
         if (verify && str1 != str2)
-            warn(("Unsimplified code in test case. It looks like this test "
-                  "should either be cleaned up or moved to TestTokenizer or "
-                  "TestSimplifyTokens instead.\nstr1="+str1+"\nstr2="+str2).c_str());
+            warnUnsimplified(str1, str2);
 
         checkNullPointer.nullConstantDereference();
     }
@@ -1101,7 +1099,7 @@ private:
               "\n"
               "    *p = 0;\n"
               "}");
-        TODO_ASSERT_EQUALS("[test.cpp:11]: (error) Possible null pointer dereference: p\n", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:11]: (error) Possible null pointer dereference: p\n", errout.str());
     }
 
     void nullpointer7() {
@@ -2573,6 +2571,9 @@ private:
         check("size_t get (char *value) { return mbstowcs (NULL, value, 0); }");
         ASSERT_EQUALS("",errout.str());
         check("size_t get (wchar_t *value) { return wcstombs (NULL, value, 0); }");
+        ASSERT_EQUALS("",errout.str());
+
+        check("void f() { strtok(NULL, 'x');}");
         ASSERT_EQUALS("",errout.str());
     }
 

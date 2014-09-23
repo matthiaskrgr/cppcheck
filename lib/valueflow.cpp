@@ -260,7 +260,7 @@ static bool isVariableChanged(const Token *start, const Token *end, const unsign
                 return true;
 
             const Token *parent = tok->astParent();
-            while (parent && (parent->str() == "." || parent->str() == "::"))
+            while (Token::Match(parent, ".|::"))
                 parent = parent->astParent();
             if (parent && parent->type() == Token::eIncDecOp)
                 return true;
@@ -820,9 +820,34 @@ static bool valueFlowForward(Token * const               startToken,
                     ++number_of_if;
                     tok2 = end;
                 } else {
-                    if (settings->debugwarnings)
-                        bailout(tokenlist, errorLogger, tok2, "variable " + var->name() + " is assigned in conditional code");
-                    return false;
+                    bool bail = true;
+
+                    // loop that conditionally set variable and then break => either loop condition is
+                    // redundant or the variable can be unchanged after the loop.
+                    bool loopCondition = false;
+                    if (Token::simpleMatch(tok2, "while (") && Token::Match(tok2->next()->astOperand2(), "%op%"))
+                        loopCondition = true;
+                    else if (Token::simpleMatch(tok2, "for (") &&
+                             Token::simpleMatch(tok2->next()->astOperand2(), ";") &&
+                             Token::simpleMatch(tok2->next()->astOperand2()->astOperand2(), ";") &&
+                             Token::Match(tok2->next()->astOperand2()->astOperand2()->astOperand1(), "%op%"))
+                        loopCondition = true;
+                    if (loopCondition) {
+                        const Token *tok3 = Token::findmatch(start, "%varid%", end, varid);
+                        if (Token::Match(tok3, "%varid% =", varid) &&
+                            tok3->scope()->classEnd                &&
+                            Token::Match(tok3->scope()->classEnd->tokAt(-3), "[;}] break ;") &&
+                            !Token::findmatch(tok3->next(), "%varid%", end, varid)) {
+                            bail = false;
+                            tok2 = end;
+                        }
+                    }
+
+                    if (bail) {
+                        if (settings->debugwarnings)
+                            bailout(tokenlist, errorLogger, tok2, "variable " + var->name() + " is assigned in conditional code");
+                        return false;
+                    }
                 }
             }
         }
@@ -1154,7 +1179,7 @@ static void execute(const Token *expr,
             *error = true;
     }
 
-    else if (expr->str() == "++" || expr->str() == "--") {
+    else if (Token::Match(expr, "++|--")) {
         if (!expr->astOperand1() || expr->astOperand1()->varId() == 0U)
             *error = true;
         else {
@@ -1233,7 +1258,7 @@ static bool valueFlowForLoop1(const Token *tok, unsigned int * const varid, Math
     tok = tok->tokAt(2);
     if (!Token::Match(tok,"%type%| %var% ="))
         return false;
-    const Token * const vartok = tok->tokAt(Token::Match(tok, "%var% =") ? 0 : 1);
+    const Token * const vartok = Token::Match(tok, "%var% =") ? tok : tok->next();
     if (vartok->varId() == 0U)
         return false;
     *varid = vartok->varId();
@@ -1492,7 +1517,7 @@ static void valueFlowSubFunction(TokenList *tokenlist, ErrorLogger *errorLogger,
             std::list<ValueFlow::Value> argvalues;
 
             // passing value(s) to function
-            if (Token::Match(argtok, "%var%|%num%|%str% [,)]") && !argtok->values.empty())
+            if (!argtok->values.empty() && Token::Match(argtok, "%var%|%num%|%str% [,)]"))
                 argvalues = argtok->values;
             else {
                 // bool operator => values 1/0 are passed to function..
@@ -1522,7 +1547,7 @@ static void valueFlowSubFunction(TokenList *tokenlist, ErrorLogger *errorLogger,
                 if (Token::Match(tok2, "%varid% !!=", varid2)) {
                     for (std::list<ValueFlow::Value>::const_iterator val = argvalues.begin(); val != argvalues.end(); ++val)
                         setTokenValue(const_cast<Token*>(tok2), *val);
-                } else if (tok2->str() == "{" || tok2->str() == "?") {
+                } else if (Token::Match(tok2, "{|?")) {
                     if (settings->debugwarnings)
                         bailout(tokenlist, errorLogger, tok2, "parameter " + arg->name() + ", at '" + tok2->str() + "'");
                     break;

@@ -1092,8 +1092,6 @@ void CheckUnusedVar::checkFunctionVariableUsage()
              it != variables.varUsage().end();
              ++it) {
             const Variables::VariableUsage &usage = it->second;
-            const std::string &varname = usage._var->name();
-            const Variable* var = symbolDatabase->getVariableFromVarId(it->first);
 
             // variable has been marked as unused so ignore it
             if (usage._var->nameToken()->isAttributeUnused() || usage._var->nameToken()->isAttributeUsed())
@@ -1104,6 +1102,9 @@ void CheckUnusedVar::checkFunctionVariableUsage()
                 usage._type == Variables::pointerArray ||
                 usage._type == Variables::referenceArray)
                 continue;
+
+            const std::string &varname = usage._var->name();
+            const Variable* var = symbolDatabase->getVariableFromVarId(it->first);
 
             // variable has had memory allocated for it, but hasn't done
             // anything with that memory other than, perhaps, freeing it
@@ -1231,9 +1232,7 @@ void CheckUnusedVar::checkStructMemberUsage()
 
             if (Token::Match(tok->next(), "%type% %var% [;[]"))
                 varname = tok->strAt(2);
-            else if (Token::Match(tok->next(), "%type% %type% %var% [;[]"))
-                varname = tok->strAt(3);
-            else if (Token::Match(tok->next(), "%type% * %var% [;[]"))
+            else if (Token::Match(tok->next(), "%type% %type%|* %var% [;[]"))
                 varname = tok->strAt(3);
             else if (Token::Match(tok->next(), "%type% %type% * %var% [;[]"))
                 varname = tok->strAt(4);

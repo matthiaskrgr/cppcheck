@@ -638,7 +638,7 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                     }
 
                     // has body?
-                    if (scopeBegin->str() == "{" || scopeBegin->str() == ":") {
+                    if (Token::Match(scopeBegin, "{|:")) {
                         tok = funcStart;
 
                         // class function
@@ -1164,7 +1164,7 @@ void Variable::evaluate()
             tok = tok->next();
     }
 
-    while (_start && _start->next() && (_start->str() == "static" || _start->str() == "const"))
+    while (Token::Match(_start, "static|const %any%"))
         _start = _start->next();
     while (_end && _end->previous() && _end->str() == "const")
         _end = _end->previous();
@@ -1203,9 +1203,9 @@ void Variable::evaluate()
     }
 
     if (_start) {
-        if (_start->str() == "bool" || _start->str() == "char" || _start->str() == "short" || _start->str() == "int" || _start->str() == "long")
+        if (Token::Match(_start, "bool|char|short|int|long"))
             setFlag(fIsIntType, true);
-        else if (_start->str() == "float" || _start->str() == "double")
+        else if (Token::Match(_start, "float|double"))
             setFlag(fIsFloatType, true);
     }
 }
@@ -1541,8 +1541,9 @@ void SymbolDatabase::addClassFunction(Scope **scope, const Token **tok, const To
                         } else if (func->type != Function::eDestructor && !destructor) {
                             // normal function?
                             if ((*tok)->next()->link()) {
-                                if ((func->isConst && (*tok)->next()->link()->next()->str() == "const") ||
-                                    (!func->isConst && (*tok)->next()->link()->next()->str() != "const")) {
+                                const bool hasConstKeyword = (*tok)->next()->link()->next()->str() == "const";
+                                if ((func->isConst && hasConstKeyword) ||
+                                    (!func->isConst && !hasConstKeyword)) {
                                     func->hasBody = true;
                                 }
                             }
@@ -1578,7 +1579,7 @@ void SymbolDatabase::addNewFunction(Scope **scope, const Token **tok)
     // skip to start of function
     bool foundInitLit = false;
     while (tok1 && (tok1->str() != "{" || (foundInitLit && tok1->previous()->isName()))) {
-        if (tok1->str() == "(" || tok1->str() == "{")
+        if (Token::Match(tok1, "(|{"))
             tok1 = tok1->link();
         if (tok1->str() == ":")
             foundInitLit = true;
@@ -1620,15 +1621,13 @@ const Token *Type::initBaseInfo(const Token *tok, const Token *tok1)
 
         // check for base classes
         else if (Token::Match(tok2, ":|,")) {
-            Type::BaseInfo base;
-
-            base.isVirtual = false;
-
             tok2 = tok2->next();
 
             // check for invalid code
             if (!tok2 || !tok2->next())
                 return nullptr;
+
+            Type::BaseInfo base;
 
             if (tok2->str() == "virtual") {
                 base.isVirtual = true;
@@ -1669,7 +1668,6 @@ const Token *Type::initBaseInfo(const Token *tok, const Token *tok1)
             }
 
             base.name = tok2->str();
-            base.type = nullptr;
 
             // add unhandled templates
             if (tok2->next() && tok2->next()->str() == "<") {
@@ -2188,12 +2186,12 @@ void Function::addArguments(const SymbolDatabase *symbolDatabase, const Scope *s
         unsigned int count = 0;
 
         for (const Token* tok = start->next(); tok; tok = tok->next()) {
+            if (Token::Match(tok, ",|)"))
+                return; // Syntax error
+
             const Token* startTok = tok;
             const Token* endTok   = nullptr;
             const Token* nameTok  = nullptr;
-
-            if (tok->str() == "," || tok->str() == ")")
-                return; // Syntax error
 
             do {
                 if (tok->varId() != 0) {
@@ -2572,10 +2570,6 @@ void Scope::getVariableList()
 
 const Token *Scope::checkVariable(const Token *tok, AccessControl varaccess)
 {
-    // This is the start of a statement
-    const Token *vartok = nullptr;
-    const Token *typetok = nullptr;
-
     // Is it a throw..?
     if (Token::Match(tok, "throw %any% (") &&
         Token::simpleMatch(tok->linkAt(2), ") ;")) {
@@ -2605,10 +2599,14 @@ const Token *Scope::checkVariable(const Token *tok, AccessControl varaccess)
         tok = tok->next();
     }
 
+    // This is the start of a statement
+    const Token *vartok = nullptr;
+    const Token *typetok = nullptr;
+
     if (tok && isVariableDeclaration(tok, vartok, typetok)) {
         // If the vartok was set in the if-blocks above, create a entry for this variable..
         tok = vartok->next();
-        while (tok && (tok->str() == "[" || tok->str() == "{"))
+        while (Token::Match(tok, "[|{"))
             tok = tok->link()->next();
 
         if (vartok->varId() == 0) {
@@ -2681,7 +2679,7 @@ static const Token* skipPointers(const Token* tok)
 
 bool Scope::isVariableDeclaration(const Token* tok, const Token*& vartok, const Token*& typetok) const
 {
-    if (tok && check && check->_tokenizer->isCPP() && (tok->str() == "throw" || tok->str() == "new"))
+    if (check && check->_tokenizer->isCPP() && Token::Match(tok, "throw|new"))
         return false;
 
     const Token* localTypeTok = skipScopeIdentifiers(tok);

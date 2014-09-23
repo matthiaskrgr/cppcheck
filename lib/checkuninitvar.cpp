@@ -1671,8 +1671,19 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
     if (Token::Match(vartok->tokAt(-3), "typeof|__alignof__ ( * %var%"))
         return false;
 
-    // Accessing Rvalue member using "." or "->" 
+    // Accessing Rvalue member using "." or "->"
     if (vartok->strAt(1) == "." && vartok->strAt(-1) != "&") {
+        // Is struct member passed to function?
+        if (!pointer && Token::Match(vartok->previous(), "[,(] %var% . %var%")) {
+            // TODO: there are FN currently:
+            // - should only return false if struct member is (or might be) array.
+            // - should only return false if function argument is (or might be) non-const pointer or reference
+            const Token *tok2 = vartok->next();
+            while (Token::Match(tok2,". %var%"))
+                tok2 = tok2->tokAt(2);
+            if (Token::Match(tok2, "[,)]"))
+                return false;
+        }
         bool assignment = false;
         const Token* parent = vartok->astParent();
         while (parent) {
@@ -1682,7 +1693,7 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
             }
             parent = parent->astParent();
         }
-        if(!assignment) 
+        if (!assignment)
             return true;
     }
 

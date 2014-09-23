@@ -65,9 +65,7 @@ private:
         TEST_CASE(elseif1);
         TEST_CASE(ifa_ifa);     // "if (a) { if (a) .." => "if (a) { if (1) .."
 
-        TEST_CASE(sizeof2);
-        TEST_CASE(sizeof3);
-        TEST_CASE(sizeof4);
+        TEST_CASE(sizeof_array);
         TEST_CASE(sizeof5);
         TEST_CASE(sizeof6);
         TEST_CASE(sizeof7);
@@ -140,6 +138,7 @@ private:
         TEST_CASE(template45);  // #5814 - syntax error reported for valid code
         TEST_CASE(template46);  // #5816 - syntax error reported for valid code
         TEST_CASE(template47);  // #6023 - syntax error reported for valid code
+        TEST_CASE(template48);  // #6134 - 100% CPU upon invalid code
         TEST_CASE(template_unhandled);
         TEST_CASE(template_default_parameter);
         TEST_CASE(template_default_type);
@@ -1027,38 +1026,37 @@ private:
 
 
 
-    void sizeof2() {
-        const char code[] = "void foo()\n"
-                            "{\n"
-                            "    int i[4];\n"
-                            "    sizeof(i);\n"
-                            "    sizeof(*i);\n"
-                            "}\n";
+    void sizeof_array() {
+        const char *code;
+
+        code = "void foo()\n"
+               "{\n"
+               "    int i[4];\n"
+               "    sizeof(i);\n"
+               "    sizeof(*i);\n"
+               "}\n";
         ASSERT_EQUALS("void foo ( ) { int i [ 4 ] ; 16 ; 4 ; }", tok(code));
-    }
 
-    void sizeof3() {
-        const char code[] = "static int i[4];\n"
-                            "void f()\n"
-                            "{\n"
-                            "    int i[10];\n"
-                            "    sizeof(i);\n"
-                            "}\n";
+        code = "static int i[4];\n"
+               "void f()\n"
+               "{\n"
+               "    int i[10];\n"
+               "    sizeof(i);\n"
+               "}\n";
         ASSERT_EQUALS("static int i [ 4 ] ; void f ( ) { int i [ 10 ] ; 40 ; }", tok(code));
-    }
-
-    void sizeof4() {
         {
-            const char code[] = "int i[10];\n"
-                                "sizeof(i[0]);\n";
+            code = "int i[10];\n"
+                   "sizeof(i[0]);\n";
+            ASSERT_EQUALS("int i [ 10 ] ; 4 ;", tok(code));
+
+            code = "int i[10];\n"
+                   "sizeof i[0];\n";
             ASSERT_EQUALS("int i [ 10 ] ; 4 ;", tok(code));
         }
 
-        {
-            const char code[] = "int i[10];\n"
-                                "sizeof i[0];\n";
-            ASSERT_EQUALS("int i [ 10 ] ; 4 ;", tok(code));
-        }
+        code = "char i[2][20];\n"
+               "sizeof(i[1]);";
+        ASSERT_EQUALS("char i [ 2 ] [ 20 ] ; 20 ;", tok(code));
     }
 
     void sizeof5() {
@@ -2429,6 +2427,12 @@ private:
     void template47() { // #6023
         tok("template <typename T1, typename T2 = T3<T1> > class C1 {}; "
             "class C2 : public C1<C2> {};");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void template48() { // #6134
+        tok("template <int> int f( {  } ); "
+            "int foo = f<1>(0);");
         ASSERT_EQUALS("", errout.str());
     }
 
