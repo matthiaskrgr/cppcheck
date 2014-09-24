@@ -20,6 +20,7 @@
 #include "errorlogger.h"
 #include "check.h"
 #include "settings.h"
+#include "symboldatabase.h"
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
@@ -651,6 +652,19 @@ std::size_t Token::getStrLength(const Token *tok)
     return len;
 }
 
+std::size_t Token::getStrSize(const Token *tok)
+{
+    assert(tok != nullptr && tok->type() == eString);
+    const std::string &str = tok->str();
+    unsigned int sizeofstring = 1U;
+    for (unsigned int i = 1U; i < str.size() - 1U; i++) {
+        if (str[i] == '\\')
+            ++i;
+        ++sizeofstring;
+    }
+    return sizeofstring;
+}
+
 std::string Token::getCharAt(const Token *tok, std::size_t index)
 {
     assert(tok != nullptr);
@@ -705,11 +719,26 @@ Token* Token::nextArgument() const
     for (const Token* tok = this; tok; tok = tok->next()) {
         if (tok->str() == ",")
             return tok->next();
-        else if (tok->str() == "(" || tok->str() == "{" || tok->str() == "[")
+        else if (tok->link() && Token::Match(tok, "(|{|[|<"))
             tok = tok->link();
-        else if (tok->str() == "<" && tok->link())
+        else if (Token::Match(tok, ")|;"))
+            return 0;
+    }
+    return 0;
+}
+
+Token* Token::nextArgumentBeforeCreateLinks2() const
+{
+    for (const Token* tok = this; tok; tok = tok->next()) {
+        if (tok->str() == ",")
+            return tok->next();
+        else if (tok->link() && Token::Match(tok, "(|{|["))
             tok = tok->link();
-        else if (tok->str() == ")" || tok->str() == ";")
+        else if (tok->str() == "<") {
+            const Token* temp = tok->findClosingBracket();
+            if (temp)
+                tok = temp;
+        } else if (Token::Match(tok, ")|;"))
             return 0;
     }
     return 0;
@@ -722,9 +751,9 @@ const Token * Token::findClosingBracket() const
     if (_str == "<") {
         unsigned int depth = 0;
         for (closing = this; closing != nullptr; closing = closing->next()) {
-            if (closing->str() == "{" || closing->str() == "[" || closing->str() == "(")
+            if (Token::Match(closing, "{|[|("))
                 closing = closing->link();
-            else if (closing->str() == "}" || closing->str() == "]" || closing->str() == ")" || closing->str() == ";" || closing->str() == "=")
+            else if (Token::Match(closing, "}|]|)|;|="))
                 break;
             else if (closing->str() == "<")
                 ++depth;
@@ -1059,6 +1088,22 @@ bool Token::isCalculation() const
     return true;
 }
 
+static bool isUnaryPreOp(const Token *op)
+{
+    if (!op->astOperand1() || op->astOperand2())
+        return false;
+    if (!Token::Match(op, "++|--"))
+        return true;
+    const Token *tok = op->astOperand1();
+    for (int distance = 1; distance < 10; distance++) {
+        if (tok == op->tokAt(-distance))
+            return false;
+        if (tok == op->tokAt(distance))
+            return true;
+    }
+    return false; // <- guess
+}
+
 std::string Token::expressionString() const
 {
     const Token * const top = this;
@@ -1066,12 +1111,12 @@ std::string Token::expressionString() const
     while (start->astOperand1() && start->astOperand2())
         start = start->astOperand1();
     const Token *end = top;
-    while (end->astOperand1() && end->astOperand2()) {
+    while (end->astOperand1() && (end->astOperand2() || isUnaryPreOp(end))) {
         if (Token::Match(end,"(|[")) {
             end = end->link();
             break;
         }
-        end = end->astOperand2();
+        end = end->astOperand2() ? end->astOperand2() : end->astOperand1();
     }
     std::string ret;
     for (const Token *tok = start; tok && tok != end; tok = tok->next()) {
@@ -1184,15 +1229,23 @@ void Token::printValueFlow(bool xml, std::ostream &out) const
             out << "  " << tok->str() << ":{";
         for (std::list<ValueFlow::Value>::const_iterator it=tok->values.begin(); it!=tok->values.end(); ++it) {
             if (xml) {
-                out << "      <value intvalue=\"" << it->intvalue << "\"";
-                if (it->condition) {
+                out << "      <value ";
+                if (it->tokvalue)
+                    out << "tokvalue=\"" << it->tokvalue << '\"';
+                else
+                    out << "intvalue=\"" << it->intvalue << '\"';
+                if (it->condition)
                     out << " condition-line=\"" << it->condition->linenr() << '\"';
-                }
                 out << "/>" << std::endl;
             }
 
             else {
-                out << (it == tok->values.begin() ? "" : ",") << it->intvalue << std::endl;
+                if (it != tok->values.begin())
+                    out << ",";
+                if (it->tokvalue)
+                    out << it->tokvalue->str();
+                else
+                    out << it->intvalue;
             }
         }
         if (xml)
@@ -1209,7 +1262,7 @@ const ValueFlow::Value * Token::getValueLE(const MathLib::bigint val, const Sett
     const ValueFlow::Value *ret = nullptr;
     std::list<ValueFlow::Value>::const_iterator it;
     for (it = values.begin(); it != values.end(); ++it) {
-        if (it->intvalue <= val) {
+        if (it->intvalue <= val && !it->tokvalue) {
             if (!ret || ret->inconclusive || (ret->condition && !it->inconclusive))
                 ret = &(*it);
             if (!ret->inconclusive && !ret->condition)
@@ -1230,7 +1283,7 @@ const ValueFlow::Value * Token::getValueGE(const MathLib::bigint val, const Sett
     const ValueFlow::Value *ret = nullptr;
     std::list<ValueFlow::Value>::const_iterator it;
     for (it = values.begin(); it != values.end(); ++it) {
-        if (it->intvalue >= val) {
+        if (it->intvalue >= val && !it->tokvalue) {
             if (!ret || ret->inconclusive || (ret->condition && !it->inconclusive))
                 ret = &(*it);
             if (!ret->inconclusive && !ret->condition)
@@ -1244,6 +1297,76 @@ const ValueFlow::Value * Token::getValueGE(const MathLib::bigint val, const Sett
             return nullptr;
     }
     return ret;
+}
+
+const Token *Token::getValueTokenMinStrSize() const
+{
+    const Token *ret = nullptr;
+    std::size_t minsize = ~0U;
+    std::list<ValueFlow::Value>::const_iterator it;
+    for (it = values.begin(); it != values.end(); ++it) {
+        if (it->tokvalue && it->tokvalue->type() == Token::eString) {
+            std::size_t size = getStrSize(it->tokvalue);
+            if (!ret || size < minsize) {
+                minsize = size;
+                ret = it->tokvalue;
+            }
+        }
+    }
+    return ret;
+}
+
+const Token *Token::getValueTokenMaxStrLength() const
+{
+    const Token *ret = nullptr;
+    std::size_t maxlength = 0U;
+    std::list<ValueFlow::Value>::const_iterator it;
+    for (it = values.begin(); it != values.end(); ++it) {
+        if (it->tokvalue && it->tokvalue->type() == Token::eString) {
+            std::size_t length = getStrLength(it->tokvalue);
+            if (!ret || length > maxlength) {
+                maxlength = length;
+                ret = it->tokvalue;
+            }
+        }
+    }
+    return ret;
+}
+
+static const Scope *getfunctionscope(const Scope *s)
+{
+    while (s && s->type != Scope::eFunction)
+        s = s->nestedIn;
+    return s;
+}
+
+const Token *Token::getValueTokenDeadPointer() const
+{
+    const Scope * const functionscope = getfunctionscope(this->scope());
+
+    std::list<ValueFlow::Value>::const_iterator it;
+    for (it = values.begin(); it != values.end(); ++it) {
+        // Is this a pointer alias?
+        if (!it->tokvalue || it->tokvalue->str() != "&")
+            continue;
+        // Get variable
+        const Token *vartok = it->tokvalue->astOperand1();
+        if (!vartok || !vartok->isName() || !vartok->variable())
+            continue;
+        const Variable * const var = vartok->variable();
+        if (var->isStatic())
+            continue;
+        // variable must be in same function (not in subfunction)
+        if (functionscope != getfunctionscope(var->scope()))
+            continue;
+        // Is variable defined in this scope or upper scope?
+        const Scope *s = this->scope();
+        while ((s != nullptr) && (s != var->scope()))
+            s = s->nestedIn;
+        if (!s)
+            return it->tokvalue;
+    }
+    return nullptr;
 }
 
 void Token::assignProgressValues(Token *tok)

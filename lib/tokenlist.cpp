@@ -296,9 +296,6 @@ bool TokenList::createTokens(std::istream &code, const std::string& file0)
             continue;
         }
 
-        // Preprocessor should ensure code doesn't contain any extended ascii / utf / etc.
-        assert(CurrentToken.empty() || (CurrentToken[0] & 0x80) == 0);
-
         if (ch == '.' &&
             !CurrentToken.empty() &&
             std::isdigit(CurrentToken[0])) {
@@ -399,11 +396,38 @@ bool TokenList::createTokens(std::istream &code, const std::string& file0)
 
 //---------------------------------------------------------------------------
 
+unsigned long long TokenList::calculateChecksum() const
+{
+    unsigned long long checksum = 0;
+    for (const Token* tok = front(); tok; tok = tok->next()) {
+        unsigned int subchecksum1 = tok->flags() + tok->varId() + static_cast<unsigned int>(tok->type());
+        unsigned int subchecksum2 = 0;
+        for (std::size_t i = 0; i < tok->str().size(); i++)
+            subchecksum2 += (unsigned int)tok->str()[i];
+        if (!tok->originalName().empty()) {
+            for (std::size_t i = 0; i < tok->originalName().size(); i++)
+                subchecksum2 += (unsigned int) tok->originalName()[i];
+        }
+
+        checksum ^= ((static_cast<unsigned long long>(subchecksum1) << 32) | subchecksum2);
+
+        bool bit1 = (checksum & 1) != 0;
+        checksum >>= 1;
+        if (bit1)
+            checksum |= (1ULL << 63);
+    }
+    return checksum;
+}
+
+
+//---------------------------------------------------------------------------
+
 struct AST_state {
     std::stack<Token*> op;
     unsigned int depth;
+    unsigned int inArrayAssignment;
     bool cpp;
-    AST_state(bool cpp_) : depth(0), cpp(cpp_) {}
+    AST_state(bool cpp_) : depth(0), inArrayAssignment(0), cpp(cpp_) {}
 };
 
 static bool iscast(const Token *tok)
@@ -411,7 +435,7 @@ static bool iscast(const Token *tok)
     if (!Token::Match(tok, "( %var%"))
         return false;
 
-    if (tok->previous() && tok->previous()->isName())
+    if (tok->previous() && tok->previous()->isName() && tok->previous()->str() != "return")
         return false;
 
     if (Token::Match(tok, "( (| typeof (") && Token::Match(tok->link(), ") %num%"))
@@ -487,6 +511,9 @@ static void compileTerm(Token *&tok, AST_state& state)
         return;
     if (Token::Match(tok, "L %str%|%char%"))
         tok = tok->next();
+    if (state.inArrayAssignment && tok->str() == "." && Token::Match(tok->previous(), ",|{")) // Jump over . in C style struct initialization
+        tok = tok->next();
+
     if (tok->isLiteral()) {
         state.op.push(tok);
         tok = tok->next();
@@ -503,8 +530,18 @@ static void compileTerm(Token *&tok, AST_state& state)
             tok = tok->next();
         }
     } else if (tok->str() == "{") {
-        state.op.push(tok);
-        tok = tok->link()->next();
+        if (!state.inArrayAssignment && tok->strAt(-1) != "=") {
+            state.op.push(tok);
+            tok = tok->link()->next();
+        } else {
+            if (tok->link() != tok->next()) {
+                state.inArrayAssignment++;
+                compileUnaryOp(tok, state, compileExpression);
+                state.inArrayAssignment--;
+            } else {
+                state.op.push(tok);
+            }
+        }
     }
 }
 
@@ -552,7 +589,7 @@ static void compilePrecedence2(Token *&tok, AST_state& state)
             } else
                 compileBinOp(tok, state, compileScope);
         } else if (tok->str() == "[") {
-            if (isPrefixUnary(tok, state.cpp) && tok->link()->strAt(1) == "(") { // Lambda
+            if (state.cpp && isPrefixUnary(tok, state.cpp) && tok->link()->strAt(1) == "(") { // Lambda
                 // What we do here:
                 // - Nest the round bracket under the square bracket.
                 // - Nest what follows the lambda (if anything) with the lambda opening [
@@ -560,6 +597,8 @@ static void compilePrecedence2(Token *&tok, AST_state& state)
                 Token* squareBracket = tok;
                 Token* roundBracket = squareBracket->link()->next();
                 Token* curlyBracket = Token::findsimplematch(roundBracket->link()->next(), "{");
+                if (!curlyBracket)
+                    break;
                 tok = curlyBracket->next();
                 compileExpression(tok, state);
                 state.op.push(roundBracket);
@@ -620,6 +659,8 @@ static void compilePrecedence3(Token *&tok, AST_state& state)
         } else if (state.cpp && Token::Match(tok, "new %var%|::|(")) {
             Token* tok2 = tok;
             tok = tok->next();
+            if (tok->str() == "(" && Token::Match(tok->link(), ") %type%"))
+                tok = tok->link()->next();
             state.op.push(tok);
             while (Token::Match(tok, "%var%|*|&|<|[")) {
                 if (tok->link())
@@ -717,7 +758,7 @@ static void compileAnd(Token *&tok, AST_state& state)
             Token* tok2 = tok->next();
             if (tok2->str() == "&")
                 tok2 = tok2->next();
-            if (state.cpp && (tok2->str() == "," || tok2->str() == ")")) {
+            if (state.cpp && Token::Match(tok2, ",|)")) {
                 tok = tok2;
                 break; // rValue reference
             }
@@ -814,7 +855,7 @@ static Token * createAstAtToken(Token *tok, bool cpp)
                 init1 = tok2;
                 AST_state state1(cpp);
                 compileExpression(tok2, state1);
-                if (tok2->str() == ";" || tok2->str() == ")")
+                if (Token::Match(tok2, ";|)"))
                     break;
                 init1 = 0;
             }
@@ -879,6 +920,8 @@ static Token * createAstAtToken(Token *tok, bool cpp)
             if (!Token::simpleMatch(tok, "( {"))
                 continue;
             if (tok->next() == endToken)
+                break;
+            if (Token::simpleMatch(tok, "( { ."))
                 break;
             const Token * const endToken2 = tok->linkAt(1);
             for (; tok && tok != endToken && tok != endToken2; tok = tok ? tok->next() : NULL)

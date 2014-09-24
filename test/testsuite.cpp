@@ -20,6 +20,7 @@
 #include "options.h"
 
 #include <iostream>
+#include <cstdio>
 #include <list>
 
 std::ostringstream errout;
@@ -73,15 +74,20 @@ TestFixture::TestFixture(const std::string &_name)
 }
 
 
-bool TestFixture::runTest(const char testname[])
+bool TestFixture::prepareTest(const char testname[])
 {
+    // Check if tests should be executed
     if (testToRun.empty() || testToRun == testname) {
+        // Tests will be executed - prepare them
         ++countTests;
         if (quiet_tests) {
-            std::cout << '.';
+            std::putchar('.'); // Use putchar to write through redirection of std::cout/cerr
+            std::fflush(stdout);
         } else {
             std::cout << classname << "::" << testname << std::endl;
         }
+        _lib = Library();
+        currentTest = classname + "::" + testname;
         return true;
     }
     return false;
@@ -232,12 +238,23 @@ void TestFixture::run(const std::string &str)
     if (quiet_tests) {
         std::cout << '\n' << classname << ':';
     }
-    run();
+    if (quiet_tests) {
+        REDIRECT;
+        run();
+    } else
+        run();
 }
 
 void TestFixture::warn(const char msg[])
 {
     warnings << "Warning: " << currentTest << " " << msg << std::endl;
+}
+
+void TestFixture::warnUnsimplified(const std::string& unsimplified, const std::string& simplified)
+{
+    warn(("Unsimplified code in test case. It looks like this test "
+          "should either be cleaned up or moved to TestTokenizer or "
+          "TestSimplifyTokens instead.\nactual=" + unsimplified + "\nexpected=" + simplified).c_str());
 }
 
 void TestFixture::processOptions(const options& args)

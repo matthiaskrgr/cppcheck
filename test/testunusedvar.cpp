@@ -96,6 +96,7 @@ private:
         TEST_CASE(localvar44); // ticket #3602
         TEST_CASE(localvar45); // ticket #4020
         TEST_CASE(localvar46); // ticket #4899
+        TEST_CASE(localvar47); // ticket #5491 (C++11 style initialization)
         TEST_CASE(localvaralias1);
         TEST_CASE(localvaralias2); // ticket #1637
         TEST_CASE(localvaralias3); // ticket #1639
@@ -154,6 +155,8 @@ private:
         TEST_CASE(localvarSwitch);   // #3744 - false positive when localvar is used in switch
         TEST_CASE(localvarNULL);     // #4203 - Setting NULL value is not redundant - it is safe
         TEST_CASE(localvarUnusedGoto);    // #4447, #4558 goto
+
+        TEST_CASE(chainedAssignment); // #5466
 
         TEST_CASE(crash1);
         TEST_CASE(crash2);
@@ -862,6 +865,11 @@ private:
                               "    } while(code < 20);\n"
                               "}");
         ASSERT_EQUALS("", errout.str());
+
+        functionVariableUsage("void foo(int j = 0) {\n" // #5985 - default function parameters should not affect checking results
+                              "    int i = 0;\n"
+                              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (style) Variable 'i' is assigned a value that is never used.\n", errout.str());
     }
 
     void localvar2() {
@@ -1866,6 +1874,22 @@ private:
                               "    int a = 123;\n"
                               "    int b = (short)-a;;\n"
                               "    return b;\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void localvar47() { // #5491/#5494
+        functionVariableUsage("int func() {\n"
+                              "    int i = 0;\n"
+                              "    int j{i};\n"
+                              "    return j;\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        functionVariableUsage("int func() {\n"
+                              "    std::mutex m;\n"
+                              "    std::unique_lock<std::mutex> l{ m };\n"
+                              "    return 0;\n"
                               "}");
         ASSERT_EQUALS("", errout.str());
     }
@@ -3218,6 +3242,18 @@ private:
                               "    bool __attribute__((unused)) test = true;\n"
                               "}");
         ASSERT_EQUALS("", errout.str());
+
+        functionVariableUsage("int foo()\n"
+                              "{\n"
+                              "    bool test __attribute__((used));\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        functionVariableUsage("int foo()\n"
+                              "{\n"
+                              "    bool __attribute__((used)) test;\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void localvarFunction() {
@@ -3652,6 +3688,11 @@ private:
         ASSERT_EQUALS("", errout.str());
 
         functionVariableUsage("void f() {\n"
+                              "    pLocker = std::shared_ptr<jfxLocker>(new jfxLocker(m_lock, true));\n" // Could have side-effects (#4355)
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        functionVariableUsage("void f() {\n"
                               "    std::mutex m;\n"
                               "    std::unique_lock<std::mutex> lock(m);\n" // #4624
                               "}");
@@ -3730,6 +3771,16 @@ private:
                               " if (i<3)\n"
                               "     goto start;\n"
                               " return i;\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void chainedAssignment() {
+        // #5466
+        functionVariableUsage("void NotUsed(double* pdD, int n) {\n"
+                              "    double sum = 0.0;\n"
+                              "    for (int i = 0; i<n; ++i)\n"
+                              "        pdD[i] = (sum += pdD[i]);\n"
                               "}");
         ASSERT_EQUALS("", errout.str());
     }

@@ -126,6 +126,7 @@ public:
 
 private:
     Settings settings1;
+    Settings settings2;
 
     void check(const char code[], const Settings *settings = nullptr) {
         // Clear the error buffer..
@@ -148,7 +149,9 @@ private:
 
 
     void run() {
+        LOAD_LIB_2(settings1.library, "std.cfg");
         LOAD_LIB_2(settings1.library, "gtk.cfg");
+        LOAD_LIB_2(settings2.library, "std.cfg");
 
         // Check that getcode works correctly..
         TEST_CASE(testgetcode);
@@ -366,17 +369,14 @@ private:
         TEST_CASE(posixcfg);
     }
 
-
-
     std::string getcode(const char code[], const char varname[], bool classfunc=false) {
         // Clear the error buffer..
         errout.str("");
 
-        Settings settings;
-        settings.standards.posix = true;
+        settings2.standards.posix = true;
 
         // Tokenize..
-        Tokenizer tokenizer(&settings, this);
+        Tokenizer tokenizer(&settings2, this);
         std::istringstream istr(code);
         if (!tokenizer.tokenize(istr, "test.cpp"))
             return "";
@@ -385,8 +385,7 @@ private:
         const unsigned int varId(Token::findmatch(tokenizer.tokens(), varname)->varId());
 
         // getcode..
-        CheckMemoryLeakInFunction checkMemoryLeak(&tokenizer, &settings, nullptr);
-        checkMemoryLeak.parse_noreturn();
+        CheckMemoryLeakInFunction checkMemoryLeak(&tokenizer, &settings2, nullptr);
         std::list<const Token *> callstack;
         callstack.push_back(0);
         CheckMemoryLeak::AllocType allocType, deallocType;
@@ -539,9 +538,9 @@ private:
 
         // exit..
         ASSERT_EQUALS(";;exit;", getcode("char *s; exit(0);", "s"));
-        ASSERT_EQUALS(";;exit;", getcode("char *s; _exit(0);", "s"));
+        ASSERT_EQUALS(";;callfunc;", getcode("char *s; _exit(0);", "s")); // not in std.cfg nor in gtk.cfg
         ASSERT_EQUALS(";;exit;", getcode("char *s; abort();", "s"));
-        ASSERT_EQUALS(";;exit;", getcode("char *s; err(0);", "s"));
+        ASSERT_EQUALS(";;callfunc;", getcode("char *s; err(0);", "s")); // not in std.cfg nor in gtk.cfg
         ASSERT_EQUALS(";;if{exit;}", getcode("char *s; if (a) { exit(0); }", "s"));
 
         // list_for_each
@@ -3487,13 +3486,14 @@ private:
               "    int *p = malloc(3);\n"
               "    free(p);\n"
               "}\n");
-        ASSERT_EQUALS("[test.cpp:3]: (error) The given size 3 is mismatching\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) The allocated size 3 is not a multiple of the underlying type's size.\n", errout.str());
+
         check("void foo()\n"
               "{\n"
               "    int *p = g_malloc(3);\n"
               "    g_free(p);\n"
               "}\n");
-        TODO_ASSERT_EQUALS("[test.cpp:3]: (error) The given size 3 is mismatching\n", "", errout.str());
+        TODO_ASSERT_EQUALS("[test.cpp:3]: (error) The allocated size 3 is not a multiple of the underlying type's size.\n", "", errout.str());
     }
 
 

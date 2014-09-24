@@ -32,7 +32,6 @@
     <ClCompile Include="options.cpp" />
     <ClCompile Include="test64bit.cpp" />
     <ClCompile Include="testassert.cpp" />
-    <ClCompile Include="testassignif.cpp" />
     <ClCompile Include="testautovariables.cpp" />
     <ClCompile Include="testbool.cpp" />
     <ClCompile Include="testboost.cpp" />
@@ -40,12 +39,13 @@
     <ClCompile Include="testcharvar.cpp" />
     <ClCompile Include="testclass.cpp" />
     <ClCompile Include="testcmdlineparser.cpp" />
+    <ClCompile Include="testcondition.cpp" />
     <ClCompile Include="testconstructors.cpp" />
     <ClCompile Include="testcppcheck.cpp" />
-    <ClCompile Include="testdivision.cpp" />
     <ClCompile Include="testerrorlogger.cpp" />
     <ClCompile Include="testexceptionsafety.cpp" />
     <ClCompile Include="testfilelister.cpp" />
+    <ClCompile Include="testgarbage.cpp" />
     <ClCompile Include="testincompletestatement.cpp" />
     <ClCompile Include="testinternal.cpp" />
     <ClCompile Include="testio.cpp" />
@@ -55,7 +55,7 @@
     <ClCompile Include="testmemleak.cpp" />
     <ClCompile Include="testnonreentrantfunctions.cpp" />
     <ClCompile Include="testnullpointer.cpp" />
-    <ClCompile Include="testobsoletefunctions.cpp" />
+    <ClCompile Include="testobsolescentfunctions.cpp" />
     <ClCompile Include="testoptions.cpp" />
     <ClCompile Include="testother.cpp" />
     <ClCompile Include="testpath.cpp" />
@@ -64,21 +64,32 @@
     <ClCompile Include="testpreprocessor.cpp" />
     <ClCompile Include="testrunner.cpp" />
     <ClCompile Include="testsamples.cpp" />
+    <ClCompile Include="testsimplifytemplate.cpp" />
     <ClCompile Include="testsimplifytokens.cpp" />
+    <ClCompile Include="testsimplifytypedef.cpp" />
     <ClCompile Include="testsizeof.cpp" />
     <ClCompile Include="teststl.cpp" />
-    <ClCompile Include="testsuite.cpp" />
+    <ClCompile Include="teststring.cpp" />
+    <ClCompile Include="testsuite.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="testsuppressions.cpp" />
     <ClCompile Include="testsymboldatabase.cpp" />
     <ClCompile Include="testthreadexecutor.cpp" />
     <ClCompile Include="testtimer.cpp" />
     <ClCompile Include="testtoken.cpp" />
     <ClCompile Include="testtokenize.cpp" />
+    <ClCompile Include="testtype.cpp" />
     <ClCompile Include="testuninitvar.cpp" />
     <ClCompile Include="testunusedfunctions.cpp" />
     <ClCompile Include="testunusedprivfunc.cpp" />
     <ClCompile Include="testunusedvar.cpp" />
+    <ClCompile Include="testvaarg.cpp" />
     <ClCompile Include="testvalueflow.cpp" />
+    <ClCompile Include="testvarid.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\cli\cmdlineparser.h" />
@@ -100,21 +111,25 @@
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
+    <PlatformToolset>v120_xp</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
+    <PlatformToolset>v120</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
+    <PlatformToolset>v120_xp</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
+    <PlatformToolset>v120</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings" />
@@ -163,6 +178,9 @@
       <WarningLevel>Level4</WarningLevel>
       <DisableSpecificWarnings>4251;4512</DisableSpecificWarnings>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>testsuite.h</PrecompiledHeaderFile>
+      <ForcedIncludeFiles>testsuite.h</ForcedIncludeFiles>
     </ClCompile>
     <Link>
       <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -184,6 +202,9 @@
       <WarningLevel>Level4</WarningLevel>
       <DisableSpecificWarnings>4251;4512</DisableSpecificWarnings>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>testsuite.h</PrecompiledHeaderFile>
+      <ForcedIncludeFiles>testsuite.h</ForcedIncludeFiles>
     </ClCompile>
     <Link>
       <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -212,6 +233,9 @@
       <DebugInformationFormat>
       </DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>testsuite.h</PrecompiledHeaderFile>
+      <ForcedIncludeFiles>testsuite.h</ForcedIncludeFiles>
     </ClCompile>
     <Link>
       <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -243,6 +267,9 @@
       <DebugInformationFormat>
       </DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>testsuite.h</PrecompiledHeaderFile>
+      <ForcedIncludeFiles>testsuite.h</ForcedIncludeFiles>
     </ClCompile>
     <Link>
       <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>

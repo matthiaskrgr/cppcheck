@@ -198,6 +198,15 @@ public:
     static std::size_t getStrLength(const Token *tok);
 
     /**
+     * @return sizeof of C-string.
+     *
+     * Should be called for %%str%% tokens only.
+     *
+     * @param tok token with C-string
+     **/
+    static std::size_t getStrSize(const Token *tok);
+
+    /**
      * @return char of C-string at index (possible escaped "\\n")
      *
      * Should be called for %%str%% tokens only.
@@ -321,6 +330,12 @@ public:
     }
     void isAttributeUnused(bool unused) {
         setFlag(fIsAttributeUnused, unused);
+    }
+    bool isAttributeUsed() const {
+        return getFlag(fIsAttributeUsed);
+    }
+    void isAttributeUsed(bool unused) {
+        setFlag(fIsAttributeUsed, unused);
     }
     bool isAttributePure() const {
         return getFlag(fIsAttributePure);
@@ -603,9 +618,17 @@ public:
 
     /**
      * @return the first token of the next argument. Does only work on argument
-     * lists. Returns 0, if there is no next argument
+     * lists. Requires that Tokenizer::createLinks2() has been called before.
+     * Returns 0, if there is no next argument.
      */
     Token* nextArgument() const;
+
+    /**
+     * @return the first token of the next argument. Does only work on argument
+     * lists. Should be used only before Tokenizer::createLinks2() was called.
+     * Returns 0, if there is no next argument.
+     */
+    Token* nextArgumentBeforeCreateLinks2() const;
 
     /**
      * Returns the closing bracket of opening '<'. Should only be used if link()
@@ -639,7 +662,7 @@ public:
     const ValueFlow::Value * getValue(const MathLib::bigint val) const {
         std::list<ValueFlow::Value>::const_iterator it;
         for (it = values.begin(); it != values.end(); ++it) {
-            if (it->intvalue == val)
+            if (it->intvalue == val && !it->tokvalue)
                 return &(*it);
         }
         return NULL;
@@ -649,6 +672,8 @@ public:
         const ValueFlow::Value *ret = nullptr;
         std::list<ValueFlow::Value>::const_iterator it;
         for (it = values.begin(); it != values.end(); ++it) {
+            if (it->tokvalue)
+                continue;
             if ((!ret || it->intvalue > ret->intvalue) &&
                 ((it->condition != NULL) == condition))
                 ret = &(*it);
@@ -658,6 +683,11 @@ public:
 
     const ValueFlow::Value * getValueLE(const MathLib::bigint val, const Settings *settings) const;
     const ValueFlow::Value * getValueGE(const MathLib::bigint val, const Settings *settings) const;
+
+    const Token *getValueTokenMaxStrLength() const;
+    const Token *getValueTokenMinStrSize() const;
+
+    const Token *getValueTokenDeadPointer() const;
 
 private:
 
@@ -727,7 +757,8 @@ private:
         fIsAttributePure        = (1 << 9),  // __attribute__((pure))
         fIsAttributeConst       = (1 << 10), // __attribute__((const))
         fIsAttributeNothrow     = (1 << 11), // __attribute__((nothrow))
-        fIsDeclspecNothrow      = (1 << 12)  // __declspec(nothrow)
+        fIsDeclspecNothrow      = (1 << 12), // __declspec(nothrow)
+        fIsAttributeUsed        = (1 << 13)  // __attribute__((used))
     };
 
     unsigned int _flags;

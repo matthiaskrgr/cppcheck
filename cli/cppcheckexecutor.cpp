@@ -158,12 +158,11 @@ bool CppCheckExecutor::parseFromArgs(CppCheck *cppcheck, int argc, const char* c
         return false;
     }
 
-    if (!_files.empty()) {
-        return true;
-    } else {
+    if (_files.empty()) {
         std::cout << "cppcheck: error: no files to check - all paths ignored." << std::endl;
         return false;
     }
+    return true;
 }
 
 int CppCheckExecutor::check(int argc, const char* const argv[])
@@ -529,7 +528,7 @@ static void PrintCallstack(FILE* f, PEXCEPTION_POINTERS ex)
         if (_tcscmp(undname, _T("main"))==0)
             beyond_main=0;
         fprintf(f,
-                "%lu. 0x%08LX in ",
+                "%lu. 0x%08I64X in ",
                 frame, (ULONG64)stack.AddrPC.Offset);
         fputs((const char *)undname, f);
         fputs("\n", f);
@@ -770,7 +769,7 @@ int CppCheckExecutor::check_internal(CppCheck& cppcheck, int /*argc*/, const cha
     }
 
     if (settings.isEnabled("information") || settings.checkConfiguration)
-        reportUnmatchedSuppressions(settings.nomsg.getUnmatchedGlobalSuppressions());
+        reportUnmatchedSuppressions(settings.nomsg.getUnmatchedGlobalSuppressions(settings._jobs == 1 && settings.isEnabled("unusedFunction")));
 
     if (!settings.checkConfiguration) {
         cppcheck.tooManyConfigsError("",0U);
