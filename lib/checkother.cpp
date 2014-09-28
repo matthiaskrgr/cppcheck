@@ -2522,7 +2522,7 @@ void CheckOther::checkRedundantCopy()
 
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
 
-    for (std::size_t i = 0; i < symbolDatabase->getVariableListSize(); i++) {
+    for (std::size_t i = 1; i < symbolDatabase->getVariableListSize(); i++) {
         const Variable* var = symbolDatabase->getVariableFromVarId(i);
 
         if (!var || var->isReference() || !var->isConst() || var->isPointer() || (!var->type() && !var->isStlType())) // bailout if var is of standard type, if it is a pointer or non-const
@@ -2739,4 +2739,32 @@ void CheckOther::varFuncNullUBError(const Token *tok)
                 "    g();\n"
                 "    return 0;\n"
                 "}");
+}
+
+//---------------------------------------------------------------------------
+// Check for ignored return values.
+//---------------------------------------------------------------------------
+void CheckOther::checkReturnIgnoredReturnValue()
+{
+    if (!_settings->isEnabled("warning"))
+        return;
+
+    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
+    const std::size_t functions = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < functions; ++i) {
+        const Scope * scope = symbolDatabase->functionScopes[i];
+        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
+            if (!Token::Match(tok, "%var% ("))
+                continue;
+
+            if (!tok->next()->astParent() && _settings->library.useretval.find(tok->str()) != _settings->library.useretval.end())
+                ignoredReturnValueError(tok, tok->str());
+        }
+    }
+}
+
+void CheckOther::ignoredReturnValueError(const Token* tok, const std::string& function)
+{
+    reportError(tok, Severity::warning, "ignoredReturnValue",
+                "Return value of function " + function + "() is not used.", false);
 }
