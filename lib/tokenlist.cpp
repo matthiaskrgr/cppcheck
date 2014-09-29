@@ -557,7 +557,7 @@ static void compileScope(Token *&tok, AST_state& state)
             if (tok)
                 compileTerm(tok, state);
 
-            if (binop->previous() && binop->previous()->isName())
+            if (binop->previous() && (binop->previous()->isName() || (binop->previous()->link() && binop->strAt(-1) == ">")))
                 compileBinOp(binop, state, nullptr);
             else
                 compileUnaryOp(binop, state, nullptr);
@@ -662,11 +662,13 @@ static void compilePrecedence3(Token *&tok, AST_state& state)
             if (tok->str() == "(" && Token::Match(tok->link(), ") %type%"))
                 tok = tok->link()->next();
             state.op.push(tok);
-            while (Token::Match(tok, "%var%|*|&|<|[")) {
+            while (Token::Match(tok, "%var%|*|&|<")) {
                 if (tok->link())
                     tok = tok->link();
                 tok = tok->next();
             }
+            if (tok->str() == "[")
+                compilePrecedence2(tok, state);
             compileUnaryOp(tok2, state, nullptr);
         } else if (state.cpp && Token::Match(tok, "delete %var%|*|&|::|(|[")) {
             Token* tok2 = tok;
@@ -756,6 +758,8 @@ static void compileAnd(Token *&tok, AST_state& state)
     while (tok) {
         if (tok->str() == "&" && !tok->astOperand1()) {
             Token* tok2 = tok->next();
+            if (!tok2)
+                break;
             if (tok2->str() == "&")
                 tok2 = tok2->next();
             if (state.cpp && Token::Match(tok2, ",|)")) {

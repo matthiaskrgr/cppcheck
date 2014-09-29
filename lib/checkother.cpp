@@ -1336,7 +1336,7 @@ void CheckOther::checkVariableScope()
         }
         bool reduce = true;
         bool used = false; // Don't warn about unused variables
-        for (; tok != var->scope()->classEnd; tok = tok->next()) {
+        for (; tok && tok != var->scope()->classEnd; tok = tok->next()) {
             if (tok->str() == "{" && tok->scope() != tok->previous()->scope() && !tok->isExpandedMacro() && tok->scope()->type != Scope::eLambda) {
                 if (used) {
                     bool used2 = false;
@@ -2754,7 +2754,7 @@ void CheckOther::checkReturnIgnoredReturnValue()
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
-            if (!Token::Match(tok, "%var% ("))
+            if (tok->varId() || !Token::Match(tok, "%var% ("))
                 continue;
 
             if (!tok->next()->astParent() && _settings->library.useretval.find(tok->str()) != _settings->library.useretval.end())

@@ -8352,7 +8352,7 @@ private:
 
     void astnewdelete() const {
         ASSERT_EQUALS("aintnew=", testAst("a = new int;"));
-        ASSERT_EQUALS("aintnew=", testAst("a = new int[4];"));
+        ASSERT_EQUALS("aint4[new=", testAst("a = new int[4];"));
         ASSERT_EQUALS("aFoonew=", testAst("a = new Foo(bar);"));
         ASSERT_EQUALS("aFoonew=", testAst("a = new Foo<bar>();"));
         ASSERT_EQUALS("Xnew", testAst("new (a,b,c) X(1,2,3);"));
@@ -8421,6 +8421,9 @@ private:
         ASSERT_EQUALS("name_bytes[bits~unusedBits>>unusedBits<<{=", testAst("const uint8_t name_bytes[] = { (~bits >> unusedBits) << unusedBits };"));
         ASSERT_EQUALS("abuf0{={=", testAst("a = { .buf = { 0 } };"));
         ASSERT_EQUALS("tset{=", testAst("struct cgroup_taskset tset = {};"));
+
+        // template paratheses: <>
+        ASSERT_EQUALS("stdfabs::m_similarity(numeric_limitsepsilon::(<=return", testAst("return std::fabs(m_similarity) <= numeric_limits<double>::epsilon();")); // #6195
     }
 
     void astbrackets() const { // []
