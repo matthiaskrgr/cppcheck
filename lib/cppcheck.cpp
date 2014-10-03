@@ -63,12 +63,14 @@ const char * CppCheck::extraVersion()
 
 unsigned int CppCheck::check(const std::string &path)
 {
-    return processFile(path, "");
+    std::ifstream fin(path.c_str());
+    return processFile(path, fin);
 }
 
 unsigned int CppCheck::check(const std::string &path, const std::string &content)
 {
-    return processFile(path, content);
+    std::istringstream iss(content);
+    return processFile(path, iss);
 }
 
 void CppCheck::replaceAll(std::string& code, const std::string &from, const std::string &to)
@@ -129,7 +131,7 @@ bool CppCheck::findError(std::string code, const char FileName[])
     return true;
 }
 
-unsigned int CppCheck::processFile(const std::string& filename, const std::string& fileContent)
+unsigned int CppCheck::processFile(const std::string& filename, std::istream& fileStream)
 {
     exitcode = 0;
 
@@ -151,15 +153,9 @@ unsigned int CppCheck::processFile(const std::string& filename, const std::strin
         std::list<std::string> configurations;
         std::string filedata = "";
 
-        if (!fileContent.empty()) {
-            // File content was given as a string (democlient)
-            std::istringstream iss(fileContent);
-            preprocessor.preprocess(iss, filedata, configurations, filename, _settings._includePaths);
-        } else {
-            // Only file name was given, read the content from file
-            std::ifstream fin(filename.c_str());
+        {
             Timer t("Preprocessor::preprocess", _settings._showtime, &S_timerResults);
-            preprocessor.preprocess(fin, filedata, configurations, filename, _settings._includePaths);
+            preprocessor.preprocess(fileStream, filedata, configurations, filename, _settings._includePaths);
         }
 
         if (_settings.checkConfiguration) {
@@ -215,7 +211,7 @@ unsigned int CppCheck::processFile(const std::string& filename, const std::strin
             if (_settings._errorsOnly == false && it != configurations.begin()) {
                 std::string fixedpath = Path::simplifyPath(filename);
                 fixedpath = Path::toNativeSeparators(fixedpath);
-                _errorLogger.reportOut(std::string("Checking ") + fixedpath + ": " + cfg + std::string("..."));
+                _errorLogger.reportOut("Checking " + fixedpath + ": " + cfg + "...");
             }
 
             if (!_settings.userDefines.empty()) {
@@ -225,17 +221,17 @@ unsigned int CppCheck::processFile(const std::string& filename, const std::strin
             }
 
             Timer t("Preprocessor::getcode", _settings._showtime, &S_timerResults);
-            const std::string codeWithoutCfg = preprocessor.getcode(filedata, cfg, filename);
+            std::string codeWithoutCfg = preprocessor.getcode(filedata, cfg, filename);
             t.Stop();
 
-            const std::string &appendCode = _settings.append();
+            codeWithoutCfg += _settings.append();
 
             if (_settings.debugFalsePositive) {
-                if (findError(codeWithoutCfg + appendCode, filename.c_str())) {
+                if (findError(codeWithoutCfg, filename.c_str())) {
                     return exitcode;
                 }
             } else {
-                if (!checkFile(codeWithoutCfg + appendCode, filename.c_str(), checksums)) {
+                if (!checkFile(codeWithoutCfg, filename.c_str(), checksums)) {
                     if (_settings.isEnabled("information") && (_settings.debug || _settings._verbose))
                         purgedConfigurationMessage(filename, cfg);
                 }
@@ -311,7 +307,7 @@ void CppCheck::analyseFile(std::istream &fin, const std::string &filename)
     // Tokenize..
     Tokenizer tokenizer(&_settings, this);
     std::istringstream istr(code);
-    tokenizer.tokenize(istr, filename.c_str(), "");
+    tokenizer.tokenize(istr, filename.c_str());
     tokenizer.simplifyTokenList2();
 
     // Analyse the tokens..
@@ -340,8 +336,6 @@ bool CppCheck::checkFile(const std::string &code, const char FileName[], std::se
     if (_settings._showtime != SHOWTIME_NONE)
         _tokenizer.setTimerResults(&S_timerResults);
     try {
-        bool result;
-
         // Execute rules for "raw" code
         for (std::list<Settings::Rule>::const_iterator it = _settings.rules.begin(); it != _settings.rules.end(); ++it) {
             if (it->tokenlist == "raw") {
@@ -357,7 +351,7 @@ bool CppCheck::checkFile(const std::string &code, const char FileName[], std::se
         std::istringstream istr(code);
 
         Timer timer("Tokenizer::tokenize", _settings._showtime, &S_timerResults);
-        result = _tokenizer.tokenize(istr, FileName, cfg);
+        bool result = _tokenizer.tokenize(istr, FileName, cfg);
         timer.Stop();
 
         if (_settings._force || _settings._maxConfigs > 1) {
