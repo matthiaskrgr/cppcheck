@@ -314,9 +314,9 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
                 return false;
             }
 
-            if (_settings->_xml_version < 0 || _settings->_xml_version > 2) {
-                // We only have xml versions 1 and 2
-                PrintMessage("cppcheck: '--xml-version' can only be 1 or 2.");
+            if (_settings->_xml_version < 0 || _settings->_xml_version > 3) {
+                // We only have xml versions 1, 2 and 3
+                PrintMessage("cppcheck: '--xml-version' can only be 1,2 or 3.");
                 return false;
             }
 

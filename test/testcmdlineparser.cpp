@@ -113,6 +113,9 @@ private:
         TEST_CASE(xmlver2);
         TEST_CASE(xmlver2both);
         TEST_CASE(xmlver2both2);
+        TEST_CASE(xmlver3);
+        TEST_CASE(xmlver3both);
+        TEST_CASE(xmlver3both2);
         TEST_CASE(xmlverunknown);
         TEST_CASE(xmlverinvalid);
         TEST_CASE(doc);
@@ -865,9 +868,39 @@ private:
         ASSERT_EQUALS(2, settings._xml_version);
     }
 
-    void xmlverunknown() {
+    void xmlver3() {
+        REDIRECT;
+        const char *argv[] = {"cppcheck", "--xml-version=3", "file.cpp"};
+        settings._xml_version = 1;
+        settings._xml = false;
+        ASSERT(defParser.ParseFromArgs(3, argv));
+        ASSERT(settings._xml);
+        ASSERT_EQUALS(3, settings._xml_version);
+    }
+
+    void xmlver3both() {
         REDIRECT;
         const char *argv[] = {"cppcheck", "--xml", "--xml-version=3", "file.cpp"};
+        settings._xml_version = 1;
+        settings._xml = false;
+        ASSERT(defParser.ParseFromArgs(4, argv));
+        ASSERT(settings._xml);
+        ASSERT_EQUALS(3, settings._xml_version);
+    }
+
+    void xmlver3both2() {
+        REDIRECT;
+        const char *argv[] = {"cppcheck", "--xml-version=3", "--xml", "file.cpp"};
+        settings._xml_version = 1;
+        settings._xml = false;
+        ASSERT(defParser.ParseFromArgs(4, argv));
+        ASSERT(settings._xml);
+        ASSERT_EQUALS(3, settings._xml_version);
+    }
+
+    void xmlverunknown() {
+        REDIRECT;
+        const char *argv[] = {"cppcheck", "--xml", "--xml-version=4", "file.cpp"};
         // FAils since unknown XML format version
         ASSERT_EQUALS(false, defParser.ParseFromArgs(4, argv));
     }

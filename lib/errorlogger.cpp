@@ -195,8 +195,8 @@ std::string ErrorLogger::ErrorMessage::getXMLHeader(int xml_version)
 
     // header
     printer.OpenElement("results", false);
-    // version 2 header
-    if (xml_version == 2) {
+    // version >1 header
+    if (xml_version > 1) {
         printer.PushAttribute("version", xml_version);
         printer.OpenElement("cppcheck", false);
         printer.PushAttribute("version", CppCheck::version());
@@ -214,13 +214,13 @@ std::string ErrorLogger::ErrorMessage::getXMLFooter(int xml_version)
 
 // There is no utf-8 support around but the strings should at least be safe for to tinyxml2.
 // See #5300 "Invalid encoding in XML output"
-static std::string fixInvalidChars(const std::string& raw)
+static std::string fixInvalidChars(const std::string& raw, bool invalid_cr)
 {
     std::string result;
     result.reserve(raw.length());
     std::string::const_iterator from=raw.begin();
     while (from!=raw.end()) {
-        if (std::isprint(static_cast<unsigned char>(*from))) {
+        if (std::isprint(static_cast<unsigned char>(*from)) || (!invalid_cr && static_cast<unsigned char>(*from) == '\n')) {
             result.push_back(*from);
         } else {
             std::ostringstream es;
@@ -261,9 +261,33 @@ std::string ErrorLogger::ErrorMessage::toXML(bool verbose, int version) const
         printer.PushAttribute("id", _id.c_str());
         printer.PushAttribute("severity", Severity::toString(_severity).c_str());
         printer.PushAttribute("msg", _shortMessage.c_str());
-        printer.PushAttribute("verbose", fixInvalidChars(_verboseMessage).c_str());
+        printer.PushAttribute("verbose", fixInvalidChars(_verboseMessage, true).c_str());
         if (_inconclusive)
             printer.PushAttribute("inconclusive", "true");
+
+        for (std::list<FileLocation>::const_reverse_iterator it = _callStack.rbegin(); it != _callStack.rend(); ++it) {
+            printer.OpenElement("location", false);
+            printer.PushAttribute("file", (*it).getfile().c_str());
+            printer.PushAttribute("line", (*it).line);
+            printer.CloseElement(false);
+        }
+        printer.CloseElement(false);
+        return printer.CStr();
+    }
+
+    // The xml format you get when you use --xml-version=3
+    else if (version == 3) {
+        tinyxml2::XMLPrinter printer(0, false, 2);
+        printer.OpenElement("error", false);
+        printer.PushAttribute("id", _id.c_str());
+        printer.PushAttribute("severity", Severity::toString(_severity).c_str());
+        printer.PushAttribute("msg", _shortMessage.c_str());
+        if (_inconclusive)
+            printer.PushAttribute("inconclusive", "true");
+
+        printer.OpenElement("verbose", false);
+        printer.PushText(fixInvalidChars(_verboseMessage, false).c_str(), true);
+        printer.CloseElement(false);
 
         for (std::list<FileLocation>::const_reverse_iterator it = _callStack.rbegin(); it != _callStack.rend(); ++it) {
             printer.OpenElement("location", false);

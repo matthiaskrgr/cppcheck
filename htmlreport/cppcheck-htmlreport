@@ -56,6 +56,25 @@ h1 {
     display: inline-block;
     margin-left: 4px;
 }
+
+div.verbose {
+    display: inline-block;
+    vertical-align: top;
+    cursor: help;
+}
+
+div.verbose div.content {
+    display: none;
+    position: absolute;
+    padding: 10px;
+    margin: 4px;
+    max-width: 40%;
+    white-space: pre-wrap;
+    border: 1px solid black;
+    background-color: #FFFFCC;
+    cursor: auto;
+}
+
 .highlight .hll {
     padding: 1px;
 }
@@ -155,9 +174,43 @@ HTML_HEAD = """
     <link rel="stylesheet" href="style.css">
     <style>
 %s
-   </style>
+    </style>
+    <script language="javascript">
+      function getStyle(el,styleProp) {
+        if (el.currentStyle)
+          var y = el.currentStyle[styleProp];
+        else if (window.getComputedStyle)
+          var y = document.defaultView.getComputedStyle(el,null).getPropertyValue(styleProp);
+        return y;
+      }
+      function toggle() {
+        var el = this.expandable_content;
+        var mark = this.expandable_marker;
+        if (el.style.display == "block") {
+          el.style.display = "none";
+          mark.innerHTML = "[+]";
+        } else {
+          el.style.display = "block";
+          mark.innerHTML = "[-]";
+        }
+      }
+      function init_expandables() {
+        var elts = document.getElementsByClassName("expandable");
+        for (var i = 0; i < elts.length; i++) {
+          var el = elts[i];
+          var clickable = el.getElementsByTagName("span")[0];
+          var marker = clickable.getElementsByClassName("marker")[0];
+          var content = el.getElementsByClassName("content")[0];
+          var width = clickable.clientWidth - parseInt(getStyle(content, "padding-left")) - parseInt(getStyle(content, "padding-right"));
+          content.style.width = width + "px";
+          clickable.expandable_content = content;
+          clickable.expandable_marker = marker;
+          clickable.onclick = toggle;
+        }
+      }
+    </script>
   </head>
-  <body>
+  <body onload="init_expandables()">
       <div id="header">
         <h1>Cppcheck report - %s: %s </h1>
       </div>
@@ -189,9 +242,12 @@ HTML_FOOTER = """
 HTML_ERROR = "<span class='error2'>&lt;--- %s</span>\n"
 HTML_INCONCLUSIVE = "<span class='inconclusive2'>&lt;--- %s</span>\n"
 
+HTML_EXPANDABLE_ERROR = "<div class='verbose expandable'><span class='error2'>&lt;--- %s <span class='marker'>[+]</span></span><div class='content'>%s</div></div>\n"""
+HTML_EXPANDABLE_INCONCLUSIVE = "<div class='verbose expandable'><span class='inconclusive2'>&lt;--- %s <span class='marker'>[+]</span></span><div class='content'>%s</div></div>\n"""
 
 class AnnotateCodeFormatter(HtmlFormatter):
     errors = []
+    xml_version = '1'
 
     def wrap(self, source, outfile):
         line_no = 1
@@ -203,9 +259,17 @@ class AnnotateCodeFormatter(HtmlFormatter):
                     if error['line'] == line_no:
                         try:
                             if error['inconclusive'] == 'true':
-                                t = t.replace('\n', HTML_INCONCLUSIVE % error['msg'])
+                                if self.xml_version == '3' and error.get('verbose'):
+                                    index = t.rfind('\n')
+                                    t = t[:index] + HTML_EXPANDABLE_INCONCLUSIVE % (error['msg'], error['verbose']) + t[index+1:]
+                                else:
+                                    t = t.replace('\n', HTML_INCONCLUSIVE % error['msg'])
                         except KeyError:
-                            t = t.replace('\n', HTML_ERROR % error['msg'])
+                            if self.xml_version == '3' and error.get('verbose'):
+                                index = t.rfind('\n')
+                                t = t[:index] + HTML_EXPANDABLE_ERROR % (error['msg'], error['verbose']) + t[index+1:]
+                            else:
+                                t = t.replace('\n', HTML_ERROR % error['msg'])
 
                 line_no = line_no + 1
             yield i, t
@@ -220,6 +284,7 @@ class CppCheckHandler(XmlContentHandler):
         self.errors = []
         self.version = '1'
         self.versionCppcheck = ''
+        self.reading_verbose = False
 
     def startElement(self, name, attributes):
         if name == 'results':
@@ -227,8 +292,18 @@ class CppCheckHandler(XmlContentHandler):
 
         if self.version == '1':
             self.handleVersion1(name, attributes)
-        else:
+        elif self.version == '2':
             self.handleVersion2(name, attributes)
+        else:
+            self.handleVersion3(name, attributes)
+
+    def endElement(self, name):
+        if name == 'verbose':
+            self.reading_verbose = False
+
+    def characters(self, content):
+        if self.version == '3' and self.reading_verbose:
+            self.errors[-1]['verbose'] = self.errors[-1].get('verbose', "") + content
 
     def handleVersion1(self, name, attributes):
         if name != 'error':
@@ -268,7 +343,13 @@ class CppCheckHandler(XmlContentHandler):
             self.errors[-1]['file'] = attributes['file']
             self.errors[-1]['line'] = int(attributes['line'])
 
-
+    def handleVersion3(self, name, attributes):
+        if name == 'verbose':
+            assert self.errors
+            self.reading_verbose = True
+        else:
+            self.handleVersion2(name, attributes)
+ 
 if __name__ == '__main__':
     # Configure all the options this little utility is using.
     parser = optparse.OptionParser()
@@ -374,6 +455,8 @@ if __name__ == '__main__':
                                               lineanchors='line',
                                               encoding=options.source_encoding)
         htmlFormatter.errors = errors
+        htmlFormatter.xml_version = contentHandler.version
+
         with io.open(os.path.join(options.report_dir, htmlfile),
                      'w') as output_file:
             output_file.write(HTML_HEAD %
