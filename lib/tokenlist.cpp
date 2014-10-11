@@ -657,19 +657,31 @@ static void compilePrecedence3(Token *&tok, AST_state& state)
             compilePrecedence3(tok, state);
             compileUnaryOp(tok2, state, nullptr);
         } else if (state.cpp && Token::Match(tok, "new %var%|::|(")) {
-            Token* tok2 = tok;
+            Token* newtok = tok;
             tok = tok->next();
-            if (tok->str() == "(" && Token::Match(tok->link(), ") %type%"))
-                tok = tok->link()->next();
+            if (tok->str() == "(") {
+                if (Token::Match(tok, "( &| %var%") && Token::Match(tok->link(), ") ( %type%") && Token::simpleMatch(tok->link()->linkAt(1), ") ("))
+                    tok = tok->link()->next();
+                if (Token::Match(tok->link(), ") %type%"))
+                    tok = tok->link()->next();
+                else if (Token::Match(tok, "( %type%") && Token::Match(tok->link(), ") [(;]"))
+                    tok = tok->next();
+                else if (Token::Match(tok, "( &| %var%") && Token::simpleMatch(tok->link(), ") ("))
+                    tok = tok->next();
+            }
             state.op.push(tok);
             while (Token::Match(tok, "%var%|*|&|<")) {
                 if (tok->link())
                     tok = tok->link();
                 tok = tok->next();
             }
-            if (tok->str() == "[")
+            if (Token::Match(tok, "( const| %type% ) (")) {
+                state.op.push(tok->next());
+                tok = tok->link()->next();
+                compileBinOp(tok, state, compilePrecedence2);
+            } else if (tok->str() == "[" || tok->str() == "(")
                 compilePrecedence2(tok, state);
-            compileUnaryOp(tok2, state, nullptr);
+            compileUnaryOp(newtok, state, nullptr);
         } else if (state.cpp && Token::Match(tok, "delete %var%|*|&|::|(|[")) {
             Token* tok2 = tok;
             tok = tok->next();
@@ -911,7 +923,7 @@ static Token * createAstAtToken(Token *tok, bool cpp)
     if (Token::Match(tok, "%type% <") && Token::Match(tok->linkAt(1), "> !!("))
         return tok->linkAt(1);
 
-    if (tok->str() == "return" || !tok->previous() || Token::Match(tok, "%var% %op%|(|[|.|::") || Token::Match(tok->previous(), "[;{}] %cop%|++|--|( !!{")) {
+    if (tok->str() == "return" || !tok->previous() || Token::Match(tok, "%var% %op%|(|[|.|::|<") || Token::Match(tok->previous(), "[;{}] %cop%|++|--|( !!{")) {
         Token * const tok1 = tok;
         AST_state state(cpp);
         compileExpression(tok, state);

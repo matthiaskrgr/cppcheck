@@ -2601,6 +2601,9 @@ void Tokenizer::setVarId()
             if (notstart.find(tok2->str()) != notstart.end())
                 continue;
 
+            if (Token::simpleMatch(tok2, "const new") && !isC())
+                continue;
+
             bool decl = setVarIdParseDeclaration(&tok2, variableId, executableScope.top(), isCPP());
             if (decl) {
                 const Token* prev2 = tok2->previous();
@@ -7159,7 +7162,7 @@ bool Tokenizer::simplifyRedundantParentheses()
             ret = true;
         }
 
-        if (isCPP() && Token::simpleMatch(tok->previous(), "new (") && Token::Match(tok->link(), ") [;,{}[]")) {
+        if (isCPP() && Token::Match(tok->tokAt(-2), "[;{}=(] new (") && Token::Match(tok->link(), ") [;,{}[]")) {
             // Remove the parentheses in "new (type)" constructs
             tok->link()->deleteThis();
             tok->deleteThis();

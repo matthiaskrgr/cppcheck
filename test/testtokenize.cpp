@@ -3465,6 +3465,12 @@ private:
             static char  exp[] = "list < int > * f [ 1 ] = { new list < int > } ;";
             ASSERT_EQUALS(exp, tokenizeAndStringify(code));
         }
+        // don't remove parentheses in operator new overload
+        {
+            static char code[] = "void *operator new(__SIZE_TYPE__, int);";
+            static char  exp[] = "void * operatornew ( __SIZE_TYPE__ , int ) ;";
+            ASSERT_EQUALS(exp, tokenizeAndStringify(code));
+        }
     }
 
     void tokenize_double() {
@@ -3595,13 +3601,13 @@ private:
     void simplify_constants6() { // Ticket #5625
         const char code[] = "template < class T > struct foo ;\n"
                             "void bar ( ) {\n"
-                              "foo < 1 ? 0 ? 1 : 6 : 2 > x ;\n"
-                              "foo < 1 ? 0 : 2 > y ;\n"
+                            "foo < 1 ? 0 ? 1 : 6 : 2 > x ;\n"
+                            "foo < 1 ? 0 : 2 > y ;\n"
                             "}";
         const char exp [] = "template < class T > struct foo ;\n"
                             "void bar ( ) {\n"
-                              "foo < 6 > x ;\n"
-                              "foo < 0 > y ;\n"
+                            "foo < 6 > x ;\n"
+                            "foo < 0 > y ;\n"
                             "}";
         ASSERT_EQUALS(exp, tokenizeAndStringify(code, true));
     }
@@ -8370,13 +8376,24 @@ private:
     void astnewdelete() const {
         ASSERT_EQUALS("aintnew=", testAst("a = new int;"));
         ASSERT_EQUALS("aint4[new=", testAst("a = new int[4];"));
-        ASSERT_EQUALS("aFoonew=", testAst("a = new Foo(bar);"));
-        ASSERT_EQUALS("aFoonew=", testAst("a = new Foo<bar>();"));
-        ASSERT_EQUALS("Xnew", testAst("new (a,b,c) X(1,2,3);"));
+        ASSERT_EQUALS("aFoobar(new=", testAst("a = new Foo(bar);"));
+        ASSERT_EQUALS("aFoobar(new=", testAst("a = new Foo(bar);"));
+        ASSERT_EQUALS("aFoo(new=", testAst("a = new Foo<bar>();"));
+        ASSERT_EQUALS("X12,3,(new", testAst("new (a,b,c) X(1,2,3);"));
         ASSERT_EQUALS("adelete", testAst("delete a;"));
         ASSERT_EQUALS("adelete", testAst("delete (a);"));
         ASSERT_EQUALS("adelete", testAst("delete[] a;"));
         ASSERT_EQUALS("ab.3c-(delete", testAst("delete[] a.b(3 - c);"));
+
+        // clang testsuite..
+        ASSERT_EQUALS("const0(new", testAst("new const auto (0);"));
+        ASSERT_EQUALS("autonew", testAst("new (auto) (0.0);"));
+        ASSERT_EQUALS("intnew", testAst("new (int S::*[3][4][5]) ();"));
+        ASSERT_EQUALS("pSnew=", testAst("p=new (x)(S)(1,2);"));
+        ASSERT_EQUALS("inti[new(", testAst("(void)new (int[i]);"));
+        ASSERT_EQUALS("intp* pnew malloc4(", testAst("int*p; new (p) (malloc(4));"));
+        ASSERT_EQUALS("intnew", testAst("new (&w.x)(int*)(0);"));
+        ASSERT_EQUALS("&new", testAst("new (&w.x)(0);")); // <- the "(int*)" has been simplified
     }
 
     void astpar() const { // parentheses
@@ -8486,6 +8503,7 @@ private:
     void asttemplate() const { // uninstantiated templates will have <,>,etc..
         ASSERT_EQUALS("a(3==", testAst("a<int>()==3"));
         ASSERT_EQUALS("ab(== f(", testAst("a == b<c>(); f();"));
+        ASSERT_EQUALS("static_casta(i[", testAst("; static_cast<char*>(a)[i];")); // #6203
 
         // This two unit tests were added to avoid a crash. The actual correct AST result for non-executable code has not been determined so far.
         ASSERT_EQUALS("Cpublica::b:::", testAst("class C : public ::a::b<bool> { };"));
