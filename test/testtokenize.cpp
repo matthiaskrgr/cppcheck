@@ -8387,20 +8387,33 @@ private:
         ASSERT_EQUALS("aFoobar(new=", testAst("a = new Foo(bar);"));
         ASSERT_EQUALS("aFoo(new=", testAst("a = new Foo<bar>();"));
         ASSERT_EQUALS("X12,3,(new", testAst("new (a,b,c) X(1,2,3);"));
+        ASSERT_EQUALS("aXnew(", testAst("a (new (X));"));
+        ASSERT_EQUALS("aXnew5,(", testAst("a (new (X), 5);"));
         ASSERT_EQUALS("adelete", testAst("delete a;"));
         ASSERT_EQUALS("adelete", testAst("delete (a);"));
         ASSERT_EQUALS("adelete", testAst("delete[] a;"));
         ASSERT_EQUALS("ab.3c-(delete", testAst("delete[] a.b(3 - c);"));
+        ASSERT_EQUALS("a::new=", testAst("a = new (b) ::X;"));
+        ASSERT_EQUALS("aA1(new(bB2(new(,", testAst("a(new A(1)), b(new B(2))"));
+
+        // invalid code (libreoffice), don't hang
+        // #define SlideSorterViewShell
+        // SfxViewFrame* pFrame;
+        // new SlideSorterViewShell(pFrame,rViewShellBase,pParentWindow,pFrameViewArgument);
+        ASSERT_EQUALS("fxnewy,z,(", testAst("f(new (x,y,z));"));
 
         // clang testsuite..
         ASSERT_EQUALS("const0(new", testAst("new const auto (0);"));
         ASSERT_EQUALS("autonew", testAst("new (auto) (0.0);"));
-        ASSERT_EQUALS("intnew", testAst("new (int S::*[3][4][5]) ();"));
+        ASSERT_EQUALS("int3[4[5[new", testAst("new (int S::*[3][4][5]) ();"));
         ASSERT_EQUALS("pSnew=", testAst("p=new (x)(S)(1,2);"));
         ASSERT_EQUALS("inti[new(", testAst("(void)new (int[i]);"));
         ASSERT_EQUALS("intp* pnew malloc4(", testAst("int*p; new (p) (malloc(4));"));
         ASSERT_EQUALS("intnew", testAst("new (&w.x)(int*)(0);"));
         ASSERT_EQUALS("&new", testAst("new (&w.x)(0);")); // <- the "(int*)" has been simplified
+
+        // gcc testsuite..
+        ASSERT_EQUALS("char10[new(", testAst("(void)new(char*)[10];"));
     }
 
     void astpar() const { // parentheses

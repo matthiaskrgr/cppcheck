@@ -1201,8 +1201,11 @@ void Variable::evaluate()
     }
     // check for C++11 member initialization
     if (_scope && _scope->isClassOrStruct()) {
+        // type var = x or
+        // type var = {x}
         // type var = x; gets simplified to: type var ; var = x ;
-        if (Token::Match(_name, "%var% ; %var% = %any% ;") && _name->strAt(2) == _name->str())
+        if ((Token::Match(_name, "%var% ; %var% = ") && _name->strAt(2) == _name->str()) ||
+            Token::Match(_name, "%var% {"))
             setFlag(fHasDefault, true);
     }
 
@@ -1923,10 +1926,10 @@ void SymbolDatabase::printOut(const char *title) const
             std::cout << "        isNoExcept: " << (func->isNoExcept ? "true" : "false") << std::endl;
             std::cout << "        isThrow: " << (func->isThrow ? "true" : "false") << std::endl;
             std::cout << "        isOperator: " << (func->isOperator ? "true" : "false") << std::endl;
-            std::cerr << "        isAttributeConst: " << (func->isAttributeConst() ? "true" : "false") << std::endl;
-            std::cerr << "        isAttributePure: " << (func->isAttributePure() ? "true" : "false") << std::endl;
-            std::cerr << "        isAttributeNothrow: " << (func->isAttributeNothrow() ? "true" : "false") << std::endl;
-            std::cerr << "        isDeclspecNothrow: " << (func->isDeclspecNothrow() ? "true" : "false") << std::endl;
+            std::cout << "        isAttributeConst: " << (func->isAttributeConst() ? "true" : "false") << std::endl;
+            std::cout << "        isAttributePure: " << (func->isAttributePure() ? "true" : "false") << std::endl;
+            std::cout << "        isAttributeNothrow: " << (func->isAttributeNothrow() ? "true" : "false") << std::endl;
+            std::cout << "        isDeclspecNothrow: " << (func->isDeclspecNothrow() ? "true" : "false") << std::endl;
             std::cout << "        noexceptArg: " << (func->noexceptArg ? func->noexceptArg->str() : "none") << std::endl;
             std::cout << "        throwArg: " << (func->throwArg ? func->throwArg->str() : "none") << std::endl;
             std::cout << "        tokenDef: " << func->tokenDef->str() << " " <<_tokenizer->list.fileLine(func->tokenDef) << std::endl;
@@ -2692,6 +2695,9 @@ bool Scope::isVariableDeclaration(const Token* tok, const Token*& vartok, const 
     const Token* localVarTok = nullptr;
 
     if (Token::Match(localTypeTok, "%type% <")) {
+        if (Token::Match(tok, "const_cast|dynamic_cast|reinterpret_cast|static_cast <"))
+            return false;
+
         const Token* closeTok = localTypeTok->next()->link();
         if (closeTok) {
             localVarTok = skipPointers(closeTok->next());
