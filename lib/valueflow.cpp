@@ -1131,8 +1131,12 @@ static void valueFlowAfterCondition(TokenList *tokenlist, ErrorLogger *errorLogg
                     isreturn |= (codeblock == 2 && isReturn(after));
                 }
 
-                if (!isreturn)
-                    valueFlowForward(after->next(), top->scope()->classEnd, var, varid, values, true, tokenlist, errorLogger, settings);
+                if (!isreturn) {
+                    // TODO: constValue could be true if there are no assignments in the conditional blocks and
+                    //       perhaps if there are no && and no || in the condition
+                    bool constValue = false;
+                    valueFlowForward(after->next(), top->scope()->classEnd, var, varid, values, constValue, tokenlist, errorLogger, settings);
+                }
             }
         }
     }
@@ -1554,7 +1558,7 @@ static void valueFlowSubFunction(TokenList *tokenlist, ErrorLogger *errorLogger,
                 if (Token::Match(tok2, "%varid% !!=", varid2)) {
                     for (std::list<ValueFlow::Value>::const_iterator val = argvalues.begin(); val != argvalues.end(); ++val)
                         setTokenValue(const_cast<Token*>(tok2), *val);
-                } else if (Token::Match(tok2, "{|?")) {
+                } else if (Token::Match(tok2, "%oror%|&&|{|?")) {
                     if (settings->debugwarnings)
                         bailout(tokenlist, errorLogger, tok2, "parameter " + arg->name() + ", at '" + tok2->str() + "'");
                     break;

@@ -49,15 +49,6 @@ public:
     }
 
 private:
-    void createSymbolDatabase(const char code[]) {
-        errout.str("");
-        Settings settings;
-        Tokenizer tokenizer(&settings, this);
-        std::istringstream istr(code);
-        tokenizer.tokenize(istr, "test.cpp");
-        tokenizer.getSymbolDatabase();
-    }
-
     const Scope si;
     const Token* vartok;
     const Token* typetok;
@@ -227,10 +218,9 @@ private:
         TEST_CASE(symboldatabase43); // #4738
         TEST_CASE(symboldatabase44);
         TEST_CASE(symboldatabase45); // #6125
+        TEST_CASE(symboldatabase46); // #6171 (anonymous namespace)
 
         TEST_CASE(isImplicitlyVirtual);
-
-        TEST_CASE(garbage);
 
         TEST_CASE(isFunction); // UNKNOWN_MACRO(a,b) { .. }
 
@@ -1983,6 +1973,27 @@ private:
         ASSERT_EQUALS(Scope::eFunction, scope->type);
     }
 
+    void symboldatabase46() { // #6171 (anonymous namespace)
+        GET_SYMBOL_DB("struct S { };\n"
+                      "namespace {\n"
+                      "    struct S { };\n"
+                      "}");
+
+        ASSERT(db != nullptr);
+        ASSERT_EQUALS(4U, db->scopeList.size());
+        std::list<Scope>::const_iterator scope = db->scopeList.begin();
+        ASSERT_EQUALS(Scope::eGlobal, scope->type);
+        ++scope;
+        ASSERT_EQUALS(Scope::eStruct, scope->type);
+        ASSERT_EQUALS(scope->className, "S");
+        ++scope;
+        ASSERT_EQUALS(Scope::eNamespace, scope->type);
+        ASSERT_EQUALS(scope->className, "");
+        ++scope;
+        ASSERT_EQUALS(Scope::eStruct, scope->type);
+        ASSERT_EQUALS(scope->className, "S");
+    }
+
     void isImplicitlyVirtual() {
         {
             GET_SYMBOL_DB("class Base {\n"
@@ -2094,27 +2105,6 @@ private:
                           "}");
             //ASSERT(db && db->findScopeByName("InfiniteA") && !db->findScopeByName("InfiniteA")->functionList.front().isImplicitlyVirtual());
             TODO_ASSERT_EQUALS(1, 0, db->findScopeByName("InfiniteA")->functionList.size());
-        }
-    }
-
-    void garbage() {
-        {
-            GET_SYMBOL_DB("void f( { u = 1 ; } ) { }");
-            (void)db;
-        }
-        {
-            GET_SYMBOL_DB("{ }; void namespace A::f; { g() { int } }");
-            (void)db;
-        }
-        {
-            ASSERT_THROW(createSymbolDatabase("class Foo {}; class Bar : public Foo"), InternalError);
-        }
-        {
-            ASSERT_THROW(createSymbolDatabase("YY_DECL { switch (yy_act) {\n"
-                                              "    case 65: YY_BREAK\n"
-                                              "    case YY_STATE_EOF(block):\n"
-                                              "        yyterminate(); \n"
-                                              "} }"), InternalError); // #5663
         }
     }
 

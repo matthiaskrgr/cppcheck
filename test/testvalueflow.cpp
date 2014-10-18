@@ -62,8 +62,6 @@ private:
         TEST_CASE(valueFlowForLoop);
         TEST_CASE(valueFlowSubFunction);
         TEST_CASE(valueFlowFunctionReturn);
-
-        TEST_CASE(garbage);
     }
 
     bool testValueOfX(const char code[], unsigned int linenr, int value) {
@@ -1022,11 +1020,11 @@ private:
         code = "void f(int x) {\n"
                "  if (x == 2) {}\n"
                "  if (x > 0)\n"
-               "    a = x;\n"
+               "    a = x;\n"  // <- TODO, x can be 2
                "  else\n"
                "    b = x;\n"
                "}";
-        ASSERT_EQUALS(true,  testValueOfX(code, 4U, 2));
+        TODO_ASSERT_EQUALS(true, false, testValueOfX(code, 4U, 2));
         ASSERT_EQUALS(false, testValueOfX(code, 6U, 2));
 
         // condition with 2nd variable
@@ -1037,6 +1035,16 @@ private:
                "    a = x;\n" // <- x can not be 7 here
                "}";
         ASSERT_EQUALS(false, testValueOfX(code, 5U, 7));
+
+        code = "void f(struct X *x) {\n"
+               "  bool b = TRUE;\n"
+               "  if(x) { }\n"
+               "  else\n"
+               "    b = FALSE;\n"
+               "  if (b)\n"
+               "    abc(x->value);\n" // <- x is not 0
+               "}\n";
+        ASSERT_EQUALS(false, testValueOfX(code, 7U, 0));
 
         // In condition, after && and ||
         code = "void f(int x) {\n"
@@ -1279,6 +1287,14 @@ private:
         ASSERT_EQUALS(true,  testValueOfX(code, 2U, 0));
         ASSERT_EQUALS(false, testValueOfX(code, 3U, 0));
 
+        code = "void f1(int *x) {\n"
+               "  if (x &&\n"
+               "      *x) {}\n"
+               "}\n"
+               "void f2() { f1(0); }";
+        ASSERT_EQUALS(true,  testValueOfX(code, 2U, 0));
+        ASSERT_EQUALS(false, testValueOfX(code, 3U, 0));
+
         // #5861 - fp with float
         code = "void f1(float x) {\n"
                "  return 1.0 / x;\n"
@@ -1315,23 +1331,6 @@ private:
                "    x = 1 * add(10+1,4);\n"
                "}";
         ASSERT_EQUALS(15, valueOfTok(code, "*").intvalue);
-    }
-
-    void garbage() {
-        // #6089
-        const char* code = "{} int foo(struct, x1, struct x2, x3, int, x5, x6, x7)\n"
-                           "{\n"
-                           "    (foo(s, , 2, , , 5, , 7)) abort()\n"
-                           "}\n";
-        ASSERT_THROW(valueOfTok(code, "*"), InternalError);
-
-        // #6106
-        code = " f { int i ; b2 , [ ] ( for ( i = 0 ; ; ) ) }";
-        valueOfTok(code, "*");
-
-        // 6122 survive garbage code
-        code = "; { int i ; for ( i = 0 ; = 123 ; ) - ; }";
-        valueOfTok(code, "*");
     }
 };
 

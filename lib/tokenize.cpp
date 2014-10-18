@@ -2141,7 +2141,8 @@ const Token * Tokenizer::startOfExecutableScope(const Token * tok)
                 } else
                     return nullptr;
             } else {
-                if (tok->isName() && tok->next() && tok->next()->str() == "(") {
+                if (tok->isName() && tok->next() && (tok->next()->str() == "(" ||
+                                                     (inInit && tok->next()->str() == "{"))) {
                     tok = tok->next()->link()->next();
                 } else if (tok->str() == ",") {
                     tok = tok->next();
@@ -5526,6 +5527,16 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
                     if (tok2 && tok2->str() == ";")
                         tok2 = nullptr;
                 }
+            }
+
+            // brace initialization
+            else if (Token::Match(varName, "%var% {")) {
+                tok2 = varName->next();
+                tok2 = tok2->link();
+                if (tok2)
+                    tok2 = tok2->next();
+                if (tok2 && tok2->str() != ",")
+                    tok2 = nullptr;
             } else
                 tok2 = nullptr;
         } else {
@@ -7358,7 +7369,7 @@ void Tokenizer::simplifyReference()
                         }
                     }
 
-                    tok2->deleteNext(6+(tok->strAt(6)==")" ? 1 : 0));
+                    tok2->deleteNext(6+(tok2->strAt(6)==")" ? 1 : 0));
                 }
             }
             tok = end;
@@ -8397,7 +8408,8 @@ void Tokenizer::eraseDeadCode(Token *begin, const Token *end)
                     break;
             }
             tok->deleteNext();
-        } else {        //no need to keep the other strings, remove them.
+        } else {
+            // no need to keep the other strings, remove them.
             if (tok->strAt(1) == "while") {
                 if (tok->str() == "}" && tok->link()->strAt(-1) == "do")
                     tok->link()->previous()->deleteThis();
@@ -9090,7 +9102,8 @@ void Tokenizer::simplifyWhile0()
         if (Token::simpleMatch(tok->next()->link(), ") {")) {
             Token *end = tok->next()->link();
             end = end->next()->link();
-            eraseDeadCode(tok->previous(), end->next());
+            tok = tok->previous();
+            eraseDeadCode(tok, end->next());
         }
     }
 }

@@ -385,8 +385,14 @@ private:
               "    int x = 0;\n"
               "    int y = f();\n"
               "    int z{0};\n"
+              "    int (*pf[2])(){nullptr, nullptr};\n"
+              "    int a[2][3] = {{1,2,3},{4,5,6}};\n"
+              "    int b{1}, c{2};\n"
+              "    int d, e{3};\n"
+              "    int f{4}, g;\n"
               "};");
-        ASSERT_EQUALS("", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Member variable 'Fred::d' is not initialized in the constructor.\n"
+                      "[test.cpp:3]: (warning) Member variable 'Fred::g' is not initialized in the constructor.\n", errout.str());
     }
 
     void simple12() { // ticket #4620
@@ -2411,6 +2417,22 @@ private:
               "    int x;\n"
               "    int y;\n"
               "    POINT() :x(0), y(0) { }\n"
+              "};\n"
+              "class Fred\n"
+              "{\n"
+              "private:\n"
+              "    POINT p;\n"
+              "public:\n"
+              "    Fred()\n"
+              "    { }\n"
+              "};");
+        ASSERT_EQUALS("", errout.str());
+
+        // non static data-member initialization
+        check("struct POINT\n"
+              "{\n"
+              "    int x=0;\n"
+              "    int y=0;\n"
               "};\n"
               "class Fred\n"
               "{\n"

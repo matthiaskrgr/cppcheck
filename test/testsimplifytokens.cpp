@@ -2375,16 +2375,6 @@ private:
 
         ASSERT_EQUALS("void foo ( ) { exit ( 0 ) ; }",
                       tokWithStdLib("void foo() { do { exit(0); } while (true); }"));
-
-        // #6187
-        tokWithStdLib("void foo() {\n"
-                      "  goto label;\n"
-                      "  for (int i = 0; i < 0; ++i) {\n"
-                      "    ;\n"
-                      "label:\n"
-                      "    ;\n"
-                      "  }\n"
-                      "}");
     }
 
     void strcat1() {
@@ -3362,6 +3352,9 @@ private:
                       tok("void f() { int a; int &b(a); b++; }"));
         ASSERT_EQUALS("void f ( ) { int a ; a ++ ; }",
                       tok("void f() { int a; int &b = a; b++; }"));
+
+        ASSERT_EQUALS("void test ( ) { c . f ( 7 ) ; }",
+                      tok("void test() { c.f(7); T3 &t3 = c; }")); // #6133
     }
 
     void simplifyRealloc() {

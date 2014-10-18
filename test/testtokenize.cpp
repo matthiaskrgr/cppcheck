@@ -682,6 +682,22 @@ private:
         // #3496 - make sure hasComplicatedSyntaxErrorsInTemplates works
         ASSERT_EQUALS("void a ( Fred * f ) { for ( ; n < f . x ( ) ; ) { } }",
                       tokenizeAndStringify("void a(Fred* f) MACRO { for (;n < f->x();) {} }"));
+
+        // #6216 - make sure hasComplicatedSyntaxErrorsInTemplates works
+        ASSERT_EQUALS("C :: C ( )\n"
+                      ": v { }\n"
+                      "{\n"
+                      "for ( int dim = 0 ; dim < v . size ( ) ; ++ dim ) {\n"
+                      "v [ dim ] . f ( ) ;\n"
+                      "}\n"
+                      "} ;",
+                      tokenizeAndStringify("C::C()\n"
+                                           ":v{}\n"
+                                           "{\n"
+                                           "    for (int dim = 0; dim < v.size(); ++dim) {\n"
+                                           "        v[dim]->f();\n"
+                                           "    }\n"
+                                           "};"));
     }
 
     void tokenize20() { // replace C99 _Bool => bool
@@ -5187,8 +5203,6 @@ private:
         //with unhandled MACRO() code
         ASSERT_EQUALS("void f(){ MACRO( ab: b=0;, foo)}", labels_("void f() { MACRO(ab: b=0;, foo)}"));
         ASSERT_EQUALS("void f(){ MACRO( bar, ab:{&(* b. x)=0;})}", labels_("void f() { MACRO(bar, ab: {&(*b.x)=0;})}"));
-        //don't crash with garbage code
-        ASSERT_THROW(labels_("switch(){case}"), InternalError);
     }
 
     void simplifyInitVar() {
@@ -5930,8 +5944,6 @@ private:
                       tokenizeAndStringify("int f(int a) { return 0 * a; }", true));
         ASSERT_EQUALS("bool f ( int i ) { switch ( i ) { case 15 : ; return true ; } }",
                       tokenizeAndStringify("bool f(int i) { switch (i) { case 10 + 5: return true; } }", true));
-        // ticket #3512 - Don't crash on garbage code
-        ASSERT_EQUALS("p = const", tokenizeAndStringify("1 *p = const", true));
 
         // ticket #3576 - False positives in boolean expressions
         ASSERT_EQUALS("int foo ( ) { return 1 ; }",
@@ -5946,9 +5958,6 @@ private:
 
         // ticket #3964 - simplify numeric calculations in tokenization
         ASSERT_EQUALS("char a [ 10 ] ;", tokenizeAndStringify("char a[9+1];"));
-
-        // #3953 (valgrind errors on garbage code)
-        ASSERT_EQUALS("void f ( 0 * ) ;", tokenizeAndStringify("void f ( 0 * ) ;"));
     }
 
     void simplifyCompoundAssignment() {
@@ -8538,6 +8547,7 @@ private:
         ASSERT_EQUALS("afoveon_avgimage((foveon_avgimage((+=", testAst("a = foveon_avg(((short(*)[4]) image)) + foveon_avg(((short(*)[4]) image));"));
         ASSERT_EQUALS("c(40<<return", testAst("return (long long)c << 40;"));
         ASSERT_EQUALS("ab-(=", testAst("a = ((int)-b)")); // Multiple subsequent unary operators (cast and -)
+        ASSERT_EQUALS("xdouble123(i*(=", testAst("x = (int)(double(123)*i);"));
     }
 
     void astlambda() const {
@@ -8605,6 +8615,8 @@ private:
         ASSERT(isStartOfExecutableScope(3, "void foo() const throw(int) { }"));
         ASSERT(isStartOfExecutableScope(2, "foo() : a(1) { }"));
         ASSERT(isStartOfExecutableScope(2, "foo() : a(1), b(2) { }"));
+        ASSERT(isStartOfExecutableScope(2, "foo() : a{1} { }"));
+        ASSERT(isStartOfExecutableScope(2, "foo() : a{1}, b{2} { }"));
     }
 
 };

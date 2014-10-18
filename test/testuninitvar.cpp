@@ -585,12 +585,6 @@ private:
                        "}");
         ASSERT_EQUALS("", errout.str());
 
-        // Ticket #3480 - Don't crash garbage code
-        ASSERT_THROW(checkUninitVar("int f()\n"
-                                    "{\n"
-                                    "    return if\n"
-                                    "}"), InternalError);
-
         // Ticket #3873 (false positive)
         checkUninitVar("MachineLoopRange *MachineLoopRanges::getLoopRange(const MachineLoop *Loop) {\n"
                        "  MachineLoopRange *&Range = Cache[Loop];\n"
@@ -2536,15 +2530,6 @@ private:
                         "}");
         ASSERT_EQUALS("", errout.str());
 
-        // Ticket #3486 - Don't crash garbage code
-        checkUninitVar2("void f()\n"
-                        "{\n"
-                        "  (\n"
-                        "    x;\n"
-                        "    int a, a2, a2*x; if () ;\n"
-                        "  )\n"
-                        "}");
-
         // Ticket #3890 - False positive for std::map
         checkUninitVar2("void f() {\n"
                         "    std::map<int,bool> x;\n"
@@ -3218,6 +3203,15 @@ private:
                         "    int *p = ab.a;\n"
                         "}");
         ASSERT_EQUALS("", errout.str());
+
+        // non static data-member initialization
+        checkUninitVar2("struct AB { int a=1; int b; };\n"
+                        "void f(void) {\n"
+                        "    struct AB ab;\n"
+                        "    int a = ab.a;\n"
+                        "    int b = ab.b;\n"
+                        "}");
+        ASSERT_EQUALS("[test.cpp:5]: (error) Uninitialized struct member: ab.b\n", errout.str());
     }
 
     void uninitvar2_while() {
