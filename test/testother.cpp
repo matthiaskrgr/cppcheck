@@ -6265,6 +6265,23 @@ private:
               "}", "test.cpp", false, false, false, true, &settings_std);
         ASSERT_EQUALS("[test.cpp:2]: (warning) Return value of function strcmp() is not used.\n", errout.str());
 
+        check("bool strcmp(char* a, char* b);\n" // cppcheck sees a custom strcmp definition, but it returns a value. Assume it is the one specified in the library.
+              "void foo() {\n"
+              "    strcmp(a, b);\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Return value of function strcmp() is not used.\n", errout.str());
+
+        check("void strcmp(char* a, char* b);\n" // cppcheck sees a custom strcmp definition which returns void!
+              "void foo() {\n"
+              "    strcmp(a, b);\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n"
+              "    class strcmp { strcmp() {} };\n" // strcmp is a constructor definition here
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("", errout.str());
+
         check("void foo() {\n"
               "    return strcmp(a, b);\n"
               "}", "test.cpp", false, false, false, true, &settings_std);
@@ -6290,6 +6307,17 @@ private:
         check("void foo() {\n"
               "    DebugLog::getInstance().log(systemInfo.getSystemInfo());\n"
               "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("", errout.str());
+
+        // #6233
+        check("int main() {\n"
+              "    auto lambda = [](double value) {\n"
+              "        double rounded = floor(value + 0.5);\n"
+              "        printf(\"Rounded value = %f\\n\", rounded);\n"
+              "    };\n"
+              "    lambda(13.3);\n"
+              "    return 0;\n"
+              "}");
         ASSERT_EQUALS("", errout.str());
     }
 };
