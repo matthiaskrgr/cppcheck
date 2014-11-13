@@ -1125,6 +1125,27 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
         }
     }
 
+    // Set C++ 11 delegate constructor function call pointers
+    for (std::list<Scope>::iterator it = scopeList.begin(); it != scopeList.end(); ++it) {
+        for (std::list<Function>::const_iterator func = it->functionList.begin(); func != it->functionList.end(); ++func) {
+            // look for initializer list
+            if (func->type == Function::eConstructor && func->functionScope &&
+                func->functionScope->functionOf && func->arg && func->arg->link()->strAt(1) == ":") {
+                const Token * tok = func->arg->link()->tokAt(2);
+                while (tok && tok != func->functionScope->classStart) {
+                    if (Token::Match(tok, "%var% {")) {
+                        if (tok->str() == func->tokenDef->str()) {
+                            const_cast<Token *>(tok)->function(func->functionScope->functionOf->findFunction(tok));
+                            break;
+                        }
+                        tok = tok->linkAt(1);
+                    }
+                    tok = tok->next();
+                }
+            }
+        }
+    }
+
     // Set variable pointers
     for (const Token* tok = _tokenizer->list.front(); tok != _tokenizer->list.back(); tok = tok->next()) {
         if (tok->varId())
@@ -2923,17 +2944,15 @@ const Function* Scope::findFunction(const Token *tok) const
     std::list<Function>::const_iterator it;
 
     // this is a function call so try to find it based on name and arguments
-    // if more than 1 function matches (it is overloaded) and we dont see which function is called, return 0
-    const Function *foundfunction = nullptr;
     for (it = functionList.begin(); it != functionList.end(); ++it) {
         if (it->tokenDef->str() == tok->str()) {
             const Function *func = &*it;
-            if ((tok->strAt(1) == "(" || (func->name() == tok->str() && tok->strAt(1) == "{" && func->type == Function::eConstructor)) && tok->tokAt(2)) {
-                std::string end(tok->strAt(1) == "{" ? "}" : ")");
+            const Token *end = tok->linkAt(1);
+            if (end) {
                 // check the arguments
                 unsigned int args = 0;
                 const Token *arg = tok->tokAt(2);
-                while (arg && arg->str() != end) {
+                while (arg && arg != end) {
                     /** @todo check argument type for match */
 
                     // mismatch parameter: passing parameter by address to function, argument is reference
@@ -2952,19 +2971,11 @@ const Function* Scope::findFunction(const Token *tok) const
 
                 // check for argument count match or default arguments
                 if (args == func->argCount() ||
-                    (args < func->argCount() && args >= func->minArgCount())) {
-                    if (foundfunction == nullptr)
-                        foundfunction = func;
-                    else {
-                        // Two or more functions match, don't guess which one is right
-                        return nullptr;
-                    }
-                }
+                    (args < func->argCount() && args >= func->minArgCount()))
+                    return func;
             }
         }
     }
-    if (foundfunction)
-        return foundfunction;
 
     // check in base classes
     if (isClassOrStruct() && definedType && !definedType->derivedFrom.empty()) {
