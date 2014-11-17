@@ -112,8 +112,8 @@ bool isSameExpression(const Token *tok1, const Token *tok2, const std::set<std::
         // some template/cast stuff.. check that the template arguments are same
         const Token *t1 = tok1->next();
         const Token *t2 = tok2->next();
-        const Token *end1 = tok1->next()->link();
-        const Token *end2 = tok2->next()->link();
+        const Token *end1 = t1->link();
+        const Token *end2 = t2->link();
         while (t1 && t2 && t1 != end1 && t2 != end2) {
             if (t1->str() != t2->str())
                 return false;
@@ -422,7 +422,7 @@ static std::string analyzeType(const Token* tok)
 
 void CheckOther::invalidPointerCast()
 {
-    if (!_settings->isEnabled("warning") && !_settings->isEnabled("portability"))
+    if (!_settings->isEnabled("portability"))
         return;
 
     const SymbolDatabase* const symbolDatabase = _tokenizer->getSymbolDatabase();
@@ -481,7 +481,7 @@ void CheckOther::invalidPointerCast()
 
             std::string fromType = analyzeType(fromTok);
             std::string toType = analyzeType(toTok);
-            if (fromType != toType && !fromType.empty() && !toType.empty() && _settings->isEnabled("portability") && (toTok->str() != "char" || _settings->inconclusive))
+            if (fromType != toType && !fromType.empty() && !toType.empty() && (toTok->str() != "char" || _settings->inconclusive))
                 invalidPointerCastError(tok, fromType, toType, toTok->str() == "char");
         }
     }
@@ -2292,8 +2292,18 @@ void CheckOther::checkDuplicateExpression()
                         const bool assignment = tok->str() == "=";
                         if (assignment)
                             selfAssignmentError(tok, tok->astOperand1()->expressionString());
-                        else
+                        else {
+                            if (_settings->CPP && _settings->standards.CPP11 && tok->str() == "==") {
+                                const Token* parent = tok->astParent();
+                                while (parent && parent->astParent()) {
+                                    parent = parent->astParent();
+                                }
+                                if (parent && parent->previous() && parent->previous()->str() == "static_assert") {
+                                    continue;
+                                }
+                            }
                             duplicateExpressionError(tok, tok, tok->str());
+                        }
                     }
                 } else if (!Token::Match(tok, "[-/%]")) { // These operators are not associative
                     if (tok->astOperand2() && tok->str() == tok->astOperand1()->str() && isSameExpression(tok->astOperand2(), tok->astOperand1()->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer, tok->astOperand2()))

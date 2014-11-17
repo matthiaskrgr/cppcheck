@@ -31,6 +31,7 @@ private:
     void run() {
         TEST_CASE(isint);
         TEST_CASE(isbin);
+        TEST_CASE(isdec);
         TEST_CASE(isoct);
         TEST_CASE(ishex);
         TEST_CASE(isnegative);
@@ -48,6 +49,10 @@ private:
         TEST_CASE(naninf);
         TEST_CASE(isNullValue);
         TEST_CASE(incdec);
+        TEST_CASE(sin);
+        TEST_CASE(cos);
+        TEST_CASE(tan);
+        TEST_CASE(abs);
     }
 
     void isGreater() const {
@@ -138,7 +143,7 @@ private:
         ASSERT_THROW(MathLib::calculate("1","2",'j'),InternalError);
     }
 
-    void calculate1() const { // mod
+    void calculate1() const {
         ASSERT_EQUALS("0"    , MathLib::calculate("2"    , "1"    , '%'));
         ASSERT_EQUALS("0.0"  , MathLib::calculate("2.0"  , "1.0"  , '%'));
         ASSERT_EQUALS("2"    , MathLib::calculate("12"   , "5"   , '%'));
@@ -148,6 +153,9 @@ private:
         ASSERT_EQUALS("1.7"  , MathLib::calculate("18.5" , "4.2" , '%'));
         ASSERT_THROW(MathLib::calculate("123", "0", '%'), InternalError); // throw
         MathLib::calculate("123", "0.0", '%'); // don't throw
+
+        ASSERT_EQUALS("0"    , MathLib::calculate("1"    , "1"    , '^'));
+        ASSERT_EQUALS("3"    , MathLib::calculate("2"    , "1"    , '^'));
     }
 
     void convert() const {
@@ -544,6 +552,10 @@ private:
         ASSERT_EQUALS(false, MathLib::isFloat(" 0"));
 
         ASSERT_EQUALS(true , MathLib::isFloat("0."));
+        ASSERT_EQUALS(true , MathLib::isFloat("0.f"));
+        ASSERT_EQUALS(true , MathLib::isFloat("0.F"));
+        ASSERT_EQUALS(true , MathLib::isFloat("0.l"));
+        ASSERT_EQUALS(true , MathLib::isFloat("0.L"));
         ASSERT_EQUALS(false , MathLib::isFloat("0. "));
         ASSERT_EQUALS(false , MathLib::isFloat(" 0. "));
         ASSERT_EQUALS(false , MathLib::isFloat(" 0."));
@@ -552,6 +564,10 @@ private:
         ASSERT_EQUALS(false , MathLib::isFloat("..0.."));
         ASSERT_EQUALS(false , MathLib::isFloat("..0"));
         ASSERT_EQUALS(true , MathLib::isFloat("0.0"));
+        ASSERT_EQUALS(true , MathLib::isFloat("0.0f"));
+        ASSERT_EQUALS(true , MathLib::isFloat("0.0F"));
+        ASSERT_EQUALS(true , MathLib::isFloat("0.0l"));
+        ASSERT_EQUALS(true , MathLib::isFloat("0.0L"));
         ASSERT_EQUALS(true , MathLib::isFloat("-0."));
         ASSERT_EQUALS(true , MathLib::isFloat("+0."));
         ASSERT_EQUALS(true , MathLib::isFloat("-0.0"));
@@ -575,8 +591,14 @@ private:
         ASSERT_EQUALS(true , MathLib::isFloat("+1E+1"));
         ASSERT_EQUALS(true , MathLib::isFloat("+1E+100"));
         ASSERT_EQUALS(true , MathLib::isFloat("+1E+100f"));
+        ASSERT_EQUALS(true , MathLib::isFloat("+1E+100F"));
+        ASSERT_EQUALS(true , MathLib::isFloat("+1E+100l"));
+        ASSERT_EQUALS(true , MathLib::isFloat("+1E+100L"));
         ASSERT_EQUALS(true , MathLib::isFloat("+1E+007")); // to be sure about #5485
         ASSERT_EQUALS(true , MathLib::isFloat("+1E+001f"));
+        ASSERT_EQUALS(true , MathLib::isFloat("+1E+001F"));
+        ASSERT_EQUALS(true , MathLib::isFloat("+1E+001l"));
+        ASSERT_EQUALS(true , MathLib::isFloat("+1E+001L"));
         ASSERT_EQUALS(false , MathLib::isFloat("+1E+001f2"));
         ASSERT_EQUALS(true , MathLib::isFloat("+1E+10000"));
         ASSERT_EQUALS(true , MathLib::isFloat("-1E+1"));
@@ -589,8 +611,14 @@ private:
 
         ASSERT_EQUALS(true , MathLib::isFloat("0.4"));
         ASSERT_EQUALS(true , MathLib::isFloat("2352.3f"));
+        ASSERT_EQUALS(true , MathLib::isFloat("2352.3F"));
+        ASSERT_EQUALS(true , MathLib::isFloat("2352.3l"));
+        ASSERT_EQUALS(true , MathLib::isFloat("2352.3L"));
         ASSERT_EQUALS(true , MathLib::isFloat("0.00004"));
         ASSERT_EQUALS(true , MathLib::isFloat("2352.00001f"));
+        ASSERT_EQUALS(true , MathLib::isFloat("2352.00001F"));
+        ASSERT_EQUALS(true , MathLib::isFloat("2352.00001l"));
+        ASSERT_EQUALS(true , MathLib::isFloat("2352.00001L"));
         ASSERT_EQUALS(true , MathLib::isFloat(".4"));
         ASSERT_EQUALS(true , MathLib::isFloat(".3e2"));
         ASSERT_EQUALS(true , MathLib::isFloat("1.0E+1"));
@@ -612,6 +640,23 @@ private:
         ASSERT_EQUALS("-inf.0", MathLib::divide("-3.0", "0.0")); // -inf (#5142)
         ASSERT_EQUALS("-inf.0", MathLib::divide("-3.0", "0.0f")); // -inf (#5142)
         ASSERT_EQUALS("inf.0", MathLib::divide("-3.0", "-0.0f")); // inf (#5142)
+    }
+
+    void isdec(void) {
+        // positive testing
+        ASSERT_EQUALS(true, MathLib::isDec("1"));
+        ASSERT_EQUALS(true, MathLib::isDec("+1"));
+        ASSERT_EQUALS(true, MathLib::isDec("-1"));
+        ASSERT_EQUALS(true, MathLib::isDec("-100"));
+        ASSERT_EQUALS(true, MathLib::isDec("-1L"));
+        ASSERT_EQUALS(true, MathLib::isDec("1UL"));
+
+        // negative testing
+        ASSERT_EQUALS(false, MathLib::isDec("-1."));
+        ASSERT_EQUALS(false, MathLib::isDec("+1."));
+        ASSERT_EQUALS(false, MathLib::isDec("-x"));
+        ASSERT_EQUALS(false, MathLib::isDec("+x"));
+        ASSERT_EQUALS(false, MathLib::isDec("x"));
     }
 
     void isNullValue() const {
@@ -802,6 +847,25 @@ private:
         }
         // invalid operation
         ASSERT_THROW(MathLib::incdec("1", "x"), InternalError); // throw
+    }
+
+    void sin() {
+        ASSERT_EQUALS("0.0"   , MathLib::sin("0"));
+    }
+    void cos() {
+        ASSERT_EQUALS("1.0"   , MathLib::cos("0"));
+    }
+    void tan() {
+        ASSERT_EQUALS("0.0"   , MathLib::tan("0"));
+    }
+    void abs() {
+        ASSERT_EQUALS("0.0"   , MathLib::abs("0"));
+        ASSERT_EQUALS("0.0"   , MathLib::abs("+0"));
+        ASSERT_EQUALS("0.0"   , MathLib::abs("-0"));
+        ASSERT_EQUALS("1.0"   , MathLib::abs("+1"));
+        ASSERT_EQUALS("1.0"   , MathLib::abs("+1.0"));
+        ASSERT_EQUALS("1.0"   , MathLib::abs("-1"));
+        ASSERT_EQUALS("1.0"   , MathLib::abs("-1.0"));
     }
 };
 
