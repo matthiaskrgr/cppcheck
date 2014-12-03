@@ -26,6 +26,7 @@
 #include <vector>
 #include <set>
 #include <algorithm>
+#include <map>
 
 #include "config.h"
 #include "token.h"
@@ -689,6 +690,7 @@ public:
     const Token *classStart; // '{' token
     const Token *classEnd;   // '}' token
     std::list<Function> functionList;
+    std::multimap<std::string, const Function *> functionMap;
     std::list<Variable> varlist;
     const Scope *nestedIn;
     std::list<Scope *> nestedList;
@@ -760,6 +762,14 @@ public:
 
     const Function *getDestructor() const;
 
+    void addFunction(const Function & func) {
+        functionList.push_back(func);
+
+        const Function * back = &functionList.back();
+
+        functionMap.insert(make_pair(back->tokenDef->str(), back));
+    }
+
     /**
      * @brief get the number of nested scopes that are not functions
      *
@@ -797,7 +807,7 @@ private:
      */
     bool isVariableDeclaration(const Token* tok, const Token*& vartok, const Token*& typetok) const;
 
-    void findFunctionInBase(const Token * tok, size_t args, std::vector<const Function *> & matches) const;
+    void findFunctionInBase(const std::string & name, size_t args, std::vector<const Function *> & matches) const;
 };
 
 class CPPCHECKLIB SymbolDatabase {
