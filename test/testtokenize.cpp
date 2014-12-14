@@ -96,6 +96,7 @@ private:
         TEST_CASE(removeCast13);
         TEST_CASE(removeCast14);
         TEST_CASE(removeCast15); // #5996 - don't remove cast in 'a+static_cast<int>(b?60:0)'
+        TEST_CASE(removeCast16); // #6278
 
         TEST_CASE(simplifyFloatCasts); // float casting a integer
 
@@ -1030,7 +1031,12 @@ private:
 
     void removeCast15() { // #5996 - don't remove cast in 'a+static_cast<int>(b?60:0)'
         ASSERT_EQUALS("a + ( b ? 60 : 0 ) ;",
-                      tokenizeAndStringify("a + static_cast<int>(b ? 60 : 0);",true));
+                      tokenizeAndStringify("a + static_cast<int>(b ? 60 : 0);", true));
+    }
+
+    void removeCast16() { // #6278
+        ASSERT_EQUALS("Get ( pArray ) ;",
+                      tokenizeAndStringify("Get((CObject*&)pArray);", true));
     }
 
     void simplifyFloatCasts() { // float casting integers
@@ -6191,6 +6197,7 @@ private:
     void simplifyNull() {
         ASSERT_EQUALS("if ( ! p )", tokenizeAndStringify("if (p==NULL)"));
         ASSERT_EQUALS("f ( NULL ) ;", tokenizeAndStringify("f(NULL);"));
+        ASSERT_EQUALS("char * i ; i = 0 ;", tokenizeAndStringify("char* i = (NULL);"));
     }
 
     void simplifyNullArray() {
@@ -8119,7 +8126,7 @@ private:
         ASSERT_EQUALS(expected2, tokenizeAndStringify(code2));
     }
 
-    void simplifyMathExpressions() {//#1620
+    void simplifyMathExpressions() { //#1620
         const char code1[] = "void foo() {\n"
                              "    std::cout<<pow(sin(x),2)+pow(cos(x),2);\n"
                              "    std::cout<<pow(sin(pow(sin(y),2)+pow(cos(y),2)),2)+pow(cos(pow(sin(y),2)+pow(cos(y),2)),2);\n"

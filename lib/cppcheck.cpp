@@ -361,6 +361,13 @@ bool CppCheck::checkFile(const std::string &code, const char FileName[], std::se
             (*it)->runChecks(&_tokenizer, &_settings, this);
         }
 
+        // Analyse the tokens..
+        for (std::list<Check *>::const_iterator it = Check::instances().begin(); it != Check::instances().end(); ++it) {
+            Check::FileInfo *fi = (*it)->getFileInfo(&_tokenizer, &_settings);
+            if (fi != nullptr)
+                fileInfo.push_back(fi);
+        }
+
         executeRules("normal", _tokenizer);
 
         if (!_simplify)
@@ -379,13 +386,6 @@ bool CppCheck::checkFile(const std::string &code, const char FileName[], std::se
 
             Timer timerSimpleChecks((*it)->name() + "::runSimplifiedChecks", _settings._showtime, &S_timerResults);
             (*it)->runSimplifiedChecks(&_tokenizer, &_settings, this);
-        }
-
-        // Analyse the tokens..
-        for (std::list<Check *>::const_iterator it = Check::instances().begin(); it != Check::instances().end(); ++it) {
-            Check::FileInfo *fi = (*it)->getFileInfo(&_tokenizer, &_settings);
-            if (fi != nullptr)
-                fileInfo.push_back(fi);
         }
 
         if (_settings.terminated())

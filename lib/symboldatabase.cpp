@@ -475,14 +475,15 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                         else if (Token::Match(end, ") const| noexcept (") &&
                                  (end->next()->str() == "const" ? Token::Match(end->linkAt(3), ") ;|=") :
                                   Token::Match(end->linkAt(2), ") ;|="))) {
-                            function.isNoExcept = true;
 
                             if (end->next()->str() == "const")
                                 tok = end->tokAt(3);
                             else
                                 tok = end->tokAt(2);
 
-                            if (Token::Match(tok, "= %any% ;")) {
+                            function.isNoExcept = tok->strAt(1) != "false";
+
+                            if (Token::Match(tok->link()->next(), "= %any% ;")) {
                                 function.isPure = true;
                                 tok = tok->tokAt(2);
                             }
@@ -1226,8 +1227,9 @@ bool SymbolDatabase::isFunction(const Token *tok, const Scope* outerScope, const
         tok->link()->previous()->str() == ")") {
         const Token* tok2 = tok->link()->next();
         if (tok2 && tok2->str() == "(" && Token::Match(tok2->link()->next(), "{|;|const|=")) {
-            *funcStart = tok->link()->previous()->link()->previous();
-            *argStart = tok->link()->previous()->link();
+            const Token* argStartTok = tok->link()->previous()->link();
+            *funcStart = argStartTok->previous();
+            *argStart = argStartTok;
             return true;
         }
     }
@@ -2961,9 +2963,9 @@ void Scope::findFunctionInBase(const Token * tok, size_t args, std::vector<const
 
 //---------------------------------------------------------------------------
 
-/** @todo This function only counts the number of arguments in the function call.
-    It does not take into account function constantness.
-    It does not take into account argument types.  This can be difficult because of promotion and conversion operators and casts and because the argument can also be a function call.
+/** @todo This function does not take into account argument types when they don't match.
+  This can be difficult because of promotion and conversion operators and casts
+  and because the argument can also be a function call.
  */
 const Function* Scope::findFunction(const Token *tok) const
 {
@@ -2998,7 +3000,8 @@ const Function* Scope::findFunction(const Token *tok) const
     findFunctionInBase(tok, args, matches);
 
     // check each function against the arguments in the function call for a match
-    for (size_t i = 0; i < matches.size(); ++i) {
+    for (std::size_t i = 0; i < matches.size();) {
+        bool erased = false;
         const Function * func = matches[i];
         size_t same = 0;
         for (std::size_t j = 0; j < args; ++j) {
@@ -3089,16 +3092,28 @@ const Function* Scope::findFunction(const Token *tok) const
             // check that function argument type is not mismatching
             else if (arguments[j]->str() == "&" && funcarg && funcarg->isReference()) {
                 // can't match so remove this function from possible matches
-                matches.erase(matches.begin() + i--);
+                matches.erase(matches.begin() + i);
+                erased = true;
                 break;
             }
         }
 
         // check if all arguments matched
         if (same == args) {
-            // found a match
-            return func;
+            // get the function this call is in
+            const Scope * scope = tok->scope();
+
+            // check if this function is a member function
+            if (scope && scope->functionOf && scope->functionOf->isClassOrStruct()) {
+                // check if isConst match
+                if (scope->function && scope->function->isConst == func->isConst)
+                    return func;
+            } else
+                return func;
         }
+
+        if (!erased)
+            ++i;
     }
 
     // no exact match so just return first function found
@@ -3169,8 +3184,8 @@ const Function* SymbolDatabase::findFunction(const Token *tok) const
 
     // check for member function
     else if (Token::Match(tok->tokAt(-2), "!!this .")) {
-        if (Token::Match(tok->tokAt(-2), "%var% .")) {
-            const Token *tok1 = tok->tokAt(-2);
+        const Token *tok1 = tok->tokAt(-2);
+        if (Token::Match(tok1, "%var% .")) {
 
             if (tok1->varId()) {
                 const Variable *var = getVariableFromVarId(tok1->varId());
@@ -3448,7 +3463,10 @@ Function * SymbolDatabase::findFunctionInScope(const Token *func, const Scope *n
     if (!function) {
         const Scope * scope = ns->findRecordInNestedList(func->str());
         if (scope && func->strAt(1) == "::") {
-            function = findFunctionInScope(func->tokAt(2), scope);
+            func = func->tokAt(2);
+            if (func->str() == "~")
+                func = func->next();
+            function = findFunctionInScope(func, scope);
         }
     }
 

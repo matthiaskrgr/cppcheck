@@ -445,10 +445,12 @@ void CheckOther::invalidPointerCast()
                 nextTok = nextTok->next();
                 toTok = tok->tokAt(2);
             }
+            if (!nextTok)
+                continue;
             if (toTok && toTok->str() == "const")
                 toTok = toTok->next();
 
-            if (!nextTok || !toTok || !toTok->isStandardType())
+            if (!toTok || !toTok->isStandardType())
                 continue;
 
             // Find casted variable
@@ -649,7 +651,7 @@ void CheckOther::checkRedundantAssignment()
                             }
                         }
                         if (error) {
-                            if (scope->type == Scope::eSwitch && Token::findmatch(it->second, "default|case", tok) && warning)
+                            if (warning && scope->type == Scope::eSwitch && Token::findmatch(it->second, "default|case", tok))
                                 redundantAssignmentInSwitchError(it->second, tok, tok->str());
                             else if (performance) {
                                 const bool nonlocal = nonLocal(it->second->variable());
@@ -1699,7 +1701,7 @@ void CheckOther::checkIncompleteStatement()
             tok = tok->next()->link();
 
         // C++11 struct/array/etc initialization in initializer list
-        else if (Token::Match(tok->previous(), "%var% {") && !Token::findsimplematch(tok,";",tok->link()))
+        else if (Token::Match(tok->previous(), "%var%|] {") && !Token::findsimplematch(tok,";",tok->link()))
             tok = tok->link();
 
         // C++11 vector initialization / return { .. }

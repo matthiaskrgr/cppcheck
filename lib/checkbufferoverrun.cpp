@@ -517,7 +517,7 @@ void CheckBufferOverrun::checkScope(const Token *tok, const std::vector<std::str
 
     const bool isPortabilityEnabled = _settings->isEnabled("portability");
 
-    for (const Token* const end = tok->scope()->classEnd; tok != end; tok = tok->next()) {
+    for (const Token* const end = tok->scope()->classEnd; tok && tok != end; tok = tok->next()) {
         if (declarationId != 0 && Token::Match(tok, "%varid% = new|malloc|realloc", declarationId)) {
             // Abort
             break;
@@ -1116,12 +1116,12 @@ void CheckBufferOverrun::checkGlobalAndLocalVariable()
 
             Token sizeTok(0);
             sizeTok.str(type);
-            const MathLib::bigint total_size = size * static_cast<int>(_tokenizer->sizeOfType(&sizeTok));
-            if (total_size == 0)
+            const MathLib::bigint totalSize = size * static_cast<int>(_tokenizer->sizeOfType(&sizeTok));
+            if (totalSize == 0)
                 continue;
 
             std::vector<std::string> v;
-            ArrayInfo temp(var->declarationId(), tok->next()->str(), total_size / size, size);
+            ArrayInfo temp(var->declarationId(), tok->next()->str(), totalSize / size, size);
             checkScope(tok->tokAt(nextTok), v, temp);
         }
     }

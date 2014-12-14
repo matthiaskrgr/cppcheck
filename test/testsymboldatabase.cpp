@@ -219,6 +219,7 @@ private:
         TEST_CASE(symboldatabase44);
         TEST_CASE(symboldatabase45); // #6125
         TEST_CASE(symboldatabase46); // #6171 (anonymous namespace)
+        TEST_CASE(symboldatabase47); // #6308
 
         TEST_CASE(isImplicitlyVirtual);
 
@@ -1998,6 +1999,19 @@ private:
         ASSERT_EQUALS(scope->className, "S");
     }
 
+    void symboldatabase47() { // #6308 - associate Function and Scope for destructors
+        GET_SYMBOL_DB("namespace NS {\n"
+                      "    class MyClass {\n"
+                      "        ~MyClass();\n"
+                      "    };\n"
+                      "}\n"
+                      "using namespace NS;\n"
+                      "MyClass::~MyClass() {\n"
+                      "    delete Example;\n"
+                      "}");
+        ASSERT(db && !db->functionScopes.empty() && db->functionScopes.front()->function && db->functionScopes.front()->function->functionScope == db->functionScopes.front());
+    }
+
     void isImplicitlyVirtual() {
         {
             GET_SYMBOL_DB("class Base {\n"
@@ -2358,6 +2372,8 @@ private:
                       "void CheckMemoryLeakInFunction::getcode(const Token *tok ) {\n"
                       "   addtoken(&rettail, tok);\n"
                       "}");
+        const Token *f = Token::findsimplematch(tokenizer.tokens(), "void addtoken ( Token * *");
+        ASSERT_EQUALS(true, db && f && !f->function()); // regression value only
     }
 
 
@@ -2392,9 +2408,9 @@ private:
         }
     }
 
-#define CLASS_FUNC(x, y) const Function *x = findFunctionByName(#x, y); \
+#define CLASS_FUNC(x, y, z) const Function *x = findFunctionByName(#x, y); \
                          ASSERT_EQUALS(true, x != nullptr);             \
-                         if (x) ASSERT_EQUALS(true, x->isNoExcept);
+                         if (x) ASSERT_EQUALS(z, x->isNoExcept);
 
     void noexceptFunction3() {
         GET_SYMBOL_DB("struct Fred {\n"
@@ -2410,6 +2426,7 @@ private:
                       "    void func10() noexcept = 0;\n"
                       "    void func11() const noexcept(true) = 0;\n"
                       "    void func12() const noexcept(true) = 0;\n"
+                      "    void func13() const noexcept(false) = 0;\n"
                       "};");
         ASSERT_EQUALS("", errout.str());
         ASSERT_EQUALS(true,  db != nullptr); // not null
@@ -2418,18 +2435,19 @@ private:
             const Scope *fred = db->findScopeByName("Fred");
             ASSERT_EQUALS(true, fred != nullptr);
             if (fred) {
-                CLASS_FUNC(func1, fred);
-                CLASS_FUNC(func2, fred);
-                CLASS_FUNC(func3, fred);
-                CLASS_FUNC(func4, fred);
-                CLASS_FUNC(func5, fred);
-                CLASS_FUNC(func6, fred);
-                CLASS_FUNC(func7, fred);
-                CLASS_FUNC(func8, fred);
-                CLASS_FUNC(func9, fred);
-                CLASS_FUNC(func10, fred);
-                CLASS_FUNC(func11, fred);
-                CLASS_FUNC(func12, fred);
+                CLASS_FUNC(func1, fred, true);
+                CLASS_FUNC(func2, fred, true);
+                CLASS_FUNC(func3, fred, true);
+                CLASS_FUNC(func4, fred, true);
+                CLASS_FUNC(func5, fred, true);
+                CLASS_FUNC(func6, fred, true);
+                CLASS_FUNC(func7, fred, true);
+                CLASS_FUNC(func8, fred, true);
+                CLASS_FUNC(func9, fred, true);
+                CLASS_FUNC(func10, fred, true);
+                CLASS_FUNC(func11, fred, true);
+                CLASS_FUNC(func12, fred, true);
+                CLASS_FUNC(func13, fred, false);
             }
         }
     }
@@ -2453,7 +2471,7 @@ private:
             const Scope *b = db->findScopeByName("B");
             ASSERT_EQUALS(true, b != nullptr);
             if (b) {
-                CLASS_FUNC(B, b);
+                CLASS_FUNC(B, b, true);
             }
         }
     }

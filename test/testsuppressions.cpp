@@ -342,7 +342,7 @@ private:
         ASSERT_EQUALS(false, !suppressions.getUnmatchedGlobalSuppressions(false).empty());
     }
 
-    void suppressionWithRelativePaths()  {
+    void suppressionWithRelativePaths() {
         // Clear the error log
         errout.str("");
 
