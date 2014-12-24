@@ -313,6 +313,12 @@ public:
     void isExpandedMacro(bool m) {
         setFlag(fIsExpandedMacro, m);
     }
+    bool isCast() const {
+        return getFlag(fIsCast);
+    }
+    void isCast(bool c) {
+        setFlag(fIsCast, c);
+    }
     bool isAttributeConstructor() const {
         return getFlag(fIsAttributeConstructor);
     }
@@ -348,6 +354,12 @@ public:
     }
     void isAttributeConst(bool value) {
         setFlag(fIsAttributeConst, value);
+    }
+    bool isAttributeNoreturn() const {
+        return getFlag(fIsAttributeNoreturn);
+    }
+    void isAttributeNoreturn(bool value) {
+        setFlag(fIsAttributeNoreturn, value);
     }
     bool isAttributeNothrow() const {
         return getFlag(fIsAttributeNothrow);
@@ -753,14 +765,16 @@ private:
         fIsLong                 = (1 << 3),
         fIsStandardType         = (1 << 4),
         fIsExpandedMacro        = (1 << 5),
-        fIsAttributeConstructor = (1 << 6),  // __attribute__((constructor)) __attribute__((constructor(priority)))
-        fIsAttributeDestructor  = (1 << 7),  // __attribute__((destructor))  __attribute__((destructor(priority)))
-        fIsAttributeUnused      = (1 << 8),  // __attribute__((unused))
-        fIsAttributePure        = (1 << 9),  // __attribute__((pure))
-        fIsAttributeConst       = (1 << 10), // __attribute__((const))
-        fIsAttributeNothrow     = (1 << 11), // __attribute__((nothrow))
-        fIsDeclspecNothrow      = (1 << 12), // __declspec(nothrow)
-        fIsAttributeUsed        = (1 << 13)  // __attribute__((used))
+        fIsCast                 = (1 << 6),
+        fIsAttributeConstructor = (1 << 7),  // __attribute__((constructor)) __attribute__((constructor(priority)))
+        fIsAttributeDestructor  = (1 << 8),  // __attribute__((destructor))  __attribute__((destructor(priority)))
+        fIsAttributeUnused      = (1 << 9),  // __attribute__((unused))
+        fIsAttributePure        = (1 << 10), // __attribute__((pure))
+        fIsAttributeConst       = (1 << 11), // __attribute__((const))
+        fIsAttributeNoreturn    = (1 << 12), // __attribute__((noreturn)) __declspec(noreturn)
+        fIsAttributeNothrow     = (1 << 13), // __attribute__((nothrow))
+        fIsDeclspecNothrow      = (1 << 14), // __declspec(nothrow)
+        fIsAttributeUsed        = (1 << 15)  // __attribute__((used))
     };
 
     unsigned int _flags;

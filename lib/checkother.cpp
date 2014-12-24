@@ -1189,7 +1189,23 @@ void CheckOther::checkUnreachableCode()
                             }
                         }
                     }
-                    if (!labelInFollowingLoop)
+
+                    // hide FP for statements that just hide compiler warnings about unused function arguments
+                    bool silencedCompilerWarningOnly = false;
+                    const Token *silencedWarning = secondBreak;
+                    for (;;) {
+                        if (Token::Match(silencedWarning, "( void ) %var% ;")) {
+                            silencedWarning = silencedWarning->tokAt(5);
+                            continue;
+                        } else if (silencedWarning && silencedWarning == scope->classEnd)
+                            silencedCompilerWarningOnly = true;
+
+                        break;
+                    }
+                    if (silencedWarning)
+                        secondBreak = silencedWarning;
+
+                    if (!labelInFollowingLoop && !silencedCompilerWarningOnly)
                         unreachableCodeError(secondBreak, inconclusive);
                     tok = Token::findmatch(secondBreak, "[}:]");
                 } else
@@ -1717,8 +1733,8 @@ void CheckOther::checkIncompleteStatement()
             if (Token::Match(tok->next(), "%num% [,.]"))
                 continue;
 
-            // No warning for [;{}] 0 ;
-            if (Token::Match(tok, "[;{}] 0 ;"))
+            // No warning for [;{}] (void *) 0 ;
+            if (Token::Match(tok, "[;{}] 0 ;") && tok->next()->isCast())
                 continue;
 
             // bailout if there is a "? :" in this statement
