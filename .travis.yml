@@ -8,7 +8,7 @@ env:
   global:
 #   unfortunately we need this to stay within 50min timelimit given by travis.
 #   this also turns off the debug/warning cxxflags
-    - CXXFLAGS="-O2 -march=native -mtune=native -Wunreachable-code"
+    - CXXFLAGS="-O2 -march=native -Wunreachable-code -D_GLIBCXX_DEBUG"
   matrix:
 #    special CXXFLAGS for maximum speed, overrides global CXXFLAGS, CHECK_CLANG is the var that controls if we download and check clang in that travis job
     - SRCDIR=build VERIFY=1 STATUS=1
