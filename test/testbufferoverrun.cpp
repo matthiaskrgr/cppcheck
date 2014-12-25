@@ -190,6 +190,7 @@ private:
         TEST_CASE(array_index_string_literal);
         TEST_CASE(array_index_same_struct_and_var_name); // #4751 - not handled well when struct name and var name is same
         TEST_CASE(array_index_valueflow);
+        TEST_CASE(array_index_function_parameter);
 
         TEST_CASE(buffer_overrun_1_standard_functions);
         TEST_CASE(buffer_overrun_1_posix_functions);
@@ -2147,6 +2148,19 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void array_index_function_parameter() {
+        check("void f(char a[10]) {\n"
+              "  a[20] = 0;\n" // <- cppcheck warn here even though it's not a definite access out of bounds
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (error) Array 'a[10]' accessed at index 20, which is out of bounds.\n", errout.str());
+
+        check("void f(char a[10]) {\n" // #6353 - reassign 'a'
+              "  a += 4;\n"
+              "  a[-1] = 0;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void buffer_overrun_1_posix_functions() {
         checkposix("void f(int fd)\n"
                    "{\n"
@@ -2948,13 +2962,13 @@ private:
               "    char a[10];\n"
               "    char *p = a + 100;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (portability) Undefined behaviour: Pointer arithmetic result does not point into or just past the end of the array.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (portability) Undefined behaviour. Pointer arithmetic 'a+100' result is out of bounds.\n", errout.str());
 
         check("void f() {\n"
               "    char a[10];\n"
               "    return a + 100;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (portability) Undefined behaviour: Pointer arithmetic result does not point into or just past the end of the array.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (portability) Undefined behaviour. Pointer arithmetic 'a+100' result is out of bounds.\n", errout.str());
 
         check("void f() {\n" // #6350 - fp when there is cast of buffer
               "  wchar_t buf[64];\n"
@@ -2969,7 +2983,7 @@ private:
               "    p += 100;\n"
               "    free(p);"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (portability) Undefined behaviour: Pointer arithmetic result does not point into or just past the end of the buffer.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (portability) Undefined behaviour. Pointer arithmetic 'p+100' result is out of bounds.\n", errout.str());
 
         check("void f() {\n"
               "    char *p = malloc(10);\n"
@@ -3003,7 +3017,7 @@ private:
               "    char x[10];\n"
               "    return x-1;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (portability) Undefined behaviour: Pointer arithmetic result does not point into or just past the end of the array.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (portability) Undefined behaviour. Pointer arithmetic 'x-1' result is out of bounds.\n", errout.str());
     }
 
     void sprintf1() {
