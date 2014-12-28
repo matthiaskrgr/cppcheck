@@ -179,9 +179,16 @@ void CheckBufferOverrun::pointerOutOfBoundsError(const Token *tok, const Token *
     // cause bad behaviour on most implementations. people create out
     // of bounds pointers by intention.
     const std::string expr(tok ? tok->expressionString() : std::string(""));
-    std::string errmsg("Undefined behaviour. Pointer arithmetic '" + expr + "' result is out of bounds");
-    if (index && !index->isNumber())
-        errmsg += " when " + index->expressionString() + " is " + MathLib::toString(indexvalue);
+    std::string errmsg;
+    if (index && !index->isNumber()) {
+        errmsg = "Undefined behaviour, when '" +
+                 index->expressionString() +
+                 "' is " +
+                 MathLib::toString(indexvalue) +
+                 " the pointer arithmetic '" + expr + "' is out of bounds";
+    } else {
+        errmsg = "Undefined behaviour, pointer arithmetic '" + expr + "' is out of bounds";
+    }
     std::string verbosemsg(errmsg + ". From chapter 6.5.6 in the C specification:\n"
                            "\"When an expression that has integer type is added to or subtracted from a pointer, ..\" and then \"If both the pointer operand and the result point to elements of the same array object, or one past the last element of the array object, the evaluation shall not produce an overflow; otherwise, the behavior is undefined.\"");
     reportError(tok, Severity::portability, "pointerOutOfBounds", errmsg + ".\n" + verbosemsg);
@@ -868,9 +875,13 @@ void CheckBufferOverrun::checkScope(const Token *tok, const ArrayInfo &arrayInfo
                     index = tok->astParent()->astOperand2();
                 else
                     index = tok->astParent()->astOperand1();
-                const ValueFlow::Value *value = index ? index->getMaxValue(false) : nullptr;
-                if (value && (value->intvalue < 0 || value->intvalue > arrayInfo.num(0)))
-                    pointerOutOfBoundsError(tok->astParent(), index, value->intvalue);
+                if (index) {
+                    const ValueFlow::Value *value = index->getValueGE(arrayInfo.num(0) + 1U, _settings);
+                    if (!value)
+                        value = index->getValueLE(-1, _settings);
+                    if (value)
+                        pointerOutOfBoundsError(tok->astParent(), index, value->intvalue);
+                }
             }
 
             else if (isPortabilityEnabled && tok->astParent() && tok->astParent()->str() == "-") {
@@ -878,6 +889,8 @@ void CheckBufferOverrun::checkScope(const Token *tok, const ArrayInfo &arrayInfo
                 if (var && var->isArray()) {
                     const Token *index = tok->astParent()->astOperand2();
                     const ValueFlow::Value *value = index ? index->getValueGE(1,_settings) : nullptr;
+                    if (!value)
+                        value = index->getValueLE(-1 - arrayInfo.num(0), _settings);
                     if (value)
                         pointerOutOfBoundsError(tok->astParent(), index, value->intvalue);
                 }
