@@ -847,7 +847,7 @@ void CheckStl::if_find()
                         else if (Token::Match(decl, "%type% >")) {
                             decl = decl->tokAt(2);
                             if (warning && (Token::Match(decl, "* &| %varid%", varid) ||
-                                            Token::Match(decl, "&| %varid% [ ]| %any% ]| ", varid)))
+                                            Token::Match(decl, "&| %varid% [ ]| %any% ]|", varid)))
                                 if_findError(tok, false);
                         }
 
@@ -858,7 +858,7 @@ void CheckStl::if_find()
                     else if (performance && var->isStlStringType()) {
                         decl = decl->next();
                         if (Token::Match(decl, "* &| %varid%", varid) ||
-                            Token::Match(decl, "&| %varid% [ ]| %any% ]| ", varid))
+                            Token::Match(decl, "&| %varid% [ ]| %any% ]|", varid))
                             if_findError(tok, true);
                     }
                 }
@@ -1327,8 +1327,8 @@ void CheckStl::checkAutoPointer()
                         autoPointerError(tok->tokAt(2));
                     }
                 }
-            } else if ((Token::Match(tok, "%var% = new %type% ") && hasArrayEnd(tok)) ||
-                       (Token::Match(tok, "%var% . reset ( new %type% ") && hasArrayEndParen(tok))) {
+            } else if ((Token::Match(tok, "%var% = new %type%") && hasArrayEnd(tok)) ||
+                       (Token::Match(tok, "%var% . reset ( new %type%") && hasArrayEndParen(tok))) {
                 std::set<unsigned int>::const_iterator iter = autoPtrVarId.find(tok->varId());
                 if (iter != autoPtrVarId.end()) {
                     autoPointerArrayError(tok);

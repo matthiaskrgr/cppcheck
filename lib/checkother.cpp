@@ -245,7 +245,9 @@ void CheckOther::clarifyCalculation()
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
             // ? operator where lhs is arithmetical expression
-            if (tok->str() != "?" || !tok->astOperand1() || !tok->astOperand1()->isArithmeticalOp() || !tok->astOperand1()->isCalculation())
+            if (tok->str() != "?" || !tok->astOperand1() || !tok->astOperand1()->isCalculation())
+                continue;
+            if (!tok->astOperand1()->isArithmeticalOp() && tok->astOperand1()->type() != Token::eBitOp)
                 continue;
 
             // Is code clarified by parentheses already?
@@ -1152,7 +1154,7 @@ void CheckOther::checkUnreachableCode()
             } else if (Token::Match(tok, "goto %any% ;")) {
                 secondBreak = tok->tokAt(3);
                 labelName = tok->next();
-            } else if (Token::Match(tok, "%var% (") && _settings->library.isnoreturn(tok->str()) && tok->strAt(-1) != ".") {
+            } else if (Token::Match(tok, "%var% (") && (_settings->library.isnoreturn(tok->str()) || (tok->function() && tok->function()->isAttributeNoreturn())) && tok->strAt(-1) != ".") {
                 if ((!tok->function() || (tok->function()->token != tok && tok->function()->tokenDef != tok)) && tok->linkAt(1)->strAt(1) != "{")
                     secondBreak = tok->linkAt(1)->tokAt(2);
             }

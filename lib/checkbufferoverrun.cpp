@@ -889,7 +889,7 @@ void CheckBufferOverrun::checkScope(const Token *tok, const ArrayInfo &arrayInfo
                 if (var && var->isArray()) {
                     const Token *index = tok->astParent()->astOperand2();
                     const ValueFlow::Value *value = index ? index->getValueGE(1,_settings) : nullptr;
-                    if (!value)
+                    if (index && !value)
                         value = index->getValueLE(-1 - arrayInfo.num(0), _settings);
                     if (value)
                         pointerOutOfBoundsError(tok->astParent(), index, value->intvalue);
@@ -925,7 +925,7 @@ void CheckBufferOverrun::checkScope(const Token *tok, const ArrayInfo &arrayInfo
                         const Token *tok2 = tok->next()->link()->next();
                         for (; tok2; tok2 = tok2->next()) {
                             if (tok2->varId() == tok->tokAt(2)->varId()) {
-                                if (!Token::Match(tok2, "%varid% [ %any% ]  = 0 ;", tok->tokAt(2)->varId())) {
+                                if (!Token::Match(tok2, "%varid% [ %any% ] = 0 ;", tok->tokAt(2)->varId())) {
                                     terminateStrncpyError(tok, tok->strAt(2));
                                 }
 
@@ -999,11 +999,11 @@ void CheckBufferOverrun::checkScope(const Token *tok, const ArrayInfo &arrayInfo
 //---------------------------------------------------------------------------
 bool CheckBufferOverrun::isArrayOfStruct(const Token* tok, int &position)
 {
-    if (Token::Match(tok->next(), "%var% [ %num% ] ")) {
+    if (Token::Match(tok->next(), "%var% [ %num% ]")) {
         tok = tok->tokAt(4);
         int i = 1;
         for (;;) {
-            if (Token::Match(tok->next(), "[ %num% ] ")) {
+            if (Token::Match(tok->next(), "[ %num% ]")) {
                 i++;
                 tok = tok->tokAt(4);
             } else

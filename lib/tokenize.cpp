@@ -2069,9 +2069,17 @@ void Tokenizer::arraySize()
             tok = tok->next();
             Token *end = tok->linkAt(3);
             for (Token *tok2 = tok->tokAt(4); tok2 && tok2 != end; tok2 = tok2->next()) {
-                if (Token::Match(tok2, "{|(|["))
+                if (tok2->link() && Token::Match(tok2, "{|(|[|<")) {
+                    if (tok2->str() == "[" && tok2->link()->strAt(1) == "=") { // designated initializer
+                        if (Token::Match(tok2, "[ %num% ]"))
+                            sz = std::max(sz, (unsigned int)MathLib::toULongNumber(tok2->strAt(1)) + 1U);
+                        else {
+                            sz = 0;
+                            break;
+                        }
+                    }
                     tok2 = tok2->link();
-                else if (tok2->str() == "<") { // Bailout. TODO: When link() supports <>, this bailout becomes unnecessary
+                } else if (tok2->str() == "<") { // Bailout. TODO: When link() supports <>, this bailout becomes unnecessary
                     sz = 0;
                     break;
                 } else if (tok2->str() == ",") {
@@ -2500,7 +2508,7 @@ static void setVarIdClassFunction(const std::string &classname,
             continue;
         if (Token::Match(tok2->tokAt(-4), "%var% :: %var% ::")) // Currently unsupported
             continue;
-        if (Token::Match(tok2->tokAt(-2), "!!this . "))
+        if (Token::Match(tok2->tokAt(-2), "!!this ."))
             continue;
 
         const std::map<std::string,unsigned int>::const_iterator it = varlist.find(tok2->str());
@@ -4259,7 +4267,7 @@ void Tokenizer::simplifyFlowControl()
 
             } else if (Token::Match(tok,"return|goto") ||
                        (Token::Match(tok->previous(), "[;{}] %var% (") &&
-                        _settings->library.isnoreturn(tok->str())) ||
+                        (_settings->library.isnoreturn(tok->str()) || (tok->function() && tok->function()->isAttributeNoreturn()))) ||
                        (tok->str() == "throw" && !isC())) {
                 //TODO: ensure that we exclude user-defined 'exit|abort|throw', except for 'noreturn'
                 //catch the first ';'
