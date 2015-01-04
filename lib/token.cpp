@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -783,6 +783,19 @@ Token* Token::nextArgumentBeforeCreateLinks2() const
             if (temp)
                 tok = temp;
         } else if (Token::Match(tok, ")|;"))
+            return 0;
+    }
+    return 0;
+}
+
+Token* Token::nextTemplateArgument() const
+{
+    for (const Token* tok = this; tok; tok = tok->next()) {
+        if (tok->str() == ",")
+            return tok->next();
+        else if (tok->link() && Token::Match(tok, "(|{|[|<"))
+            tok = tok->link();
+        else if (Token::Match(tok, ">|;"))
             return 0;
     }
     return 0;

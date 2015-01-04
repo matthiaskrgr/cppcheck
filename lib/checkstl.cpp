@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -298,10 +298,6 @@ void CheckStl::mismatchingContainers()
 
 void CheckStl::stlOutOfBounds()
 {
-    // THIS ARRAY MUST BE ORDERED ALPHABETICALLY
-    static const char* const stl_bounded_container [] = {
-        "array", "basic_string", "deque", "string", "vector", "wstring"
-    };
     const SymbolDatabase* const symbolDatabase = _tokenizer->getSymbolDatabase();
 
     // Scan through all scopes..
@@ -318,37 +314,52 @@ void CheckStl::stlOutOfBounds()
         } else
             tok = tok->next();
 
+        if (!tok)
+            continue;
+        tok = tok->next();
+
         // check if the for loop condition is wrong
-        if (Token::Match(tok, ";|( %var% <= %var% . size|length ( ) ;|)|%oror%")) {
+        if (Token::Match(tok, "%var% <= %var% . %var% ( ) ;|)|%oror%")) {
             // Is it a vector?
-            const Variable *container = tok->tokAt(3)->variable();
+            const Variable *var = tok->tokAt(2)->variable();
+            if (!var)
+                continue;
+
+            const Library::Container* container = _settings->library.detectContainer(var->typeStartToken());
             if (!container)
                 continue;
-            if (!container->isStlType(stl_bounded_container))
+
+            Library::Container::Yield yield = container->getYield(tok->strAt(4));
+            if (yield != Library::Container::SIZE)
                 continue;
 
             // variable id for loop variable.
-            const unsigned int numId = tok->next()->varId();
+            const unsigned int numId = tok->varId();
 
             // variable id for the container variable
-            const unsigned int declarationId = container->declarationId();
+            const unsigned int declarationId = var->declarationId();
 
             for (const Token *tok3 = i->classStart; tok3 && tok3 != i->classEnd; tok3 = tok3->next()) {
                 if (tok3->varId() == declarationId) {
-                    if (Token::Match(tok3->next(), ". size|length ( )"))
-                        break;
-                    else if (Token::Match(tok3->next(), "[ %varid% ]", numId))
-                        stlOutOfBoundsError(tok3, tok3->strAt(2), tok3->str(), false);
-                    else if (Token::Match(tok3->next(), ". at ( %varid% )", numId))
-                        stlOutOfBoundsError(tok3, tok3->strAt(4), tok3->str(), true);
+                    tok3 = tok3->next();
+                    if (Token::Match(tok3, ". %var% ( )")) {
+                        Library::Container::Yield yield = container->getYield(tok3->strAt(1));
+                        if (yield == Library::Container::SIZE)
+                            break;
+                    } else if (container->arrayLike_indexOp && Token::Match(tok3, "[ %varid% ]", numId))
+                        stlOutOfBoundsError(tok3, tok3->strAt(1), var->name(), false);
+                    else if (Token::Match(tok3, ". %var% ( %varid% )", numId)) {
+                        Library::Container::Yield yield = container->getYield(tok3->strAt(1));
+                        if (yield == Library::Container::AT_INDEX)
+                            stlOutOfBoundsError(tok3, tok3->strAt(3), var->name(), true);
+                    }
                 }
             }
-            break;
+            continue;
         }
     }
 }
 
-// Error message for bad iterator usage..
 void CheckStl::stlOutOfBoundsError(const Token *tok, const std::string &num, const std::string &var, bool at)
 {
     if (at)
@@ -739,27 +750,17 @@ void CheckStl::stlBoundariesError(const Token *tok, const std::string &container
                 "One should use operator!= instead to compare iterators.");
 }
 
-static bool if_findCompare(const Token * const tokBack, bool str)
+static bool if_findCompare(const Token * const tokBack)
 {
-    const Token *tok = tokBack;
-    while (tok && tok->str() == ")") {
-        tok = tok->next();
-
-        if (Token::Match(tok, ") !!{") &&
-            tok->link()->previous() &&
-            (Token::Match(tok->link()->previous(),",|==|!=") ||
-             tok->link()->previous()->isName()))
-            return true;
-    }
-
-    if (Token::Match(tok,",|==|!="))
+    const Token *tok = tokBack->astParent();
+    if (!tok)
         return true;
-    if (tok) {
-        if (str && tok->isComparisonOp())
-            return true;
-        if (tok->isArithmeticalOp()) // result is used in some calculation
-            return true;  // TODO: check if there is a comparison of the result somewhere
-    }
+    if (tok->isComparisonOp())
+        return true;
+    if (tok->isArithmeticalOp()) // result is used in some calculation
+        return true;  // TODO: check if there is a comparison of the result somewhere
+    if (tok->isAssignmentOp())
+        return if_findCompare(tok); // Go one step upwards in the AST
     return false;
 }
 
@@ -781,48 +782,30 @@ void CheckStl::if_find()
             tok = tok->next();
 
         for (const Token* const end = tok->link(); tok != end; tok = (tok == end) ? end : tok->next()) {
-            if (Token::Match(tok, "&&|(|%oror%"))
-                tok = tok->next();
-            else
-                continue;
-
-            while (tok->str() == "(")
-                tok = tok->next();
-
-            if (tok->str() == "!")
-                tok = tok->next();
-
             if (Token::Match(tok, "%var% . find (")) {
                 const Variable *var = tok->variable();
                 if (var) {
-                    const bool isString = var->isStlStringType() && !var->isArrayOrPointer();
-                    if (if_findCompare(tok->linkAt(3), isString))
+                    if (if_findCompare(tok->tokAt(3)))
                         continue;
 
                     // Is the variable a std::string or STL container?
                     const Token * decl = var->typeStartToken();
-                    const unsigned int varid = tok->varId();
                     // stl container
-                    if (warning && Token::Match(decl, "std :: %var% < %type% > &| %varid%", varid))
+                    if (warning && Token::Match(decl, "std :: %var% <") && Token::Match(decl->linkAt(3), "> !!::"))
                         if_findError(tok, false);
-                    else if (performance && isString)
+                    else if (performance && var->isStlStringType())
                         if_findError(tok, true);
                 }
             }
 
             //check also for vector-like or pointer containers
-            else if (Token::Match(tok, "* %var%") || Token::Match(tok, "%var% [")) {
-                // goto %var%
-                if (tok->str() == "*")
-                    tok = tok->next();
+            else if (tok->variable() && tok->astParent() && (tok->astParent()->str() == "*" || tok->astParent()->str() == "[")) {
+                const Token *tok2 = tok->astParent();
 
-                const Token *tok2 = tok->next();
-                if (tok2->str() == "[")
-                    tok2 = tok2->link()->next();
-
-                if (!Token::simpleMatch(tok2, ". find ("))
+                if (!Token::simpleMatch(tok2->astParent(), ". find ("))
                     continue;
-                if (if_findCompare(tok2->linkAt(2), false))
+
+                if (if_findCompare(tok2->astParent()->tokAt(2)))
                     continue;
 
                 const Variable *var = tok->variable();
@@ -866,7 +849,7 @@ void CheckStl::if_find()
 
             else if (warning && Token::Match(tok, "std :: find|find_if (")) {
                 // check that result is checked properly
-                if (!if_findCompare(tok->linkAt(3), false)) {
+                if (!if_findCompare(tok->tokAt(3))) {
                     if_findError(tok, false);
                 }
             }

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1748,29 +1748,12 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
         }
 
         // is there something like: ; "*((&var ..expr.. ="  => the variable is assigned
-        if (vartok->previous()->str() == "&") {
-            const Token *tok2 = vartok->tokAt(-2);
-            if (tok2 && (tok2->isConstOp() || Token::Match(tok2, "[;{}(=]")))
-                return false; // address of
-            if (tok2 && tok2->str() == ")")
-                tok2 = tok2->link()->previous();
-            if (Token::Match(tok2,"[()] ( %type% *| ) &") && tok2->tokAt(2)->varId() == 0)
-                return false; // cast
-            while (tok2 && tok2->str() == "(")
-                tok2 = tok2->previous();
-            while (tok2 && tok2->str() == "*")
-                tok2 = tok2->previous();
-            if (Token::Match(tok2, "[;{}] *")) {
-                // there is some such code before vartok: "[*]+ [(]* &"
-                // determine if there is a = after vartok
-                for (tok2 = vartok; tok2; tok2 = tok2->next()) {
-                    if (Token::Match(tok2, "[;{}]"))
-                        break;
-                    if (tok2->str() == "=")
-                        return false;
-                }
-            }
-        }
+        if (vartok->previous()->str() == "&" && !vartok->previous()->astOperand2())
+            return false;
+
+        // bailout to avoid fp for 'int x = 2 + x();' where 'x()' is a unseen preprocessor macro (seen in linux)
+        if (!pointer && vartok->next() && vartok->next()->str() == "(")
+            return false;
 
         if (vartok->previous()->str() != "&" || !Token::Match(vartok->tokAt(-2), "[(,=?:]")) {
             if (alloc && vartok->previous()->str() == "*") {

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1933,6 +1933,11 @@ private:
                        "    f();\n"
                        "}");
         ASSERT_EQUALS("[test.cpp:4]: (error) Uninitialized variable: f\n", errout.str());
+
+        checkUninitVar2("void foo() {\n"
+                        "    int f = 1 + f();\n"
+                        "}");
+        ASSERT_EQUALS("", errout.str());
 
         // calling noreturn function..
         checkUninitVar("int foo(int a) {\n"

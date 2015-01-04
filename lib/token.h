@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -648,6 +648,13 @@ public:
      * Returns 0, if there is no next argument.
      */
     Token* nextArgumentBeforeCreateLinks2() const;
+
+    /**
+    * @return the first token of the next template argument. Does only work on template argument
+    * lists. Requires that Tokenizer::createLinks2() has been called before.
+    * Returns 0, if there is no next argument.
+    */
+    Token* nextTemplateArgument() const;
 
     /**
      * Returns the closing bracket of opening '<'. Should only be used if link()
