@@ -816,6 +816,18 @@ private:
                "}";
         ASSERT_EQUALS(true, testValueOfX(code, 5U, 2));
 
+        code = "void f(int mode) {\n"
+               "    struct ABC *x;\n"
+               "\n"
+               "    if (mode) { x = &y; }\n"
+               "    else { x = NULL; }\n"
+               "\n"
+               "    if (!x) exit(1);\n"
+               "\n"
+               "    a = x->a;\n" // <- x can't be 0
+               "}";
+        ASSERT_EQUALS(false, testValueOfX(code, 9U, 0));
+
         // multivariables
         code = "void f(int a) {\n"
                "    int x = a;\n"
@@ -1288,6 +1300,25 @@ private:
                "  a = x++;\n"
                "}\n";
         TODO_ASSERT_EQUALS(true, false, testValueOfX(code, 4U, 20));
+
+        code = "void f() {\n"
+               "  int x;\n"
+               "  for (x = 0; x < 5; x++) {}\n"
+               "  if (x == 5) {\n"
+               "    panic();\n"
+               "  }\n"
+               "  a = x;\n" // <- x can't be 5
+               "}";
+        ASSERT_EQUALS(false, testValueOfX(code, 7U, 5));
+
+        code = "void f() {\n"
+               "  int x;\n"
+               "  for (x = 0; x < 5; x++) {}\n"
+               "  if (x < 5) {}\n"
+               "  else return;\n"
+               "  a = x;\n" // <- x can't be 5
+               "}";
+        ASSERT_EQUALS(false, testValueOfX(code, 6U, 5));
 
         // hang
         code = "void f() {\n"

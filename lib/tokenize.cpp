@@ -3877,7 +3877,8 @@ void Tokenizer::printDebugOutput() const
                 _symbolDatabase->printOut("Symbol database");
         }
 
-        list.front()->printAst(_settings->_verbose, _settings->_xml, std::cout);
+        if (_settings->_verbose)
+            list.front()->printAst(_settings->_verbose, _settings->_xml, std::cout);
 
         list.front()->printValueFlow(_settings->_xml, std::cout);
 
@@ -9414,6 +9415,8 @@ void Tokenizer::simplifyAssignmentBlock()
 {
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         if (Token::Match(tok, "[;{}] %var% = ( {")) {
+            const std::string &varname = tok->next()->str();
+
             // goto the "} )"
             unsigned int indentlevel = 0;
             Token *tok2 = tok;
@@ -9424,7 +9427,9 @@ void Tokenizer::simplifyAssignmentBlock()
                     if (indentlevel <= 2)
                         break;
                     --indentlevel;
-                }
+                } else if (indentlevel == 2 && tok2->str() == varname && Token::Match(tok2->previous(), "%type%|*"))
+                    // declaring variable in inner scope with same name as lhs variable
+                    break;
             }
             if (indentlevel == 2 && Token::simpleMatch(tok2, "} )")) {
                 tok2 = tok2->tokAt(-3);

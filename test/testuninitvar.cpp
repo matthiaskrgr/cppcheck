@@ -303,6 +303,12 @@ private:
                        "}");
         ASSERT_EQUALS("", errout.str());
 
+        checkUninitVar("static void foo() {\n"
+                       "    int x, y;\n"
+                       "    x = ((y) = 10);\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+
         // Ticket #3597
         checkUninitVar("int f() {\n"
                        "    int a;\n"
@@ -904,6 +910,20 @@ private:
                         "  { }\n"
                         "}");
         ASSERT_EQUALS("", errout.str());
+
+        // ({ .. })
+        {
+            const char code[] = "void f() {\n"
+                                "    int x;\n"
+                                "    if (abc) { x = 123; }\n"
+                                "    else { a = ({b=c;}); x = 456; }\n"
+                                "    ++x;\n"
+                                "}";
+            checkUninitVar(code);
+            ASSERT_EQUALS("", errout.str());
+            checkUninitVar2(code);
+            ASSERT_EQUALS("", errout.str());
+        }
 
         // Ticket #3098 - False negative uninitialized variable
         checkUninitVar("void f()\n"

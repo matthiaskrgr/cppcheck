@@ -376,7 +376,7 @@ private:
             if (tok2->varId() &&
                 !Token::Match(tok2->previous(), "&|::") &&
                 !Token::simpleMatch(tok2->tokAt(-2), "& (") &&
-                tok2->strAt(1) != "=") {
+                !Token::Match(tok2->tokAt(1), ")| =")) {
                 // Multiple assignments..
                 if (Token::Match(tok2->next(), ".|[")) {
                     const Token * tok3 = tok2;
@@ -1421,6 +1421,11 @@ bool CheckUninitVar::checkScopeForVariable(const Scope* scope, const Token *tok,
 
         // TODO: handle loops, try, etc
         if (Token::simpleMatch(tok, ") {") || Token::Match(tok, "%var% {")) {
+            return true;
+        }
+
+        // bailout if there is ({
+        if (Token::simpleMatch(tok, "( {")) {
             return true;
         }
 
