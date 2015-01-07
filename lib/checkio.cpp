@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -88,7 +88,7 @@ struct Filepointer {
     unsigned int op_indent;
     enum AppendMode { UNKNOWN_AM, APPEND, APPEND_EX };
     AppendMode append_mode;
-    Filepointer(OpenMode mode_ = UNKNOWN_OM)
+    explicit Filepointer(OpenMode mode_ = UNKNOWN_OM)
         : mode(mode_), mode_indent(0), lastOperation(NONE), op_indent(0), append_mode(UNKNOWN_AM) {
     }
 };
@@ -490,7 +490,7 @@ static bool findFormat(unsigned int arg, const Token *firstArg,
 }
 
 // Utility function returning whether iToTest equals iTypename or iOptionalPrefix+iTypename
-inline bool typesMatch(const std::string& iToTest, const std::string& iTypename, const std::string& iOptionalPrefix = "std::")
+static inline bool typesMatch(const std::string& iToTest, const std::string& iTypename, const std::string& iOptionalPrefix = "std::")
 {
     return (iToTest == iTypename) || (iToTest == iOptionalPrefix + iTypename);
 }
@@ -1427,8 +1427,8 @@ CheckIO::ArgumentInfo::ArgumentInfo(const Token * tok, const Settings *settings)
                     tok1 = tok1->link();
 
                 // check for some common well known functions
-                else if ((Token::Match(tok1->previous(), "%var% . size|empty|c_str ( )") && isStdContainer(tok1->previous())) ||
-                         (Token::Match(tok1->previous(), "] . size|empty|c_str ( )") && Token::Match(tok1->previous()->link()->previous(), "%var%") && isStdContainer(tok1->previous()->link()->previous()))) {
+                else if ((Token::Match(tok1->previous(), "%var% . size|empty|c_str ( ) [,)]") && isStdContainer(tok1->previous())) ||
+                         (Token::Match(tok1->previous(), "] . size|empty|c_str ( ) [,)]") && Token::Match(tok1->previous()->link()->previous(), "%var%") && isStdContainer(tok1->previous()->link()->previous()))) {
                     tempToken = new Token(0);
                     tempToken->fileIndex(tok1->fileIndex());
                     tempToken->linenr(tok1->linenr());
@@ -1549,6 +1549,20 @@ bool CheckIO::ArgumentInfo::isStdVectorOrString()
                 return true;
             }
         }
+    } else if (variableInfo->type()) {
+        const Scope * classScope = variableInfo->type()->classScope;
+        if (classScope) {
+            std::list<Function>::const_iterator functions;
+            for (functions = classScope->functionList.begin();
+                 functions != classScope->functionList.end(); ++functions) {
+                if (functions->name() == "operator[]") {
+                    if (Token::Match(functions->retDef, "%type% &")) {
+                        typeToken = functions->retDef;
+                        return true;
+                    }
+                }
+            }
+        }
     }
 
     return false;
@@ -1645,7 +1659,7 @@ void CheckIO::wrongPrintfScanfArgumentsError(const Token* tok,
         unsigned int numFunction)
 {
     Severity::SeverityType severity = numFormat > numFunction ? Severity::error : Severity::warning;
-    if (severity != Severity::error && !_settings->isEnabled("style"))
+    if (severity != Severity::error && !_settings->isEnabled("warning"))
         return;
 
     std::ostringstream errmsg;
@@ -1664,6 +1678,8 @@ void CheckIO::wrongPrintfScanfArgumentsError(const Token* tok,
 void CheckIO::wrongPrintfScanfPosixParameterPositionError(const Token* tok, const std::string& functionName,
         unsigned int index, unsigned int numFunction)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << functionName << ": ";
     if (index == 0) {
@@ -1676,6 +1692,8 @@ void CheckIO::wrongPrintfScanfPosixParameterPositionError(const Token* tok, cons
 
 void CheckIO::invalidScanfArgTypeError_s(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "%" << specifier << " in format string (no. " << numFormat << ") requires a \'";
     if (specifier[0] == 's')
@@ -1689,6 +1707,8 @@ void CheckIO::invalidScanfArgTypeError_s(const Token* tok, unsigned int numForma
 }
 void CheckIO::invalidScanfArgTypeError_int(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo, bool isUnsigned)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "%" << specifier << " in format string (no. " << numFormat << ") requires \'";
     if (specifier[0] == 'h') {
@@ -1731,6 +1751,8 @@ void CheckIO::invalidScanfArgTypeError_int(const Token* tok, unsigned int numFor
 }
 void CheckIO::invalidScanfArgTypeError_float(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "%" << specifier << " in format string (no. " << numFormat << ") requires \'";
     if (specifier[0] == 'l' && specifier[1] != 'l')
@@ -1747,6 +1769,8 @@ void CheckIO::invalidScanfArgTypeError_float(const Token* tok, unsigned int numF
 
 void CheckIO::invalidPrintfArgTypeError_s(const Token* tok, unsigned int numFormat, const ArgumentInfo* argInfo)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "%s in format string (no. " << numFormat << ") requires \'char *\' but the argument type is ";
     argumentType(errmsg, argInfo);
@@ -1755,6 +1779,8 @@ void CheckIO::invalidPrintfArgTypeError_s(const Token* tok, unsigned int numForm
 }
 void CheckIO::invalidPrintfArgTypeError_n(const Token* tok, unsigned int numFormat, const ArgumentInfo* argInfo)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "%n in format string (no. " << numFormat << ") requires \'int *\' but the argument type is ";
     argumentType(errmsg, argInfo);
@@ -1763,6 +1789,8 @@ void CheckIO::invalidPrintfArgTypeError_n(const Token* tok, unsigned int numForm
 }
 void CheckIO::invalidPrintfArgTypeError_p(const Token* tok, unsigned int numFormat, const ArgumentInfo* argInfo)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "%p in format string (no. " << numFormat << ") requires an address but the argument type is ";
     argumentType(errmsg, argInfo);
@@ -1804,6 +1832,8 @@ static void printfFormatType(std::ostream& os, const std::string& specifier, boo
 }
 void CheckIO::invalidPrintfArgTypeError_int(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "%" << specifier << " in format string (no. " << numFormat << ") requires ";
     printfFormatType(errmsg, specifier, true);
@@ -1814,6 +1844,8 @@ void CheckIO::invalidPrintfArgTypeError_int(const Token* tok, unsigned int numFo
 }
 void CheckIO::invalidPrintfArgTypeError_uint(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "%" << specifier << " in format string (no. " << numFormat << ") requires ";
     printfFormatType(errmsg, specifier, true);
@@ -1825,6 +1857,8 @@ void CheckIO::invalidPrintfArgTypeError_uint(const Token* tok, unsigned int numF
 
 void CheckIO::invalidPrintfArgTypeError_sint(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "%" << specifier << " in format string (no. " << numFormat << ") requires ";
     printfFormatType(errmsg, specifier, false);
@@ -1835,6 +1869,8 @@ void CheckIO::invalidPrintfArgTypeError_sint(const Token* tok, unsigned int numF
 }
 void CheckIO::invalidPrintfArgTypeError_float(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "%" << specifier << " in format string (no. " << numFormat << ") requires \'";
     if (specifier[0] == 'L')
@@ -1867,7 +1903,7 @@ void CheckIO::argumentType(std::ostream& os, const ArgumentInfo * argInfo)
                     os << type->str() << "::";
                     type = type->tokAt(2);
                 }
-                type->stringify(os, false, true);
+                type->stringify(os, false, true, false);
                 if (type->strAt(1) == "*" && !argInfo->element)
                     os << " *";
                 else if (argInfo->variableInfo && !argInfo->element && argInfo->variableInfo->isArray())
@@ -1883,7 +1919,7 @@ void CheckIO::argumentType(std::ostream& os, const ArgumentInfo * argInfo)
                 if (type->strAt(1) == "*" || argInfo->address)
                     os << " *";
                 os << " {aka ";
-                type->stringify(os, false, true);
+                type->stringify(os, false, true, false);
                 if (type->strAt(1) == "*" || argInfo->address)
                     os << " *";
                 os << "}";
@@ -1896,6 +1932,8 @@ void CheckIO::argumentType(std::ostream& os, const ArgumentInfo * argInfo)
 
 void CheckIO::invalidLengthModifierError(const Token* tok, unsigned int numFormat, const std::string& modifier)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
     std::ostringstream errmsg;
     errmsg << "'" << modifier << "' in format string (no. " << numFormat << ") is a length modifier and cannot be used without a conversion specifier.";
     reportError(tok, Severity::warning, "invalidLengthModifierError", errmsg.str());

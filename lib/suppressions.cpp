@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -267,9 +267,10 @@ bool Suppressions::isSuppressedLocal(const std::string &errorId, const std::stri
 
 std::list<Suppressions::SuppressionEntry> Suppressions::getUnmatchedLocalSuppressions(const std::string &file, bool unusedFunctionChecking) const
 {
+    (void)unusedFunctionChecking;
     std::list<SuppressionEntry> r;
     for (std::map<std::string, FileMatcher>::const_iterator i = _suppressions.begin(); i != _suppressions.end(); ++i) {
-        if (!unusedFunctionChecking && i->first == "unusedFunction")
+        if (i->first == "unusedFunction")
             continue;  // unusedFunction is not a "local" suppression
 
         std::map<std::string, std::map<unsigned int, bool> >::const_iterator f = i->second._files.find(file);

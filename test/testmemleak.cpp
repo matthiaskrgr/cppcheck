@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -253,11 +253,13 @@ private:
         TEST_CASE(allocfunc11);
         TEST_CASE(allocfunc12); // #3660: allocating and returning non-local pointer => not allocfunc
         TEST_CASE(allocfunc13); // Ticket #4494 and #4540 - class function
+        TEST_CASE(allocfunc14); // Use pointer before returning it
 
         TEST_CASE(throw1);
         TEST_CASE(throw2);
 
         TEST_CASE(linux_list_1);
+        TEST_CASE(linux_list_2);
 
         TEST_CASE(sizeof1);
 
@@ -330,6 +332,7 @@ private:
         TEST_CASE(tmpfile_function);
         TEST_CASE(fcloseall_function);
         TEST_CASE(file_functions);
+        TEST_CASE(posix_rewinddir);
         TEST_CASE(getc_function);
 
         TEST_CASE(open_function);
@@ -361,12 +364,11 @@ private:
         // #1879 non regression test case
         TEST_CASE(trac1879);
 
-        TEST_CASE(garbageCode);
-
         TEST_CASE(ptrptr);
 
         // test that the cfg files are configured correctly
         TEST_CASE(posixcfg);
+        TEST_CASE(posixcfg_mmap);
     }
 
     std::string getcode(const char code[], const char varname[], bool classfunc=false) {
@@ -408,8 +410,10 @@ private:
     void testgetcode() {
         // alloc;
         ASSERT_EQUALS(";;alloc;", getcode("int *a = malloc(100);", "a"));
+        TODO_ASSERT_EQUALS(";;alloc;", ";;alloccallfunc;", getcode("int *a = ::malloc(100);", "a"));
         ASSERT_EQUALS(";;alloc;", getcode("int *a = new int;", "a"));
         ASSERT_EQUALS(";;alloc;", getcode("int *a = new int[10];", "a"));
+        ASSERT_EQUALS(";;alloc;", getcode("int **a = new int*[10];", "a"));
         ASSERT_EQUALS(";;alloc;", getcode("int * const a = new int[10];", "a"));
         ASSERT_EQUALS(";;alloc;", getcode("const int * const a = new int[10];", "a"));
         ASSERT_EQUALS(";;alloc;", getcode("int i = open(a,b);", "i"));
@@ -452,7 +456,12 @@ private:
         ASSERT_EQUALS(";;if{}", getcode("char *s; if (a) { }", "s"));
         ASSERT_EQUALS(";;dealloc;ifv{}", getcode("FILE *f; if (fclose(f)) { }", "f"));
         ASSERT_EQUALS(";;if(!var){}else{}", getcode("char *s; if (!s) { } else { }", "s"));
-        ASSERT_EQUALS(";;if{}", getcode("char *s; if (a && s) { }", "s"));
+        TODO_ASSERT_EQUALS(";;ifv{}",";;if{}", getcode("char *s; if (a && s) { }", "s"));
+        ASSERT_EQUALS(";;ifv{}", getcode("char *s; if (s && a) { }", "s"));
+        ASSERT_EQUALS(";;;ifv{}", getcode("char *s; int a; if (a && s) { }", "s"));
+        ASSERT_EQUALS(";;;ifv{}", getcode("char *s; int a; if (s && a) { }", "s"));
+        ASSERT_EQUALS(";;ifv{}", getcode("char *s; if (a || s) { }", "s"));
+        ASSERT_EQUALS(";;ifv{}", getcode("char *s; if (s || a) { }", "s"));
         ASSERT_EQUALS(";;if(!var){}", getcode("char *s; if (a && !s) { }", "s"));
         ASSERT_EQUALS(";;ifv{}", getcode("char *s; if (foo(!s)) { }", "s"));
         ASSERT_EQUALS(";;;if{dealloc;};if{dealloc;return;}assign;returnuse;", getcode("char *buf, *tmp; tmp = realloc(buf, 40); if (!(tmp)) { free(buf); return; } buf = tmp; return buf;", "buf"));
@@ -554,6 +563,8 @@ private:
         ASSERT_EQUALS(";;;dealloc;assign;;", getcode(";int res; res = close(res);", "res"));
 
         ASSERT_EQUALS(";;dealloc;", getcode("int f; e |= fclose(f);", "f"));
+        ASSERT_EQUALS(";;dealloc;", getcode("int f; e += fclose(f);", "f"));
+        ASSERT_EQUALS(";;dealloc;", getcode("int f; foo(fclose(f));", "f"));
 
         // fcloseall..
         ASSERT_EQUALS(";;alloc;;", getcode("char *s; s = malloc(10); fcloseall();", "s"));
@@ -2656,6 +2667,20 @@ private:
               "   free(tmp);\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        check("int alloc(char **str) {\n"
+              "   *str = malloc(20);\n"
+              "   if (condition) { free(str); return -123; }\n"
+              "   return 0;\n"
+              "}\n"
+              "\n"
+              "void bar()\n"
+              "{\n"
+              "   char *p;\n"
+              "   if ((ret = alloc(&p)) != 0) return;\n"
+              "   free(p);\n"
+              "}");
+        ASSERT_EQUALS(std::string(""), errout.str());
     }
 
 
@@ -2803,6 +2828,19 @@ private:
         ASSERT_EQUALS("[test.cpp:11]: (error) Memory leak: a\n", errout.str());
     }
 
+    void allocfunc14() { // use pointer before returning it
+        check("static struct ABC * newabc() {\n"
+              "    struct ABC *abc = malloc(sizeof(struct ABC));\n"
+              "    init_abc(&abc->a);\n" // <- might take address
+              "    return abc;\n"
+              "}\n"
+              "\n"
+              "static void f() {\n"
+              "    struct ABC *abc = newabc();\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void throw1() {
         check("void foo()\n"
               "{\n"
@@ -2850,6 +2888,14 @@ private:
               "    func(&ab->a);\n"
               "}");
 
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void linux_list_2() { // #5993
+        check("void foo() {\n"
+              "    struct AB *ab = malloc(sizeof(struct AB));\n"
+              "    list_add_tail(&(ab->list));\n"
+              "}");
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -3665,6 +3711,14 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void posix_rewinddir() {
+        Settings settings;
+        settings.standards.posix = true;
+
+        check("void f(DIR *p) { rewinddir(p); }", &settings);
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void exit2() {
         check("void f()\n"
               "{\n"
@@ -4209,12 +4263,6 @@ private:
         ASSERT_EQUALS("[test.cpp:5]: (error) Memory leak: a\n", errout.str());
     }
 
-    void garbageCode() {
-        ASSERT_THROW(check("void h(int l) {\n"
-                           "    while\n" // Don't crash (#3870)
-                           "}"), InternalError);
-    }
-
     void ptrptr() {
         check("void f() {\n"
               "    char *p;\n"
@@ -4223,7 +4271,6 @@ private:
               "}");
         ASSERT_EQUALS("[test.cpp:5]: (error) Memory leak: p\n", errout.str());
     }
-
 
     // Test that posix.cfg is configured correctly
     void posixcfg() {
@@ -4267,6 +4314,13 @@ private:
               "}", &settings);
         ASSERT_EQUALS("[test.cpp:3]: (error) Resource leak: f\n", errout.str());
 
+        // strdupa allocates on the stack, no free() needed
+        check("void x()\n"
+              "{\n"
+              "    char *s = strdupa(\"Test\");\n"
+              "}", &settings);
+        ASSERT_EQUALS("", errout.str());
+
         LOAD_LIB_2(settings.library, "gtk.cfg");
 
         check("void f(char *a) {\n"
@@ -4276,6 +4330,54 @@ private:
               "    mktemp(s);\n"
               "}", &settings);
         ASSERT_EQUALS("[test.cpp:6]: (error) Memory leak: s\n", errout.str());
+    }
+
+    void posixcfg_mmap() {
+        Settings settings;
+        settings.standards.posix = true;
+        LOAD_LIB_2(settings.library, "posix.cfg");
+
+        // normal mmap
+        check("void f(int fd) {\n"
+              "    char *addr = mmap(NULL, 255, PROT_NONE, MAP_PRIVATE, fd, 0);\n"
+              "    munmap(addr, 255);\n"
+              "}", &settings);
+        ASSERT_EQUALS("", errout.str());
+
+        // mmap64 - large file support
+        check("void f(int fd) {\n"
+              "    char *addr = mmap64(NULL, 255, PROT_NONE, MAP_PRIVATE, fd, 0);\n"
+              "    munmap(addr, 255);\n"
+              "}", &settings);
+        ASSERT_EQUALS("", errout.str());
+
+        // pass in fixed address
+        check("void f(int fd) {\n"
+              "    void *fixed_addr = 123;\n"
+              "    void *mapped_addr = mmap(fixed_addr, 255, PROT_NONE, MAP_PRIVATE, fd, 0);\n"
+              "    munmap(mapped_addr, 255);\n"
+              "}", &settings);
+        ASSERT_EQUALS("", errout.str());
+
+        // no munmap()
+        check("void f(int fd) {\n"
+              "    void *addr = mmap(NULL, 255, PROT_NONE, MAP_PRIVATE, fd, 0);\n"
+              "}", &settings);
+        ASSERT_EQUALS("[test.cpp:3]: (error) Memory leak: addr\n", errout.str());
+
+        // wrong deallocator
+        check("void f(int fd) {\n"
+              "    void *addr = mmap(NULL, 255, PROT_NONE, MAP_PRIVATE, fd, 0);\n"
+              "    free(addr);\n"
+              "}", &settings);
+        ASSERT_EQUALS("[test.cpp:3]: (error) Mismatching allocation and deallocation: addr\n", errout.str());
+
+        // wrong deallocator for mmap64
+        check("void f(int fd) {\n"
+              "    void *addr = mmap64(NULL, 255, PROT_NONE, MAP_PRIVATE, fd, 0);\n"
+              "    free(addr);\n"
+              "}", &settings);
+        ASSERT_EQUALS("[test.cpp:3]: (error) Mismatching allocation and deallocation: addr\n", errout.str());
     }
 };
 
@@ -6203,6 +6305,8 @@ private:
 
     void run() {
         settings.standards.posix = true;
+        settings.inconclusive = true;
+        settings.addEnabled("warning");
 
         LOAD_LIB_2(settings.library, "gtk.cfg");
 
@@ -6219,8 +6323,12 @@ private:
 
         // pass allocated memory to function..
         TEST_CASE(functionParameter);
+
         // never use leakable resource
         TEST_CASE(missingAssignment);
+
+        // pass allocated memory to function using a smart pointer
+        TEST_CASE(smartPointerFunctionParam);
     }
 
     void functionParameter() {
@@ -6366,6 +6474,55 @@ private:
               "    f();\n"
               "}");
         TODO_ASSERT_EQUALS("[test.cpp:7]: (error) Return value of allocation function f is not used.\n", "", errout.str());
+    }
+
+    void smartPointerFunctionParam() {
+        check("void x() {\n"
+              "    f(shared_ptr<int>(new int(42)), g());\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning, inconclusive) Unsafe allocation. If g() throws, memory could be leaked. Use make_shared<int>() instead.\n", errout.str());
+
+        check("void x() {\n"
+              "    h(12, f(shared_ptr<int>(new int(42)), g()));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning, inconclusive) Unsafe allocation. If g() throws, memory could be leaked. Use make_shared<int>() instead.\n", errout.str());
+
+        check("void x() {\n"
+              "    f(unique_ptr<int>(new int(42)), g());\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning, inconclusive) Unsafe allocation. If g() throws, memory could be leaked. Use make_unique<int>() instead.\n", errout.str());
+
+        check("void x() {\n"
+              "    f(g(), shared_ptr<int>(new int(42)));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning, inconclusive) Unsafe allocation. If g() throws, memory could be leaked. Use make_shared<int>() instead.\n", errout.str());
+
+        check("void x() {\n"
+              "    f(g(), unique_ptr<int>(new int(42)));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning, inconclusive) Unsafe allocation. If g() throws, memory could be leaked. Use make_unique<int>() instead.\n", errout.str());
+
+        check("void x() {\n"
+              "    f(shared_ptr<char>(new char), make_unique<int>(32));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning, inconclusive) Unsafe allocation. If make_unique<int>() throws, memory could be leaked. Use make_shared<char>() instead.\n", errout.str());
+
+        check("void x() {\n"
+              "    f(g(124), h(\"test\", 234), shared_ptr<char>(new char));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning, inconclusive) Unsafe allocation. If h() throws, memory could be leaked. Use make_shared<char>() instead.\n", errout.str());
+
+        check("void g(int x) throw() { }\n"
+              "void x() {\n"
+              "    f(g(124), shared_ptr<char>(new char));\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void __declspec(nothrow) g(int x) { }\n"
+              "void x() {\n"
+              "    f(g(124), shared_ptr<char>(new char));\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 };
 REGISTER_TEST(TestMemleakNoVar)

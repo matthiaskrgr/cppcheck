@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -125,7 +125,7 @@ public:
 
     void copyconstructors();
 
-    /** @brief call of pure virtual funcion */
+    /** @brief call of pure virtual function */
     void checkPureVirtualFunctionCall();
 
     /** @brief Check duplicated inherited members */
@@ -193,23 +193,23 @@ private:
 
     std::string classInfo() const {
         return "Check the code for each class.\n"
-               "* Missing constructors and copy constructors\n"
-               //"* Missing allocation of memory in copy constructor\n"
-               "* Are all variables initialized by the constructors?\n"
-               "* Are all variables assigned by 'operator='?\n"
-               "* Warn if memset, memcpy etc are used on a class\n"
-               "* Warn if memory for classes is allocated with malloc()\n"
-               "* If it's a base class, check that the destructor is virtual\n"
-               "* Are there unused private functions?\n"
-               "* 'operator=' should return reference to self\n"
-               "* 'operator=' should check for assignment to self\n"
-               "* Constness for member functions\n"
-               "* Order of initializations\n"
-               "* Suggest usage of initialization list\n"
-               "* Initialization of a member with itself\n"
-               "* Suspicious subtraction from 'this'\n"
-               "* Call of pure virtual function in constructor/destructor\n"
-               "* Duplicated inherited data members\n";
+               "- Missing constructors and copy constructors\n"
+               //"- Missing allocation of memory in copy constructor\n"
+               "- Are all variables initialized by the constructors?\n"
+               "- Are all variables assigned by 'operator='?\n"
+               "- Warn if memset, memcpy etc are used on a class\n"
+               "- Warn if memory for classes is allocated with malloc()\n"
+               "- If it's a base class, check that the destructor is virtual\n"
+               "- Are there unused private functions?\n"
+               "- 'operator=' should return reference to self\n"
+               "- 'operator=' should check for assignment to self\n"
+               "- Constness for member functions\n"
+               "- Order of initializations\n"
+               "- Suggest usage of initialization list\n"
+               "- Initialization of a member with itself\n"
+               "- Suspicious subtraction from 'this'\n"
+               "- Call of pure virtual function in constructor/destructor\n"
+               "- Duplicated inherited data members\n";
     }
 
     // operatorEqRetRefThis helper functions

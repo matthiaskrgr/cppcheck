@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,9 +33,13 @@ public:
     }
 
 private:
-
+    Settings settings_std;
+    Settings settings_posix;
 
     void run() {
+        LOAD_LIB_2(settings_std.library, "std.cfg");
+        LOAD_LIB_2(settings_posix.library, "posix.cfg");
+
         TEST_CASE(emptyBrackets);
 
         TEST_CASE(zeroDiv1);
@@ -136,6 +140,7 @@ private:
         TEST_CASE(duplicateExpression4); // ticket #3354 (++)
         TEST_CASE(duplicateExpression5); // ticket #3749 (macros with same values)
         TEST_CASE(duplicateExpression6); // ticket #4639
+        TEST_CASE(duplicateExpressionTernary); // #6391
 
         TEST_CASE(checkSignOfUnsignedVariable);
         TEST_CASE(checkSignOfPointer);
@@ -167,7 +172,10 @@ private:
 
         TEST_CASE(checkComparisonFunctionIsAlwaysTrueOrFalse);
 
-        TEST_CASE(integerOverflow) // #5895
+        TEST_CASE(integerOverflow); // #5895
+
+        TEST_CASE(testReturnIgnoredReturnValue);
+        TEST_CASE(testReturnIgnoredReturnValuePosix);
     }
 
     void check(const char code[], const char *filename = nullptr, bool experimental = false, bool inconclusive = true, bool posix = false, bool runSimpleChecks=true, Settings* settings = 0) {
@@ -178,6 +186,9 @@ private:
             static Settings _settings;
             settings = &_settings;
         }
+        if (posix) {
+            settings = &settings_posix;
+        }
         settings->addEnabled("style");
         settings->addEnabled("warning");
         settings->addEnabled("portability");
@@ -185,16 +196,6 @@ private:
         settings->inconclusive = inconclusive;
         settings->experimental = experimental;
         settings->standards.posix = posix;
-
-        if (posix) {
-            const char cfg[] = "<?xml version=\"1.0\"?>\n"
-                               "<def>\n"
-                               "  <function name=\"usleep\"> <arg nr=\"1\"><valid>0:999999</valid></arg> </function>\n"
-                               "</def>";
-            tinyxml2::XMLDocument xmldoc;
-            xmldoc.Parse(cfg, sizeof(cfg));
-            settings->library.load(xmldoc);
-        }
 
         // Tokenize..
         Tokenizer tokenizer(settings, this);
@@ -578,7 +579,7 @@ private:
         ASSERT_EQUALS("[test.cpp:1]: (error) Invalid memset() argument nr 3. A non-boolean value is required.\n", errout.str());
 
         invalidFunctionUsage("int f() { memset(a,b,sizeof(a)!=0); }");
-        TODO_ASSERT_EQUALS("error", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid memset() argument nr 3. A non-boolean value is required.\n", errout.str());
 
         invalidFunctionUsage("int f() { strtol(a,b,sizeof(a)!=12); }");
         ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strtol() argument nr 3. The value is 0 or 1 (comparison result) but the valid values are '0,2:36'.\n", errout.str());
@@ -1245,10 +1246,8 @@ private:
                                 "    delete [] (double*)f;\n"
                                 "    delete [] (long double const*)(new float[10]);\n"
                                 "}");
-        TODO_ASSERT_EQUALS("[test.cpp:3]: (portability) Casting between float* and double* which have an incompatible binary data representation.\n"
-                           "[test.cpp:4]: (portability) Casting between float* and long double* which have an incompatible binary data representation.\n",
-                           "[test.cpp:3]: (portability) Casting between float* and double* which have an incompatible binary data representation.\n"
-                           "[test.cpp:4]: (portability) Casting between float* and double* which have an incompatible binary data representation.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (portability) Casting between float* and double* which have an incompatible binary data representation.\n"
+                      "[test.cpp:4]: (portability) Casting between float* and long double* which have an incompatible binary data representation.\n", errout.str());
 
         checkInvalidPointerCast("void test(const float* f) {\n"
                                 "    double *d = (double*)f;\n"
@@ -2965,6 +2964,27 @@ private:
               "}", 0, false, false, false, false);
         ASSERT_EQUALS("[test.cpp:3]: (style) Statements following return, break, continue, goto or throw will never be executed.\n", errout.str());
 
+        check("int foo(int unused) {\n"
+              "    return 0;\n"
+              "    (void)unused;\n"
+              "}", 0, false, false, false, false);
+        ASSERT_EQUALS("", errout.str());
+
+        check("int foo(int unused1, int unused2) {\n"
+              "    return 0;\n"
+              "    (void)unused1;\n"
+              "    (void)unused2;\n"
+              "}", 0, false, false, false, false);
+        ASSERT_EQUALS("", errout.str());
+
+        check("int foo(int unused1, int unused2) {\n"
+              "    return 0;\n"
+              "    (void)unused1;\n"
+              "    (void)unused2;\n"
+              "    foo();\n"
+              "}", 0, false, false, false, false);
+        ASSERT_EQUALS("[test.cpp:5]: (style) Statements following return, break, continue, goto or throw will never be executed.\n", errout.str());
+
         check("int foo() {\n"
               "    if(bar)\n"
               "        return 0;\n"
@@ -3678,20 +3698,20 @@ private:
     }
 
     void redundantGetAndSetUserId() {
-        check("seteuid(geteuid());\n", nullptr, false , false, true);
+        check("void foo() { seteuid(geteuid()); }", nullptr, false , false, true);
         ASSERT_EQUALS("[test.cpp:1]: (warning) Redundant get and set of user id.\n", errout.str());
-        check("setuid(getuid());\n", nullptr, false , false, true);
+        check("void foo() { setuid(getuid()); }", nullptr, false , false, true);
         ASSERT_EQUALS("[test.cpp:1]: (warning) Redundant get and set of user id.\n", errout.str());
-        check("setgid(getgid());\n", nullptr, false , false, true);
+        check("void foo() { setgid(getgid()); }", nullptr, false , false, true);
         ASSERT_EQUALS("[test.cpp:1]: (warning) Redundant get and set of user id.\n", errout.str());
-        check("setegid(getegid());\n", nullptr, false , false, true);
+        check("void foo() { setegid(getegid()); }", nullptr, false , false, true);
         ASSERT_EQUALS("[test.cpp:1]: (warning) Redundant get and set of user id.\n", errout.str());
 
-        check("seteuid(getuid());\n", nullptr, false , false, true);
+        check("void foo() { seteuid(getuid()); }", nullptr, false , false, true);
         ASSERT_EQUALS("", errout.str());
-        check("seteuid(foo());\n", nullptr, false , false, true);
+        check("void foo() { seteuid(foo()); }", nullptr, false , false, true);
         ASSERT_EQUALS("", errout.str());
-        check("foo(getuid());\n", nullptr, false , false, true);
+        check("void foo() { foo(getuid()); }", nullptr, false , false, true);
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -3731,6 +3751,11 @@ private:
               "    int ab = a - b ? 2 : 3;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:2]: (style) Clarify calculation precedence for '-' and '?'.\n", errout.str());
+
+        check("void f() {\n"
+              "    int ab = a | b ? 2 : 3;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (style) Clarify calculation precedence for '|' and '?'.\n", errout.str());
 
         // ticket #195
         check("int f(int x, int y) {\n"
@@ -4098,6 +4123,38 @@ private:
               "        a++;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&&'.\n", errout.str());
+
+        check("void f() {\n"
+              "    enum { Four = 4 };\n"
+              "    if (Four == 4) {}"
+              "}", nullptr, false, true, false, false);
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:3]: (style) Same expression on both sides of '=='.\n", errout.str());
+
+        check("void f() {\n"
+              "    enum { Four = 4 };\n"
+              "    static_assert(Four == 4, "");\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    enum { Four = 4 };\n"
+              "    static_assert(4 == Four, "");\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    enum { FourInEnumOne = 4 };\n"
+              "    enum { FourInEnumTwo = 4 };\n"
+              "    if (FourInEnumOne == FourInEnumTwo) {}\n"
+              "}", nullptr, false, true, false, false);
+        ASSERT_EQUALS("[test.cpp:4] -> [test.cpp:4]: (style) Same expression on both sides of '=='.\n", errout.str());
+
+        check("void f() {\n"
+              "    enum { FourInEnumOne = 4 };\n"
+              "    enum { FourInEnumTwo = 4 };\n"
+              "    static_assert(FourInEnumOne == FourInEnumTwo, "");\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void duplicateExpression2() { // check if float is NaN or Inf
@@ -4174,14 +4231,10 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
-        {
-            Settings settings;
-            LOAD_LIB_2(settings.library, "std.cfg");
-            check("void foo() {\n"
-                  "    if ((strcmp(a, b) == 0) || (strcmp(a, b) == 0)) {}\n"
-                  "}", "test.cpp", false, false, false, true, &settings);
-            ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
-        }
+        check("void foo() {\n"
+              "    if ((strcmp(a, b) == 0) || (strcmp(a, b) == 0)) {}\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
 
         check("void GetValue() { return rand(); }\n"
               "void foo() {\n"
@@ -4267,6 +4320,23 @@ private:
         check("float IsNan(float value) { return !(value == value); }\n"
               "double IsNan(double value) { return !(value == value); }\n"
               "long double IsNan(long double value) { return !(value == value); }");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void duplicateExpressionTernary() { // #6391
+        check("void f() {\n"
+              "    return A ? x : x;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (style) Same expression in both branches of ternary operator.\n", errout.str());
+
+        check("void f() {\n"
+              "    if( a ? (b ? false:false): false ) ;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (style) Same expression in both branches of ternary operator.\n", errout.str());
+
+        check("void f() {\n"
+              "    return A ? x : z;\n"
+              "}");
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -4785,14 +4855,12 @@ private:
             "}");
         ASSERT_EQUALS("[test.cpp:4]: (error) Memory pointed to by 'p' is freed twice.\n", errout.str());
 
-        Settings settings;
-        LOAD_LIB_2(settings.library, "std.cfg");
         check(
             "void foo(char *p) {\n"
             "  free(p);\n"
             "  printf(\"Freed memory at location %x\", p);\n"
             "  free(p);\n"
-            "}", nullptr, false, false, false, true, &settings);
+            "}", nullptr, false, false, false, true, &settings_std);
         ASSERT_EQUALS("[test.cpp:4]: (error) Memory pointed to by 'p' is freed twice.\n", errout.str());
 
         check(
@@ -5148,7 +5216,21 @@ private:
         );
         ASSERT_EQUALS("", errout.str());
 
-
+        check( // #6252
+            "struct Wrapper {\n"
+            "    Thing* m_thing;\n"
+            "    Wrapper() : m_thing(0) {\n"
+            "    }\n"
+            "    ~Wrapper() {\n"
+            "        delete m_thing;\n"
+            "    }\n"
+            "    void changeThing() {\n"
+            "        delete m_thing;\n"
+            "        m_thing = new Thing;\n"
+            "    }\n"
+            "};\n"
+        );
+        ASSERT_EQUALS("", errout.str());
     }
 
 
@@ -5407,6 +5489,9 @@ private:
               "{\n"
               "   std::cout << 3 << -1 ;\n"
               "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("x = y ? z << $-1 : 0;\n");
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -5944,37 +6029,37 @@ private:
         ASSERT_EQUALS("", errout.str());
 
         // avoid crash with pointer variable - for local variable on stack as well - see #4801
-        check("void foo {\n"
+        check("void foo() {\n"
               "  int *cp;\n"
               "  if ( pipe (cp) == -1 ) {\n"
               "     return;\n"
               "  }\n"
-              "}\n");
+              "}");
         ASSERT_EQUALS("", errout.str());
 
         // test with unknown variable
-        check("void foo {\n"
+        check("void foo() {\n"
               "  if ( pipe (cp) == -1 ) {\n"
               "     return;\n"
               "  }\n"
-              "}\n");
+              "}");
         ASSERT_EQUALS("", errout.str());
 
         // avoid crash with pointer variable - for local variable on stack as well - see #4801
-        check("void foo {\n"
+        check("void foo() {\n"
               "  int *cp;\n"
               "  if ( pipe (cp) == -1 ) {\n"
               "     return;\n"
               "  }\n"
-              "}\n");
+              "}");
         ASSERT_EQUALS("", errout.str());
 
         // test with unknown variable
-        check("void foo {\n"
+        check("void foo() {\n"
               "  if ( pipe (cp) == -1 ) {\n"
               "     return;\n"
               "  }\n"
-              "}\n");
+              "}");
         ASSERT_EQUALS("", errout.str());
 
     }
@@ -6259,6 +6344,95 @@ private:
               "    if (ull == 0x89504e470d0a1a0a || ull == 0x8a4d4e470d0a1a0a) ;\n"
               "}\n");
         ASSERT_EQUALS("", errout.str());
+    }
+
+    void testReturnIgnoredReturnValue() {
+        check("void foo() {\n"
+              "    strcmp(a, b);\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Return value of function strcmp() is not used.\n", errout.str());
+
+        check("bool strcmp(char* a, char* b);\n" // cppcheck sees a custom strcmp definition, but it returns a value. Assume it is the one specified in the library.
+              "void foo() {\n"
+              "    strcmp(a, b);\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Return value of function strcmp() is not used.\n", errout.str());
+
+        check("void strcmp(char* a, char* b);\n" // cppcheck sees a custom strcmp definition which returns void!
+              "void foo() {\n"
+              "    strcmp(a, b);\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n"
+              "    class strcmp { strcmp() {} };\n" // strcmp is a constructor definition here
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n"
+              "    return strcmp(a, b);\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n"
+              "    if(strcmp(a, b));\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n"
+              "    bool b = strcmp(a, b);\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("", errout.str());
+
+        // #6194
+        check("void foo() {\n"
+              "    std::ofstream log(logfile.c_str(), std::ios::out);\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("", errout.str());
+
+        // #6197
+        check("void foo() {\n"
+              "    DebugLog::getInstance().log(systemInfo.getSystemInfo());\n"
+              "}", "test.cpp", false, false, false, true, &settings_std);
+        ASSERT_EQUALS("", errout.str());
+
+        // #6233
+        check("int main() {\n"
+              "    auto lambda = [](double value) {\n"
+              "        double rounded = floor(value + 0.5);\n"
+              "        printf(\"Rounded value = %f\\n\", rounded);\n"
+              "    };\n"
+              "    lambda(13.3);\n"
+              "    return 0;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void testReturnIgnoredReturnValuePosix() {
+        check("void f() {\n"
+              "    strdupa(\"test\");\n"
+              "}",
+              "test.cpp",
+              false, // experimental
+              false, // inconclusive
+              true,  // posix
+              false  // runSimpleChecks
+             );
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Return value of function strdupa() is not used.\n", errout.str());
+
+        // mmap(): error about unused return address since fixed_addr is just a hint
+        check("void f(int fd) {\n"
+              "    void *fixed_addr = 123;\n"
+              "    mmap(fixed_addr, 255, PROT_NONE, MAP_PRIVATE, fd, 0);\n"
+              "    munmap(fixed_addr, 255);\n"
+              "}",
+              "test.cpp",
+              false, // experimental
+              false, // inconclusive
+              true,  // posix
+              false  // runSimpleChecks
+             );
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Return value of function mmap() is not used.\n", errout.str());
     }
 };
 

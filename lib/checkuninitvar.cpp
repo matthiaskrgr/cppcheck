@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -376,7 +376,7 @@ private:
             if (tok2->varId() &&
                 !Token::Match(tok2->previous(), "&|::") &&
                 !Token::simpleMatch(tok2->tokAt(-2), "& (") &&
-                tok2->strAt(1) != "=") {
+                !Token::Match(tok2->tokAt(1), ")| =")) {
                 // Multiple assignments..
                 if (Token::Match(tok2->next(), ".|[")) {
                     const Token * tok3 = tok2;
@@ -601,7 +601,7 @@ private:
             }
         }
 
-        if (Token::Match(&tok, "%var% (") && uvarFunctions.find(tok.str()) == uvarFunctions.end()) {
+        if (Token::Match(&tok, "%var% (")) {
             // sizeof/typeof doesn't dereference. A function name that is all uppercase
             // might be an unexpanded macro that uses sizeof/typeof
             if (Token::Match(&tok, "sizeof|typeof ("))
@@ -920,9 +920,6 @@ private:
 
 public:
 
-    /** Functions that don't handle uninitialized variables well */
-    static std::set<std::string> uvarFunctions;
-
     static void analyseFunctions(const Token * const tokens, std::set<std::string> &func) {
         for (const Token *tok = tokens; tok; tok = tok->next()) {
             if (tok->str() == "{") {
@@ -1013,34 +1010,34 @@ public:
     }
 };
 
-/** Functions that don't handle uninitialized variables well */
-std::set<std::string> UninitVar::uvarFunctions;
-
-
 /// @}
 
 
-void CheckUninitVar::analyse(const Token * tokens, std::set<std::string> &func) const
+Check::FileInfo *CheckUninitVar::getFileInfo(const Tokenizer *tokenizer, const Settings *settings) const
 {
-    UninitVar::analyseFunctions(tokens, func);
+    (void)settings;
+    MyFileInfo * mfi = new MyFileInfo;
+    analyseFunctions(tokenizer, mfi->uvarFunctions);
+    // TODO: add suspicious function calls
+    return mfi;
 }
 
-void CheckUninitVar::saveAnalysisData(const std::set<std::string> &data) const
+void CheckUninitVar::analyseWholeProgram(const std::list<Check::FileInfo*> &fileInfo, ErrorLogger &errorLogger)
 {
-    UninitVar::uvarFunctions.insert(data.begin(), data.end());
+    (void)fileInfo;
+    (void)errorLogger;
+}
+
+void CheckUninitVar::analyseFunctions(const Tokenizer *tokenizer, std::set<std::string> &f) const
+{
+    UninitVar::analyseFunctions(tokenizer->tokens(), f);
 }
 
 void CheckUninitVar::executionPaths()
 {
     // check if variable is accessed uninitialized..
-    {
-        // no writing if multiple threads are used (TODO: thread safe analysis?)
-        if (_settings->_jobs == 1)
-            UninitVar::analyseFunctions(_tokenizer->tokens(), UninitVar::uvarFunctions);
-
-        UninitVar c(this, _tokenizer->getSymbolDatabase(), &_settings->library, _tokenizer->isC());
-        checkExecutionPaths(_tokenizer->getSymbolDatabase(), &c);
-    }
+    UninitVar c(this, _tokenizer->getSymbolDatabase(), &_settings->library, _tokenizer->isC());
+    checkExecutionPaths(_tokenizer->getSymbolDatabase(), &c);
 }
 
 
@@ -1128,7 +1125,7 @@ void CheckUninitVar::checkStruct(const Scope* scope, const Token *tok, const Var
         if (scope2->className == structname && scope2->numConstructors == 0U) {
             for (std::list<Variable>::const_iterator it = scope2->varlist.begin(); it != scope2->varlist.end(); ++it) {
                 const Variable &var = *it;
-                if (!var.isArray()) {
+                if (!var.hasDefault() && !var.isArray()) {
                     // is the variable declared in a inner union?
                     bool innerunion = false;
                     for (std::list<Scope>::const_iterator it2 = symbolDatabase->scopeList.begin(); it2 != symbolDatabase->scopeList.end(); ++it2) {
@@ -1427,6 +1424,11 @@ bool CheckUninitVar::checkScopeForVariable(const Scope* scope, const Token *tok,
             return true;
         }
 
+        // bailout if there is ({
+        if (Token::simpleMatch(tok, "( {")) {
+            return true;
+        }
+
         // bailout if there is assembler code
         if (Token::simpleMatch(tok, "asm (")) {
             return true;
@@ -1525,6 +1527,8 @@ bool CheckUninitVar::checkScopeForVariable(const Scope* scope, const Token *tok,
 bool CheckUninitVar::checkIfForWhileHead(const Token *startparentheses, const Variable& var, bool suppressErrors, bool isuninit, bool alloc, const std::string &membervar)
 {
     const Token * const endpar = startparentheses->link();
+    if (Token::Match(startparentheses, "( ! %var% %oror%") && startparentheses->tokAt(2)->getValue(0))
+        suppressErrors = true;
     for (const Token *tok = startparentheses->next(); tok && tok != endpar; tok = tok->next()) {
         if (tok->varId() == var.declarationId()) {
             if (Token::Match(tok, "%var% . %var%")) {
@@ -1749,29 +1753,12 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
         }
 
         // is there something like: ; "*((&var ..expr.. ="  => the variable is assigned
-        if (vartok->previous()->str() == "&") {
-            const Token *tok2 = vartok->tokAt(-2);
-            if (tok2 && (tok2->isConstOp() || Token::Match(tok2, "[;{}(=]")))
-                return false; // address of
-            if (tok2 && tok2->str() == ")")
-                tok2 = tok2->link()->previous();
-            if (Token::Match(tok2,"[()] ( %type% *| ) &") && tok2->tokAt(2)->varId() == 0)
-                return false; // cast
-            while (tok2 && tok2->str() == "(")
-                tok2 = tok2->previous();
-            while (tok2 && tok2->str() == "*")
-                tok2 = tok2->previous();
-            if (Token::Match(tok2, "[;{}] *")) {
-                // there is some such code before vartok: "[*]+ [(]* &"
-                // determine if there is a = after vartok
-                for (tok2 = vartok; tok2; tok2 = tok2->next()) {
-                    if (Token::Match(tok2, "[;{}]"))
-                        break;
-                    if (tok2->str() == "=")
-                        return false;
-                }
-            }
-        }
+        if (vartok->previous()->str() == "&" && !vartok->previous()->astOperand2())
+            return false;
+
+        // bailout to avoid fp for 'int x = 2 + x();' where 'x()' is a unseen preprocessor macro (seen in linux)
+        if (!pointer && vartok->next() && vartok->next()->str() == "(")
+            return false;
 
         if (vartok->previous()->str() != "&" || !Token::Match(vartok->tokAt(-2), "[(,=?:]")) {
             if (alloc && vartok->previous()->str() == "*") {

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -87,7 +87,7 @@ bool isSameExpression(const Token *tok1, const Token *tok2, const std::set<std::
         tok1 = tok1->astOperand2();
     if (tok2->str() == "." && tok2->astOperand1() && tok2->astOperand1()->str() == "this")
         tok2 = tok2->astOperand2();
-    if (tok1->str() != tok2->str() || tok1->varId() != tok2->varId())
+    if (tok1->varId() != tok2->varId() || tok1->str() != tok2->str())
         return false;
     if (tok1->str() == "." && tok1->originalName() != tok2->originalName())
         return false;
@@ -112,8 +112,8 @@ bool isSameExpression(const Token *tok1, const Token *tok2, const std::set<std::
         // some template/cast stuff.. check that the template arguments are same
         const Token *t1 = tok1->next();
         const Token *t2 = tok2->next();
-        const Token *end1 = tok1->next()->link();
-        const Token *end2 = tok2->next()->link();
+        const Token *end1 = t1->link();
+        const Token *end2 = t2->link();
         while (t1 && t2 && t1 != end1 && t2 != end2) {
             if (t1->str() != t2->str())
                 return false;
@@ -245,7 +245,9 @@ void CheckOther::clarifyCalculation()
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
             // ? operator where lhs is arithmetical expression
-            if (tok->str() != "?" || !tok->astOperand1() || !tok->astOperand1()->isArithmeticalOp() || !tok->astOperand1()->isCalculation())
+            if (tok->str() != "?" || !tok->astOperand1() || !tok->astOperand1()->isCalculation())
+                continue;
+            if (!tok->astOperand1()->isArithmeticalOp() && tok->astOperand1()->type() != Token::eBitOp)
                 continue;
 
             // Is code clarified by parentheses already?
@@ -319,7 +321,7 @@ void CheckOther::clarifyStatementError(const Token *tok)
 }
 
 //---------------------------------------------------------------------------
-// Check for suspicious occurences of 'if(); {}'.
+// Check for suspicious occurrences of 'if(); {}'.
 //---------------------------------------------------------------------------
 void CheckOther::checkSuspiciousSemicolon()
 {
@@ -422,7 +424,7 @@ static std::string analyzeType(const Token* tok)
 
 void CheckOther::invalidPointerCast()
 {
-    if (!_settings->isEnabled("warning") && !_settings->isEnabled("portability"))
+    if (!_settings->isEnabled("portability"))
         return;
 
     const SymbolDatabase* const symbolDatabase = _tokenizer->getSymbolDatabase();
@@ -445,10 +447,12 @@ void CheckOther::invalidPointerCast()
                 nextTok = nextTok->next();
                 toTok = tok->tokAt(2);
             }
+            if (!nextTok)
+                continue;
             if (toTok && toTok->str() == "const")
                 toTok = toTok->next();
 
-            if (!nextTok || !toTok || !toTok->isStandardType())
+            if (!toTok || !toTok->isStandardType())
                 continue;
 
             // Find casted variable
@@ -481,7 +485,7 @@ void CheckOther::invalidPointerCast()
 
             std::string fromType = analyzeType(fromTok);
             std::string toType = analyzeType(toTok);
-            if (fromType != toType && !fromType.empty() && !toType.empty() && _settings->isEnabled("portability") && (toTok->str() != "char" || _settings->inconclusive))
+            if (fromType != toType && !fromType.empty() && !toType.empty() && (toTok->str() != "char" || _settings->inconclusive))
                 invalidPointerCastError(tok, fromType, toType, toTok->str() == "char");
         }
     }
@@ -649,7 +653,7 @@ void CheckOther::checkRedundantAssignment()
                             }
                         }
                         if (error) {
-                            if (scope->type == Scope::eSwitch && Token::findmatch(it->second, "default|case", tok) && warning)
+                            if (warning && scope->type == Scope::eSwitch && Token::findmatch(it->second, "default|case", tok))
                                 redundantAssignmentInSwitchError(it->second, tok, tok->str());
                             else if (performance) {
                                 const bool nonlocal = nonLocal(it->second->variable());
@@ -998,45 +1002,49 @@ void CheckOther::checkSuspiciousEqualityComparison()
     if (!_settings->isEnabled("warning") || !_settings->inconclusive)
         return;
 
-    for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
+    const SymbolDatabase* symbolDatabase = _tokenizer->getSymbolDatabase();
+    const std::size_t functions = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < functions; ++i) {
+        const Scope * scope = symbolDatabase->functionScopes[i];
+        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
+            if (Token::simpleMatch(tok, "for (")) {
+                const Token* const openParen = tok->next();
+                const Token* const closeParen = tok->linkAt(1);
 
-        if (Token::simpleMatch(tok, "for (")) {
-            const Token* const openParen = tok->next();
-            const Token* const closeParen = tok->linkAt(1);
+                // Search for any suspicious equality comparison in the initialization
+                // or increment-decrement parts of the for() loop.
+                // For example:
+                //    for (i == 2; i < 10; i++)
+                // or
+                //    for (i = 0; i < 10; i == a)
+                if (Token::Match(openParen->next(), "%var% =="))
+                    suspiciousEqualityComparisonError(openParen->tokAt(2));
+                if (Token::Match(closeParen->tokAt(-2), "== %any%"))
+                    suspiciousEqualityComparisonError(closeParen->tokAt(-2));
 
-            // Search for any suspicious equality comparison in the initialization
-            // or increment-decrement parts of the for() loop.
-            // For example:
-            //    for (i == 2; i < 10; i++)
-            // or
-            //    for (i = 0; i < 10; i == a)
-            if (Token::Match(openParen->next(), "%var% =="))
-                suspiciousEqualityComparisonError(openParen->tokAt(2));
-            if (Token::Match(closeParen->tokAt(-2), "== %any%"))
-                suspiciousEqualityComparisonError(closeParen->tokAt(-2));
+                // Equality comparisons with 0 are simplified to negation. For instance,
+                // (x == 0) is simplified to (!x), so also check for suspicious negation
+                // in the initialization or increment-decrement parts of the for() loop.
+                // For example:
+                //    for (!i; i < 10; i++)
+                if (Token::Match(openParen->next(), "! %var%"))
+                    suspiciousEqualityComparisonError(openParen->next());
+                if (Token::Match(closeParen->tokAt(-2), "! %var%"))
+                    suspiciousEqualityComparisonError(closeParen->tokAt(-2));
 
-            // Equality comparisons with 0 are simplified to negation. For instance,
-            // (x == 0) is simplified to (!x), so also check for suspicious negation
-            // in the initialization or increment-decrement parts of the for() loop.
-            // For example:
-            //    for (!i; i < 10; i++)
-            if (Token::Match(openParen->next(), "! %var%"))
-                suspiciousEqualityComparisonError(openParen->next());
-            if (Token::Match(closeParen->tokAt(-2), "! %var%"))
-                suspiciousEqualityComparisonError(closeParen->tokAt(-2));
+                // Skip over for() loop conditions because "for (;running==1;)"
+                // is a bit strange, but not necessarily incorrect.
+                tok = closeParen;
+            } else if (Token::Match(tok, "[;{}] *| %var% == %any% ;")) {
 
-            // Skip over for() loop conditions because "for (;running==1;)"
-            // is a bit strange, but not necessarily incorrect.
-            tok = closeParen;
-        } else if (Token::Match(tok, "[;{}] *| %var% == %any% ;")) {
-
-            // Exclude compound statements surrounded by parentheses, such as
-            //    printf("%i\n", ({x==0;}));
-            // because they may appear as an expression in GNU C/C++.
-            // See http://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html
-            const Token* afterStatement = tok->strAt(1) == "*" ? tok->tokAt(6) : tok->tokAt(5);
-            if (!Token::simpleMatch(afterStatement, "} )"))
-                suspiciousEqualityComparisonError(tok->next());
+                // Exclude compound statements surrounded by parentheses, such as
+                //    printf("%i\n", ({x==0;}));
+                // because they may appear as an expression in GNU C/C++.
+                // See http://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html
+                const Token* afterStatement = tok->strAt(1) == "*" ? tok->tokAt(6) : tok->tokAt(5);
+                if (!Token::simpleMatch(afterStatement, "} )"))
+                    suspiciousEqualityComparisonError(tok->next());
+            }
         }
     }
 }
@@ -1146,7 +1154,7 @@ void CheckOther::checkUnreachableCode()
             } else if (Token::Match(tok, "goto %any% ;")) {
                 secondBreak = tok->tokAt(3);
                 labelName = tok->next();
-            } else if (Token::Match(tok, "%var% (") && _settings->library.isnoreturn(tok->str()) && tok->strAt(-1) != ".") {
+            } else if (Token::Match(tok, "%var% (") && (_settings->library.isnoreturn(tok->str()) || (tok->function() && tok->function()->isAttributeNoreturn())) && tok->strAt(-1) != ".") {
                 if ((!tok->function() || (tok->function()->token != tok && tok->function()->tokenDef != tok)) && tok->linkAt(1)->strAt(1) != "{")
                     secondBreak = tok->linkAt(1)->tokAt(2);
             }
@@ -1183,7 +1191,23 @@ void CheckOther::checkUnreachableCode()
                             }
                         }
                     }
-                    if (!labelInFollowingLoop)
+
+                    // hide FP for statements that just hide compiler warnings about unused function arguments
+                    bool silencedCompilerWarningOnly = false;
+                    const Token *silencedWarning = secondBreak;
+                    for (;;) {
+                        if (Token::Match(silencedWarning, "( void ) %var% ;")) {
+                            silencedWarning = silencedWarning->tokAt(5);
+                            continue;
+                        } else if (silencedWarning && silencedWarning == scope->classEnd)
+                            silencedCompilerWarningOnly = true;
+
+                        break;
+                    }
+                    if (silencedWarning)
+                        secondBreak = silencedWarning;
+
+                    if (!labelInFollowingLoop && !silencedCompilerWarningOnly)
                         unreachableCodeError(secondBreak, inconclusive);
                     tok = Token::findmatch(secondBreak, "[}:]");
                 } else
@@ -1336,7 +1360,7 @@ void CheckOther::checkVariableScope()
         }
         bool reduce = true;
         bool used = false; // Don't warn about unused variables
-        for (; tok != var->scope()->classEnd; tok = tok->next()) {
+        for (; tok && tok != var->scope()->classEnd; tok = tok->next()) {
             if (tok->str() == "{" && tok->scope() != tok->previous()->scope() && !tok->isExpandedMacro() && tok->scope()->type != Scope::eLambda) {
                 if (used) {
                     bool used2 = false;
@@ -1695,7 +1719,7 @@ void CheckOther::checkIncompleteStatement()
             tok = tok->next()->link();
 
         // C++11 struct/array/etc initialization in initializer list
-        else if (Token::Match(tok->previous(), "%var% {") && !Token::findsimplematch(tok,";",tok->link()))
+        else if (Token::Match(tok->previous(), "%var%|] {") && !Token::findsimplematch(tok,";",tok->link()))
             tok = tok->link();
 
         // C++11 vector initialization / return { .. }
@@ -1709,6 +1733,10 @@ void CheckOther::checkIncompleteStatement()
         else if (Token::Match(tok, "[;{}] %str%|%num%")) {
             // No warning if numeric constant is followed by a "." or ","
             if (Token::Match(tok->next(), "%num% [,.]"))
+                continue;
+
+            // No warning for [;{}] (void *) 0 ;
+            if (Token::Match(tok, "[;{}] 0 ;") && (tok->next()->isCast() || tok->next()->isExpandedMacro()))
                 continue;
 
             // bailout if there is a "? :" in this statement
@@ -1996,11 +2024,14 @@ void CheckOther::checkDuplicateBranch()
             // save if branch code
             std::string branch1 = scope->classStart->next()->stringifyList(scope->classEnd);
 
+            if (branch1.empty())
+                continue;
+
             // save else branch code
             std::string branch2 = scope->classEnd->tokAt(3)->stringifyList(scope->classEnd->linkAt(2));
 
             // check for duplicates
-            if (!branch1.empty() && branch1 == branch2)
+            if (branch1 == branch2)
                 duplicateBranchError(scope->classDef, scope->classEnd->next());
         }
     }
@@ -2027,58 +2058,64 @@ void CheckOther::duplicateBranchError(const Token *tok1, const Token *tok2)
 void CheckOther::checkInvalidFree()
 {
     std::map<unsigned int, bool> allocatedVariables;
-    for (const Token* tok = _tokenizer->tokens(); tok; tok = tok->next()) {
 
-        // Keep track of which variables were assigned addresses to newly-allocated memory
-        if (Token::Match(tok, "%var% = malloc|g_malloc|new")) {
-            allocatedVariables.insert(std::make_pair(tok->varId(), false));
-        }
+    const SymbolDatabase* symbolDatabase = _tokenizer->getSymbolDatabase();
+    const std::size_t functions = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < functions; ++i) {
+        const Scope * scope = symbolDatabase->functionScopes[i];
+        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
 
-        // If a previously-allocated pointer is incremented or decremented, any subsequent
-        // free involving pointer arithmetic may or may not be invalid, so we should only
-        // report an inconclusive result.
-        else if (Token::Match(tok, "%var% = %var% +|-") &&
-                 tok->varId() == tok->tokAt(2)->varId() &&
-                 allocatedVariables.find(tok->varId()) != allocatedVariables.end()) {
-            if (_settings->inconclusive)
-                allocatedVariables[tok->varId()] = true;
-            else
-                allocatedVariables.erase(tok->varId());
-        }
-
-        // If a previously-allocated pointer is assigned a completely new value,
-        // we can't know if any subsequent free() on that pointer is valid or not.
-        else if (Token::Match(tok, "%var% =")) {
-            allocatedVariables.erase(tok->varId());
-        }
-
-        // If a variable that was previously assigned a newly-allocated memory location is
-        // added or subtracted from when used to free the memory, report an error.
-        else if (Token::Match(tok, "free|g_free|delete ( %any% +|- %any%") ||
-                 Token::Match(tok, "delete [ ] ( %any% +|- %any%") ||
-                 Token::Match(tok, "delete %any% +|- %any%")) {
-
-            const int varIndex = tok->strAt(1) == "(" ? 2 :
-                                 tok->strAt(3) == "(" ? 4 : 1;
-            const unsigned int var1 = tok->tokAt(varIndex)->varId();
-            const unsigned int var2 = tok->tokAt(varIndex + 2)->varId();
-            const std::map<unsigned int, bool>::iterator alloc1 = allocatedVariables.find(var1);
-            const std::map<unsigned int, bool>::iterator alloc2 = allocatedVariables.find(var2);
-            if (alloc1 != allocatedVariables.end()) {
-                invalidFreeError(tok, alloc1->second);
-            } else if (alloc2 != allocatedVariables.end()) {
-                invalidFreeError(tok, alloc2->second);
+            // Keep track of which variables were assigned addresses to newly-allocated memory
+            if (Token::Match(tok, "%var% = malloc|g_malloc|new")) {
+                allocatedVariables.insert(std::make_pair(tok->varId(), false));
             }
-        }
 
-        // If the previously-allocated variable is passed in to another function
-        // as a parameter, it might be modified, so we shouldn't report an error
-        // if it is later used to free memory
-        else if (Token::Match(tok, "%var% (") && _settings->library.functionpure.find(tok->str()) == _settings->library.functionpure.end()) {
-            const Token* tok2 = Token::findmatch(tok->next(), "%var%", tok->linkAt(1));
-            while (tok2 != nullptr) {
-                allocatedVariables.erase(tok2->varId());
-                tok2 = Token::findmatch(tok2->next(), "%var%", tok->linkAt(1));
+            // If a previously-allocated pointer is incremented or decremented, any subsequent
+            // free involving pointer arithmetic may or may not be invalid, so we should only
+            // report an inconclusive result.
+            else if (Token::Match(tok, "%var% = %var% +|-") &&
+                     tok->varId() == tok->tokAt(2)->varId() &&
+                     allocatedVariables.find(tok->varId()) != allocatedVariables.end()) {
+                if (_settings->inconclusive)
+                    allocatedVariables[tok->varId()] = true;
+                else
+                    allocatedVariables.erase(tok->varId());
+            }
+
+            // If a previously-allocated pointer is assigned a completely new value,
+            // we can't know if any subsequent free() on that pointer is valid or not.
+            else if (Token::Match(tok, "%var% =")) {
+                allocatedVariables.erase(tok->varId());
+            }
+
+            // If a variable that was previously assigned a newly-allocated memory location is
+            // added or subtracted from when used to free the memory, report an error.
+            else if (Token::Match(tok, "free|g_free|delete ( %any% +|- %any%") ||
+                     Token::Match(tok, "delete [ ] ( %any% +|- %any%") ||
+                     Token::Match(tok, "delete %any% +|- %any%")) {
+
+                const int varIndex = tok->strAt(1) == "(" ? 2 :
+                                     tok->strAt(3) == "(" ? 4 : 1;
+                const unsigned int var1 = tok->tokAt(varIndex)->varId();
+                const unsigned int var2 = tok->tokAt(varIndex + 2)->varId();
+                const std::map<unsigned int, bool>::iterator alloc1 = allocatedVariables.find(var1);
+                const std::map<unsigned int, bool>::iterator alloc2 = allocatedVariables.find(var2);
+                if (alloc1 != allocatedVariables.end()) {
+                    invalidFreeError(tok, alloc1->second);
+                } else if (alloc2 != allocatedVariables.end()) {
+                    invalidFreeError(tok, alloc2->second);
+                }
+            }
+
+            // If the previously-allocated variable is passed in to another function
+            // as a parameter, it might be modified, so we shouldn't report an error
+            // if it is later used to free memory
+            else if (Token::Match(tok, "%var% (") && _settings->library.functionpure.find(tok->str()) == _settings->library.functionpure.end()) {
+                const Token* tok2 = Token::findmatch(tok->next(), "%var%", tok->linkAt(1));
+                while (tok2 != nullptr) {
+                    allocatedVariables.erase(tok2->varId());
+                    tok2 = Token::findmatch(tok2->next(), "%var%", tok->linkAt(1));
+                }
             }
         }
     }
@@ -2099,92 +2136,99 @@ void CheckOther::checkDoubleFree()
     std::set<unsigned int> freedVariables;
     std::set<unsigned int> closeDirVariables;
 
-    for (const Token* tok = _tokenizer->tokens(); tok; tok = tok->next()) {
-        // Keep track of any variables passed to "free()", "g_free()" or "closedir()",
-        // and report an error if the same variable is passed twice.
-        if (Token::Match(tok, "free|g_free|closedir ( %var% )")) {
-            const unsigned int varId = tok->tokAt(2)->varId();
-            if (varId) {
-                if (Token::Match(tok, "free|g_free")) {
-                    if (freedVariables.find(varId) != freedVariables.end())
-                        doubleFreeError(tok, tok->strAt(2));
-                    else
-                        freedVariables.insert(varId);
-                } else if (tok->str() == "closedir") {
-                    if (closeDirVariables.find(varId) != closeDirVariables.end())
-                        doubleCloseDirError(tok, tok->strAt(2));
-                    else
-                        closeDirVariables.insert(varId);
-                }
-            }
-        }
-
-        // Keep track of any variables operated on by "delete" or "delete[]"
-        // and report an error if the same variable is delete'd twice.
-        else if (Token::Match(tok, "delete %var% ;") || Token::Match(tok, "delete [ ] %var% ;")) {
-            const int varIndex = (tok->strAt(1) == "[") ? 3 : 1;
-            const unsigned int varId = tok->tokAt(varIndex)->varId();
-            if (varId) {
-                if (freedVariables.find(varId) != freedVariables.end())
-                    doubleFreeError(tok, tok->strAt(varIndex));
-                else
-                    freedVariables.insert(varId);
-            }
-        }
-
-        // If this scope doesn't return, clear the set of previously freed variables
-        else if (tok->str() == "}" && _tokenizer->IsScopeNoReturn(tok)) {
-            freedVariables.clear();
-            closeDirVariables.clear();
-        }
-
-        // If this scope is a "for" or "while" loop that contains "break" or "continue",
-        // give up on trying to figure out the flow of execution and just clear the set
-        // of previously freed variables.
-        // TODO: There are false negatives. This bailout is only needed when the
-        // loop will exit without free()'ing the memory on the last iteration.
-        else if (tok->str() == "}" && tok->link() && tok->link()->previous() &&
-                 tok->link()->linkAt(-1) &&
-                 Token::Match(tok->link()->linkAt(-1)->previous(), "while|for") &&
-                 Token::findmatch(tok->link()->linkAt(-1), "break|continue ;", tok) != nullptr) {
-            freedVariables.clear();
-            closeDirVariables.clear();
-        }
-
-        // If a variable is passed to a function, remove it from the set of previously freed variables
-        else if (Token::Match(tok, "%var% (") && _settings->library.leakignore.find(tok->str()) == _settings->library.leakignore.end()) {
-
-            // If this is a new function definition, clear all variables
-            if (Token::simpleMatch(tok->next()->link(), ") {")) {
-                freedVariables.clear();
-                closeDirVariables.clear();
-            }
-            // If it is a function call, then clear those variables in its argument list
-            else if (Token::simpleMatch(tok->next()->link(), ") ;")) {
-                for (const Token* tok2 = tok->tokAt(2); tok2 != tok->linkAt(1); tok2 = tok2->next()) {
-                    const unsigned int varId = tok2->varId();
-                    if (varId) {
-                        freedVariables.erase(varId);
-                        closeDirVariables.erase(varId);
+    const SymbolDatabase* symbolDatabase = _tokenizer->getSymbolDatabase();
+    const std::size_t functions = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < functions; ++i) {
+        freedVariables.clear();
+        closeDirVariables.clear();
+        const Scope * scope = symbolDatabase->functionScopes[i];
+        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+            // Keep track of any variables passed to "free()", "g_free()" or "closedir()",
+            // and report an error if the same variable is passed twice.
+            if (Token::Match(tok, "free|g_free|closedir ( %var% )")) {
+                const unsigned int varId = tok->tokAt(2)->varId();
+                if (varId) {
+                    if (Token::Match(tok, "free|g_free")) {
+                        if (freedVariables.find(varId) != freedVariables.end())
+                            doubleFreeError(tok, tok->strAt(2));
+                        else
+                            freedVariables.insert(varId);
+                    } else if (tok->str() == "closedir") {
+                        if (closeDirVariables.find(varId) != closeDirVariables.end())
+                            doubleCloseDirError(tok, tok->strAt(2));
+                        else
+                            closeDirVariables.insert(varId);
                     }
                 }
             }
-        }
 
-        // If a pointer is assigned a new value, remove it from the set of previously freed variables
-        else if (Token::Match(tok, "%var% =")) {
-            const unsigned int varId = tok->varId();
-            if (varId) {
-                freedVariables.erase(varId);
-                closeDirVariables.erase(varId);
+            // Keep track of any variables operated on by "delete" or "delete[]"
+            // and report an error if the same variable is delete'd twice.
+            else if (Token::Match(tok, "delete %var% ;") || Token::Match(tok, "delete [ ] %var% ;")) {
+                const int varIndex = (tok->strAt(1) == "[") ? 3 : 1;
+                const unsigned int varId = tok->tokAt(varIndex)->varId();
+                if (varId) {
+                    if (freedVariables.find(varId) != freedVariables.end())
+                        doubleFreeError(tok, tok->strAt(varIndex));
+                    else
+                        freedVariables.insert(varId);
+                }
             }
-        }
 
-        // Any control statements in-between delete, free() or closedir() statements
-        // makes it unclear whether any subsequent statements would be redundant.
-        if (Token::Match(tok, "if|else|for|while|break|continue|goto|return|throw|switch")) {
-            freedVariables.clear();
-            closeDirVariables.clear();
+            // If this scope doesn't return, clear the set of previously freed variables
+            else if (tok->str() == "}" && _tokenizer->IsScopeNoReturn(tok)) {
+                freedVariables.clear();
+                closeDirVariables.clear();
+            }
+
+            // If this scope is a "for" or "while" loop that contains "break" or "continue",
+            // give up on trying to figure out the flow of execution and just clear the set
+            // of previously freed variables.
+            // TODO: There are false negatives. This bailout is only needed when the
+            // loop will exit without free()'ing the memory on the last iteration.
+            else if (tok->str() == "}" && tok->link() && tok->link()->previous() &&
+                     tok->link()->linkAt(-1) &&
+                     Token::Match(tok->link()->linkAt(-1)->previous(), "while|for") &&
+                     Token::findmatch(tok->link()->linkAt(-1), "break|continue ;", tok) != nullptr) {
+                freedVariables.clear();
+                closeDirVariables.clear();
+            }
+
+            // If a variable is passed to a function, remove it from the set of previously freed variables
+            else if (Token::Match(tok, "%var% (") && _settings->library.leakignore.find(tok->str()) == _settings->library.leakignore.end()) {
+
+                // If this is a new function definition, clear all variables
+                if (Token::simpleMatch(tok->next()->link(), ") {")) {
+                    freedVariables.clear();
+                    closeDirVariables.clear();
+                }
+                // If it is a function call, then clear those variables in its argument list
+                else if (Token::simpleMatch(tok->next()->link(), ") ;")) {
+                    for (const Token* tok2 = tok->tokAt(2); tok2 != tok->linkAt(1); tok2 = tok2->next()) {
+                        const unsigned int varId = tok2->varId();
+                        if (varId) {
+                            freedVariables.erase(varId);
+                            closeDirVariables.erase(varId);
+                        }
+                    }
+                }
+            }
+
+            // If a pointer is assigned a new value, remove it from the set of previously freed variables
+            else if (Token::Match(tok, "%var% =")) {
+                const unsigned int varId = tok->varId();
+                if (varId) {
+                    freedVariables.erase(varId);
+                    closeDirVariables.erase(varId);
+                }
+            }
+
+            // Any control statements in-between delete, free() or closedir() statements
+            // makes it unclear whether any subsequent statements would be redundant.
+            if (Token::Match(tok, "if|else|for|while|break|continue|goto|return|throw|switch")) {
+                freedVariables.clear();
+                closeDirVariables.clear();
+            }
         }
     }
 }
@@ -2242,7 +2286,7 @@ static bool isWithoutSideEffects(const Tokenizer *tokenizer, const Token* tok)
 
     while (tok && tok->astOperand2() && tok->astOperand2()->str() != "(")
         tok = tok->astOperand2();
-    if (tok->varId()) {
+    if (tok && tok->varId()) {
         const Variable* var = tok->variable();
         return var && (!var->isClass() || var->isPointer() || var->isStlType());
     }
@@ -2259,6 +2303,7 @@ void CheckOther::checkDuplicateExpression()
 
     std::list<Scope>::const_iterator scope;
     std::list<const Function*> constFunctions;
+    const std::set<std::string> temp; // Can be used as dummy for isSameExpression()
     getConstFunctions(symbolDatabase, constFunctions);
 
     for (scope = symbolDatabase->scopeList.begin(); scope != symbolDatabase->scopeList.end(); ++scope) {
@@ -2275,8 +2320,18 @@ void CheckOther::checkDuplicateExpression()
                         const bool assignment = tok->str() == "=";
                         if (assignment)
                             selfAssignmentError(tok, tok->astOperand1()->expressionString());
-                        else
+                        else {
+                            if (_settings->CPP && _settings->standards.CPP11 && tok->str() == "==") {
+                                const Token* parent = tok->astParent();
+                                while (parent && parent->astParent()) {
+                                    parent = parent->astParent();
+                                }
+                                if (parent && parent->previous() && parent->previous()->str() == "static_assert") {
+                                    continue;
+                                }
+                            }
                             duplicateExpressionError(tok, tok, tok->str());
+                        }
                     }
                 } else if (!Token::Match(tok, "[-/%]")) { // These operators are not associative
                     if (tok->astOperand2() && tok->str() == tok->astOperand1()->str() && isSameExpression(tok->astOperand2(), tok->astOperand1()->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer, tok->astOperand2()))
@@ -2296,6 +2351,9 @@ void CheckOther::checkDuplicateExpression()
                         }
                     }
                 }
+            } else if (tok->astOperand1() && tok->astOperand2() && tok->str() == ":" && tok->astParent() && tok->astParent()->str() == "?") {
+                if (isSameExpression(tok->astOperand1(), tok->astOperand2(), temp))
+                    duplicateExpressionTernaryError(tok);
             }
         }
     }
@@ -2311,6 +2369,13 @@ void CheckOther::duplicateExpressionError(const Token *tok1, const Token *tok2, 
                 "Finding the same expression on both sides of an operator is suspicious and might "
                 "indicate a cut and paste or logic error. Please examine this code carefully to "
                 "determine if it is correct.");
+}
+
+void CheckOther::duplicateExpressionTernaryError(const Token *tok)
+{
+    reportError(tok, Severity::style, "duplicateExpressionTernary", "Same expression in both branches of ternary operator.\n"
+                "Finding the same expression in both branches of ternary operator is suspicious as "
+                "the same code is executed regardless of the condition.");
 }
 
 void CheckOther::selfAssignmentError(const Token *tok, const std::string &varname)
@@ -2375,14 +2440,20 @@ void CheckOther::checkComparisonFunctionIsAlwaysTrueOrFalseError(const Token* to
 //-----------------------------------------------------------------------------
 void CheckOther::redundantGetAndSetUserId()
 {
-    if (_settings->isEnabled("warning")
-        && _settings->standards.posix) {
+    if (!_settings->standards.posix || !_settings->isEnabled("warning"))
+        return;
 
-        for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
+    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
+
+    const std::size_t functions = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < functions; ++i) {
+        const Scope * scope = symbolDatabase->functionScopes[i];
+        // check all the code in the function
+        for (const Token *tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
             if (Token::simpleMatch(tok, "setuid ( getuid ( ) )")
-                ||  Token::simpleMatch(tok, "seteuid ( geteuid ( ) )")
-                ||  Token::simpleMatch(tok, "setgid ( getgid ( ) )")
-                ||  Token::simpleMatch(tok, "setegid ( getegid ( ) )")) {
+                || Token::simpleMatch(tok, "seteuid ( geteuid ( ) )")
+                || Token::simpleMatch(tok, "setgid ( getgid ( ) )")
+                || Token::simpleMatch(tok, "setegid ( getegid ( ) )")) {
                 redundantGetAndSetUserIdError(tok);
             }
         }
@@ -2522,7 +2593,7 @@ void CheckOther::checkRedundantCopy()
 
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
 
-    for (std::size_t i = 0; i < symbolDatabase->getVariableListSize(); i++) {
+    for (std::size_t i = 1; i < symbolDatabase->getVariableListSize(); i++) {
         const Variable* var = symbolDatabase->getVariableFromVarId(i);
 
         if (!var || var->isReference() || !var->isConst() || var->isPointer() || (!var->type() && !var->isStlType())) // bailout if var is of standard type, if it is a pointer or non-const
@@ -2591,6 +2662,17 @@ void CheckOther::checkNegativeBitwiseShift()
                     (!rhs->variable()->typeStartToken() || !rhs->variable()->typeStartToken()->isStandardType()))
                     continue;
             }
+
+            // bailout if operation is protected by ?:
+            bool ternary = false;
+            for (const Token *parent = tok; parent; parent = parent->astParent()) {
+                if (Token::Match(parent, "?|:")) {
+                    ternary = true;
+                    break;
+                }
+            }
+            if (ternary)
+                continue;
 
             // Get negative rhs value. preferably a value which doesn't have 'condition'.
             const ValueFlow::Value *value = tok->astOperand2()->getValueLE(-1LL, _settings);
@@ -2713,7 +2795,7 @@ void CheckOther::varFuncNullUBError(const Token *tok)
                 "    va_start(ap,s);\n"
                 "    for (;;) {\n"
                 "        char *p = va_arg(ap,char*);\n"
-                "        printf(\"%018p, %s\n\", p, (long)p & 255 ? p : \"\");\n"
+                "        printf(\"%018p, %s\\n\", p, (long)p & 255 ? p : \"\");\n"
                 "        if(!p) break;\n"
                 "    }\n"
                 "    va_end(ap);\n"
@@ -2739,4 +2821,35 @@ void CheckOther::varFuncNullUBError(const Token *tok)
                 "    g();\n"
                 "    return 0;\n"
                 "}");
+}
+
+//---------------------------------------------------------------------------
+// Check for ignored return values.
+//---------------------------------------------------------------------------
+void CheckOther::checkIgnoredReturnValue()
+{
+    if (!_settings->isEnabled("warning"))
+        return;
+
+    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
+    const std::size_t functions = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < functions; ++i) {
+        const Scope * scope = symbolDatabase->functionScopes[i];
+        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
+            if (tok->varId() || !Token::Match(tok, "%var% (") || tok->strAt(-1) == "." || tok->next()->astOperand1() != tok)
+                continue;
+
+            if (!tok->scope()->isExecutable())
+                tok = tok->scope()->classEnd;
+
+            if (!tok->next()->astParent() && (!tok->function() || !Token::Match(tok->function()->retDef, "void %var%")) && _settings->library.useretval.find(tok->str()) != _settings->library.useretval.end())
+                ignoredReturnValueError(tok, tok->str());
+        }
+    }
+}
+
+void CheckOther::ignoredReturnValueError(const Token* tok, const std::string& function)
+{
+    reportError(tok, Severity::warning, "ignoredReturnValue",
+                "Return value of function " + function + "() is not used.", false);
 }

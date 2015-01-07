@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -141,6 +141,12 @@ void ExecutionPath::checkScope(const Token *tok, std::list<ExecutionPath *> &che
         if (Token::simpleMatch(tok->tokAt(-2), ") ; }") &&
             Token::Match(tok->linkAt(-2)->tokAt(-2), "[;{}] %var% (") &&
             tok->linkAt(-2)->previous()->varId() == 0) {
+            ExecutionPath::bailOut(checks);
+            return;
+        }
+
+        // ({ is not handled well
+        if (Token::simpleMatch(tok, "( {")) {
             ExecutionPath::bailOut(checks);
             return;
         }

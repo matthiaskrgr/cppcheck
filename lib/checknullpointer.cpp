@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,6 +31,11 @@ namespace {
 
 //---------------------------------------------------------------------------
 
+static bool checkNullpointerFunctionCallPlausibility(const Function* func, unsigned int arg)
+{
+    return !func || (func->argCount() >= arg && func->getArgumentVar(arg - 1) && func->getArgumentVar(arg - 1)->isPointer());
+}
+
 /**
  * @brief parse a function call and extract information about variable usage
  * @param tok first token
@@ -52,17 +57,17 @@ void CheckNullPointer::parseFunctionCall(const Token &tok, std::list<const Token
         (value == 0 && Token::Match(firstParam, "0|NULL ,|)"))) {
         if (value == 0 && Token::Match(&tok, "snprintf|vsnprintf|fnprintf|vfnprintf") && secondParam && secondParam->str() != "0") // Only if length (second parameter) is not zero
             var.push_back(firstParam);
-        else if (value == 0 && library != nullptr && library->isnullargbad(tok.str(),1))
+        else if (value == 0 && library != nullptr && library->isnullargbad(tok.str(), 1) && checkNullpointerFunctionCallPlausibility(tok.function(), 1))
             var.push_back(firstParam);
-        else if (value == 1 && library != nullptr && library->isuninitargbad(tok.str(),1))
+        else if (value == 1 && library != nullptr && library->isuninitargbad(tok.str(), 1))
             var.push_back(firstParam);
     }
 
     // 2nd parameter..
     if ((value == 0 && Token::Match(secondParam, "0|NULL ,|)")) || (secondParam && secondParam->varId() > 0 && Token::Match(secondParam->next(),"[,)]"))) {
-        if (value == 0 && library != nullptr && library->isnullargbad(tok.str(),2))
+        if (value == 0 && library != nullptr && library->isnullargbad(tok.str(), 2) && checkNullpointerFunctionCallPlausibility(tok.function(), 2))
             var.push_back(secondParam);
-        else if (value == 1 && library != nullptr && library->isuninitargbad(tok.str(),2))
+        else if (value == 1 && library != nullptr && library->isuninitargbad(tok.str(), 2))
             var.push_back(secondParam);
     }
 
@@ -165,6 +170,13 @@ bool CheckNullPointer::isPointerDeRef(const Token *tok, bool &unknown)
     // array access
     if (parent->str() == "[" && (!parent->astParent() || parent->astParent()->str() != "&"))
         return true;
+
+    // address of member variable / array element
+    const Token *parent2 = parent;
+    while (Token::Match(parent2, "[|."))
+        parent2 = parent2->astParent();
+    if (parent2 != parent && parent2 && parent2->str() == "&" && !parent2->astOperand2())
+        return false;
 
     // read/write member variable
     if (firstOperand && parent->str() == "." && (!parent->astParent() || parent->astParent()->str() != "&")) {
@@ -425,13 +437,13 @@ void CheckNullPointer::nullConstantDereference()
             }
 
             const Variable *ovar = nullptr;
-            if (Token::Match(tok, "0 ==|!= %var% !!."))
+            if (Token::Match(tok, "0 ==|!=|>|>=|<|<= %var% !!."))
                 ovar = tok->tokAt(2)->variable();
-            else if (Token::Match(tok, "%var% ==|!= 0"))
+            else if (Token::Match(tok, "%var% ==|!=|>|>=|<|<= 0"))
                 ovar = tok->variable();
             else if (Token::Match(tok, "%var% =|+ 0 )|]|,|;|+"))
                 ovar = tok->variable();
-            if (ovar && !ovar->isPointer() && !ovar->isArray() && ovar->isStlStringType())
+            if (ovar && !ovar->isPointer() && !ovar->isArray() && ovar->isStlStringType() && tok->tokAt(2)->originalName() != "'\\0'")
                 nullPointerError(tok);
         }
     }
@@ -502,7 +514,7 @@ void CheckNullPointer::nullPointerDefaultArgument()
                     }
                     if (!tok)
                         break;
-                } else if (Token::simpleMatch(tok, "if ( "))  {
+                } else if (Token::simpleMatch(tok, "if ("))  {
                     bool dependsOnPointer = false;
                     const Token *endOfCondition = tok->next()->link();
                     if (!endOfCondition)

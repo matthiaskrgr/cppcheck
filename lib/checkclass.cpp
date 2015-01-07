@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -444,7 +444,7 @@ void CheckClass::initializeVarList(const Function &func, std::list<const Functio
                 if (ftok->str() != func.name()) {
                     initVar(ftok->str(), scope, usage);
                 } else { // c++11 delegate constructor
-                    const Function *member = scope->findFunction(ftok);
+                    const Function *member = ftok->function();
                     // member function found
                     if (member) {
                         // recursive call
@@ -528,7 +528,7 @@ void CheckClass::initializeVarList(const Function &func, std::list<const Functio
         }
 
         if (!Token::Match(ftok->next(), "::| %var%") &&
-            !Token::Match(ftok->next(), "this . %var%") &&
+            !Token::Match(ftok->next(), "*| this . %var%") &&
             !Token::Match(ftok->next(), "* %var% =") &&
             !Token::Match(ftok->next(), "( * this ) . %var%"))
             continue;
@@ -700,6 +700,8 @@ void CheckClass::initializeVarList(const Function &func, std::list<const Functio
         // Assignment of array item of member variable?
         else if (Token::Match(ftok, "* %var% =")) {
             assignVar(ftok->next()->str(), scope, usage);
+        } else if (Token::Match(ftok, "* this . %var% =")) {
+            assignVar(ftok->strAt(3), scope, usage);
         }
 
         // The functions 'clear' and 'Clear' are supposed to initialize variable.
@@ -1115,7 +1117,10 @@ void CheckClass::operatorEq()
         std::list<Function>::const_iterator func;
 
         for (func = scope->functionList.begin(); func != scope->functionList.end(); ++func) {
-            if (func->type == Function::eOperatorEqual && func->access != Private) {
+            if (func->type == Function::eOperatorEqual && func->access == Public) {
+                // skip "deleted" functions - cannot be called anyway
+                if (func->isDelete)
+                    continue;
                 // use definition for check so we don't have to deal with qualification
                 if (!(Token::Match(func->retDef, "%type% &") && func->retDef->str() == scope->className)) {
                     // make sure we really have a copy assignment operator
@@ -1421,7 +1426,7 @@ void CheckClass::virtualDestructor()
                     // pointer variables of type 'Base *'
                     std::set<unsigned int> basepointer;
 
-                    for (std::size_t k = 0; k < symbolDatabase->getVariableListSize(); k++) {
+                    for (std::size_t k = 1; k < symbolDatabase->getVariableListSize(); k++) {
                         const Variable* var = symbolDatabase->getVariableFromVarId(k);
                         if (var && var->isPointer() && var->type() == derivedFrom)
                             basepointer.insert(var->declarationId());
@@ -1680,53 +1685,10 @@ bool CheckClass::isMemberVar(const Scope *scope, const Token *tok) const
     return false;
 }
 
-static unsigned int countParameters(const Token *tok)
-{
-    tok = tok->tokAt(2);
-    if (tok->str() == ")")
-        return 0;
-
-    unsigned int numpar = 1;
-    while (nullptr != (tok = tok->nextArgument()))
-        numpar++;
-
-    return numpar;
-}
-
-static unsigned int countMinArgs(const Token* argList)
-{
-    if (!argList)
-        return 0;
-
-    argList = argList->next();
-    if (argList->str() == ")")
-        return 0;
-
-    unsigned int count = 1;
-    for (; argList; argList = argList->next()) {
-        if (argList->link() && Token::Match(argList, "(|[|{|<"))
-            argList = argList->link();
-        else if (argList->str() == ",")
-            count++;
-        else if (argList->str() == "=")
-            return count-1;
-        else if (argList->str() == ")")
-            break;
-    }
-    return count;
-}
-
 bool CheckClass::isMemberFunc(const Scope *scope, const Token *tok) const
 {
-    unsigned int args = countParameters(tok);
-
-    for (std::list<Function>::const_iterator func = scope->functionList.begin(); func != scope->functionList.end(); ++func) {
-        /** @todo we need to look at the argument types when there are overloaded functions
-          * with the same number of arguments */
-        if (func->tokenDef->str() == tok->str() && (func->argCount() == args || (func->argCount() > args && countMinArgs(func->argDef) <= args))) {
-            return !func->isStatic;
-        }
-    }
+    if (tok->function() && tok->function()->nestedIn == scope)
+        return !tok->function()->isStatic;
 
     // not found in this class
     if (!scope->definedType->derivedFrom.empty()) {
@@ -1748,25 +1710,8 @@ bool CheckClass::isMemberFunc(const Scope *scope, const Token *tok) const
 
 bool CheckClass::isConstMemberFunc(const Scope *scope, const Token *tok) const
 {
-    unsigned int args = countParameters(tok);
-
-    std::list<Function>::const_iterator func;
-    unsigned int matches = 0;
-    unsigned int consts = 0;
-
-    for (func = scope->functionList.begin(); func != scope->functionList.end(); ++func) {
-        /** @todo we need to look at the argument types when there are overloaded functions
-          * with the same number of arguments */
-        if (func->tokenDef->str() == tok->str() && (func->argCount() == args || (func->argCount() > args && countMinArgs(func->argDef) <= args))) {
-            matches++;
-            if (func->isConst)
-                consts++;
-        }
-    }
-
-    // if there are multiple matches that are all const, return const
-    if (matches > 0 && matches == consts)
-        return true;
+    if (tok->function() && tok->function()->nestedIn == scope)
+        return tok->function()->isConst;
 
     // not found in this class
     if (!scope->definedType->derivedFrom.empty()) {
@@ -1799,6 +1744,21 @@ bool CheckClass::checkConstFunc(const Scope *scope, const Function *func, bool& 
 
             if (tok1->str() == "this" && tok1->previous()->isAssignmentOp())
                 return (false);
+
+
+            const Token* lhs = tok1->tokAt(-1);
+            if (lhs->str() == "&") {
+                lhs = lhs->previous();
+                if (lhs->type() == Token::eAssignmentOp && lhs->previous()->variable()) {
+                    if (lhs->previous()->variable()->typeStartToken()->strAt(-1) != "const" && lhs->previous()->variable()->isPointer())
+                        return false;
+                }
+            } else {
+                const Variable* v2 = lhs->previous()->variable();
+                if (lhs->type() == Token::eAssignmentOp && v2)
+                    if (!v2->isConst() && v2->isReference() && lhs == v2->nameToken()->next())
+                        return false;
+            }
 
             const Token* jumpBackToken = 0;
             const Token *lastVarTok = tok1;

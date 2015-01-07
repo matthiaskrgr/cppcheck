@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -415,8 +415,8 @@ int main(int argc, char **argv)
     fout << "\tinstall cppcheck ${BIN}\n";
     fout << "\tinstall htmlreport/cppcheck-htmlreport ${BIN}\n";
     fout << "ifdef CFGDIR \n";
-    fout << "\tinstall -d ${CFGDIR}\n";
-    fout << "\tinstall -m 644 cfg/* ${CFGDIR}\n";
+    fout << "\tinstall -d ${DESTDIR}${CFGDIR}\n";
+    fout << "\tinstall -m 644 cfg/* ${DESTDIR}${CFGDIR}\n";
     fout << "endif\n\n";
 
     fout << "\n###### Build\n\n";

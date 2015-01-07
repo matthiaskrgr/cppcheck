@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -113,6 +113,18 @@ private:
               "    va_list arg_ptr;\n"
               "    va_start(arg_ptr, szBuffer);\n"
               "    va_end(arg_ptr);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // #6186
+        check("void Format(char* szFormat, char (*szBuffer)[_Size], ...) {\n"
+              "    va_list arg_ptr;\n"
+              "    va_start(arg_ptr, szBuffer);\n"
+              "    try {\n"
+              "        throw sth;\n"
+              "    } catch(...) {\n"
+              "        va_end(arg_ptr);\n"
+              "    }\n"
               "}");
         ASSERT_EQUALS("", errout.str());
 

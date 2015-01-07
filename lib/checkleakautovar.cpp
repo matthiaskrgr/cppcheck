@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -224,6 +224,10 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
                 continue;
             }
 
+            // non-pod variable
+            if (_tokenizer->isCPP() && (!var || !var->typeStartToken()->isStandardType()))
+                continue;
+
             // Don't check reference variables
             if (var && var->isReference())
                 continue;
@@ -402,6 +406,9 @@ void CheckLeakAutoVar::functionCall(const Token *tok, VarInfo *varInfo, const in
     std::map<unsigned int, std::string> &possibleUsage = varInfo->possibleUsage;
 
     for (const Token *arg = tok->tokAt(2); arg; arg = arg->nextArgument()) {
+        if (arg->str() == "new")
+            arg = arg->next();
+
         if ((Token::Match(arg, "%var% [-,)]") && arg->varId() > 0) ||
             (Token::Match(arg, "& %var%") && arg->next()->varId() > 0)) {
 

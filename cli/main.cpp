@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 /**
  *
  * @mainpage Cppcheck
- * @version 1.66.99
+ * @version 1.68.99
  *
  * @section overview_sec Overview
  * Cppcheck is a simple tool for static analysis of C/C++ code.
@@ -95,6 +95,9 @@ void CheckOther::checkZeroDivision()
 
 #include "cppcheckexecutor.h"
 
+#include <cstdio>
+#include <cstdlib>
+
 #ifdef _WIN32
 #include <windows.h>
 static char exename[1024] = {0};
@@ -120,8 +123,11 @@ int main(int argc, char* argv[])
     argv[0] = exename;
 #endif
 
+#ifdef NDEBUG
     try {
+#endif
         return exec.check(argc, argv);
+#ifdef NDEBUG
     } catch (const InternalError& e) {
         printf("%s\n", e.errorMessage.c_str());
     } catch (const std::exception& error) {
@@ -130,6 +136,7 @@ int main(int argc, char* argv[])
         printf("Unknown exception\n");
     }
     return EXIT_FAILURE;
+#endif
 }
 
 

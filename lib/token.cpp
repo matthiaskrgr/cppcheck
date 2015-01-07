@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -153,16 +153,60 @@ std::string Token::strValue() const
 
 void Token::deleteNext(unsigned long index)
 {
-    while (_next && index--) {
+    while (_next && index) {
         Token *n = _next;
         _next = n->next();
         delete n;
+        --index;
     }
 
     if (_next)
         _next->previous(this);
     else if (tokensBack)
         *tokensBack = this;
+}
+
+void Token::swapWithNext()
+{
+    if (_next) {
+        Token temp(0);
+
+        temp._str = _next->_str;
+        temp._type = _next->_type;
+        temp._flags = _next->_flags;
+        temp._varId = _next->_varId;
+        temp._fileIndex = _next->_fileIndex;
+        temp._link = _next->_link;
+        temp._scope = _next->_scope;
+        temp._function = _next->_function;
+        temp._originalName = _next->_originalName;
+        temp.values = _next->values;
+        temp._progressValue = _next->_progressValue;
+
+        _next->_str = _str;
+        _next->_type = _type;
+        _next->_flags = _flags;
+        _next->_varId = _varId;
+        _next->_fileIndex = _fileIndex;
+        _next->_link = _link;
+        _next->_scope = _scope;
+        _next->_function = _function;
+        _next->_originalName = _originalName;
+        _next->values = values;
+        _next->_progressValue = _progressValue;
+
+        _str = temp._str;
+        _type = temp._type;
+        _flags = temp._flags;
+        _varId = temp._varId;
+        _fileIndex = temp._fileIndex;
+        _link = temp._link;
+        _scope = temp._scope;
+        _function = temp._function;
+        _originalName = temp._originalName;
+        values = temp.values;
+        _progressValue = temp._progressValue;
+    }
 }
 
 void Token::deleteThis()
@@ -744,6 +788,19 @@ Token* Token::nextArgumentBeforeCreateLinks2() const
     return 0;
 }
 
+Token* Token::nextTemplateArgument() const
+{
+    for (const Token* tok = this; tok; tok = tok->next()) {
+        if (tok->str() == ",")
+            return tok->next();
+        else if (tok->link() && Token::Match(tok, "(|{|[|<"))
+            tok = tok->link();
+        else if (Token::Match(tok, ">|;"))
+            return 0;
+    }
+    return 0;
+}
+
 const Token * Token::findClosingBracket() const
 {
     const Token *closing = nullptr;
@@ -928,7 +985,7 @@ void Token::printOut(const char *title, const std::vector<std::string> &fileName
     std::cout << stringifyList(true, true, true, true, true, &fileNames, 0) << std::endl;
 }
 
-void Token::stringify(std::ostream& os, bool varid, bool attributes) const
+void Token::stringify(std::ostream& os, bool varid, bool attributes, bool macro) const
 {
     if (attributes) {
         if (isUnsigned())
@@ -942,7 +999,7 @@ void Token::stringify(std::ostream& os, bool varid, bool attributes) const
                 os << "long ";
         }
     }
-    if (isExpandedMacro())
+    if (macro && isExpandedMacro())
         os << "$";
     if (_str[0] != '\"' || _str.find("\0") == std::string::npos)
         os << _str;
@@ -1007,7 +1064,7 @@ std::string Token::stringifyList(bool varid, bool attributes, bool linenumbers, 
             lineNumber = tok->linenr();
         }
 
-        tok->stringify(ret, varid, attributes); // print token
+        tok->stringify(ret, varid, attributes, attributes); // print token
         if (tok->next() != end && (!linebreaks || (tok->next()->linenr() <= tok->linenr() && tok->next()->fileIndex() == tok->fileIndex())))
             ret << ' ';
     }

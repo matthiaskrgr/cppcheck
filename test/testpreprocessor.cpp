@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1758,7 +1758,7 @@ private:
         ASSERT_EQUALS("\n\n\n\n\n$$$__forceinline $$inline $$__forceinline\n", actual[""]);
     }
 
-    void ticket_4922() {// #4922
+    void ticket_4922() { // #4922
         const std::string code("__asm__ \n"
                                "{ int extern __value) 0; (double return (\"\" } extern\n"
                                "__typeof __finite (__finite) __finite __inline \"__GI___finite\");");
@@ -4052,7 +4052,7 @@ private:
         preprocessor.handleIncludes(code, "123.h", includePaths, defs, pragmaOnce, std::list<std::string>());
     }
 
-    void invalid_ifs()  {
+    void invalid_ifs() {
         const char filedata[] = "#ifdef\n"
                                 "#endif\n"
                                 "#ifdef !\n"

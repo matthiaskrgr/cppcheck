@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -427,7 +427,7 @@ struct AST_state {
     unsigned int depth;
     unsigned int inArrayAssignment;
     bool cpp;
-    AST_state(bool cpp_) : depth(0), inArrayAssignment(0), cpp(cpp_) {}
+    explicit AST_state(bool cpp_) : depth(0), inArrayAssignment(0), cpp(cpp_) {}
 };
 
 static bool iscast(const Token *tok)
@@ -453,7 +453,7 @@ static bool iscast(const Token *tok)
         if (!Token::Match(tok2, "%var%|*|&|::"))
             return false;
 
-        if (tok2->isStandardType())
+        if (tok2->isStandardType() && tok2->next()->str() != "(")
             type = true;
     }
 
@@ -557,7 +557,7 @@ static void compileScope(Token *&tok, AST_state& state)
             if (tok)
                 compileTerm(tok, state);
 
-            if (binop->previous() && binop->previous()->isName())
+            if (binop->previous() && (binop->previous()->isName() || (binop->previous()->link() && binop->strAt(-1) == ">")))
                 compileBinOp(binop, state, nullptr);
             else
                 compileUnaryOp(binop, state, nullptr);
@@ -657,17 +657,44 @@ static void compilePrecedence3(Token *&tok, AST_state& state)
             compilePrecedence3(tok, state);
             compileUnaryOp(tok2, state, nullptr);
         } else if (state.cpp && Token::Match(tok, "new %var%|::|(")) {
-            Token* tok2 = tok;
+            Token* newtok = tok;
             tok = tok->next();
-            if (tok->str() == "(" && Token::Match(tok->link(), ") %type%"))
-                tok = tok->link()->next();
+            bool innertype = false;
+            if (tok->str() == "(") {
+                if (Token::Match(tok, "( &| %var%") && Token::Match(tok->link(), ") ( %type%") && Token::simpleMatch(tok->link()->linkAt(1), ") ("))
+                    tok = tok->link()->next();
+                if (Token::Match(tok->link(), ") ::| %type%"))
+                    tok = tok->link()->next();
+                else if (Token::Match(tok, "( %type%") && Token::Match(tok->link(), ") [();,[]")) {
+                    tok = tok->next();
+                    innertype = true;
+                } else if (Token::Match(tok, "( &| %var%") && Token::simpleMatch(tok->link(), ") (")) {
+                    tok = tok->next();
+                    innertype = true;
+                } else {
+                    /* bad code */
+                    continue;
+                }
+            }
             state.op.push(tok);
-            while (Token::Match(tok, "%var%|*|&|<|[")) {
+            while (Token::Match(tok, "%var%|*|&|<|::")) {
                 if (tok->link())
                     tok = tok->link();
                 tok = tok->next();
             }
-            compileUnaryOp(tok2, state, nullptr);
+            if (Token::Match(tok, "( const| %type% ) (")) {
+                state.op.push(tok->next());
+                tok = tok->link()->next();
+                compileBinOp(tok, state, compilePrecedence2);
+            } else if (tok->str() == "[" || tok->str() == "(")
+                compilePrecedence2(tok, state);
+            else if (innertype && Token::simpleMatch(tok, ") [")) {
+                tok = tok->next();
+                compilePrecedence2(tok, state);
+            }
+            compileUnaryOp(newtok, state, nullptr);
+            if (innertype && Token::simpleMatch(tok, ") ,"))
+                tok = tok->next();
         } else if (state.cpp && Token::Match(tok, "delete %var%|*|&|::|(|[")) {
             Token* tok2 = tok;
             tok = tok->next();
@@ -756,6 +783,8 @@ static void compileAnd(Token *&tok, AST_state& state)
     while (tok) {
         if (tok->str() == "&" && !tok->astOperand1()) {
             Token* tok2 = tok->next();
+            if (!tok2)
+                break;
             if (tok2->str() == "&")
                 tok2 = tok2->next();
             if (state.cpp && Token::Match(tok2, ",|)")) {
@@ -907,7 +936,7 @@ static Token * createAstAtToken(Token *tok, bool cpp)
     if (Token::Match(tok, "%type% <") && Token::Match(tok->linkAt(1), "> !!("))
         return tok->linkAt(1);
 
-    if (tok->str() == "return" || !tok->previous() || Token::Match(tok, "%var% %op%|(|[|.|::") || Token::Match(tok->previous(), "[;{}] %cop%|++|--|( !!{")) {
+    if (tok->str() == "return" || !tok->previous() || Token::Match(tok, "%var% %op%|(|[|.|::|<") || Token::Match(tok->previous(), "[;{}] %cop%|++|--|( !!{")) {
         Token * const tok1 = tok;
         AST_state state(cpp);
         compileExpression(tok, state);

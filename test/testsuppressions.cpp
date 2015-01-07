@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2014 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -327,7 +327,7 @@ private:
     void inlinesuppress_unusedFunction() const { // #4210, #4946 - wrong report of "unmatchedSuppression" for "unusedFunction"
         Suppressions suppressions;
         suppressions.addSuppression("unusedFunction", "test.c", 3U);
-        ASSERT_EQUALS(true, !suppressions.getUnmatchedLocalSuppressions("test.c", true).empty());
+        ASSERT_EQUALS(false, !suppressions.getUnmatchedLocalSuppressions("test.c", true).empty());
         ASSERT_EQUALS(false, !suppressions.getUnmatchedGlobalSuppressions(true).empty());
         ASSERT_EQUALS(false, !suppressions.getUnmatchedLocalSuppressions("test.c", false).empty());
         ASSERT_EQUALS(false, !suppressions.getUnmatchedGlobalSuppressions(false).empty());
@@ -342,7 +342,7 @@ private:
         ASSERT_EQUALS(false, !suppressions.getUnmatchedGlobalSuppressions(false).empty());
     }
 
-    void suppressionWithRelativePaths()  {
+    void suppressionWithRelativePaths() {
         // Clear the error log
         errout.str("");
 
