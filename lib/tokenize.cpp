@@ -4271,7 +4271,7 @@ void Tokenizer::simplifyFlowControl()
 
             } else if (Token::Match(tok,"return|goto") ||
                        (Token::Match(tok->previous(), "[;{}] %var% (") &&
-                        (_settings->library.isnoreturn(tok->str()) || (tok->function() && tok->function()->isAttributeNoreturn()))) ||
+                        _settings->library.isnoreturn(tok)) ||
                        (tok->str() == "throw" && !isC())) {
                 //TODO: ensure that we exclude user-defined 'exit|abort|throw', except for 'noreturn'
                 //catch the first ';'
@@ -9196,7 +9196,7 @@ void Tokenizer::simplifyDeclspec()
                     if (tok->strAt(2) == "noreturn")
                         tok1->isAttributeNoreturn(true);
                     else
-                        tok1->isDeclspecNothrow(true);
+                        tok1->isAttributeNothrow(true);
                 }
             } else if (tok->strAt(2) == "property")
                 tok->next()->link()->insertToken("__property");

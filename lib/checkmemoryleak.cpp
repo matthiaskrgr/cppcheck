@@ -397,7 +397,7 @@ void CheckMemoryLeak::mismatchAllocDealloc(const std::list<const Token *> &calls
 
 CheckMemoryLeak::AllocType CheckMemoryLeak::functionReturnType(const Function* func, std::list<const Function*> *callstack) const
 {
-    if (!func || !func->hasBody)
+    if (!func || !func->hasBody())
         return No;
 
     // Get return pointer..
@@ -578,7 +578,7 @@ const char * CheckMemoryLeakInFunction::call_func(const Token *tok, std::list<co
         return 0;
     }
 
-    if ((_settings->library.isnoreturn(tok->str()) || (tok->function() && tok->function()->isAttributeNoreturn())) && tok->strAt(-1) != "=")
+    if (_settings->library.isnoreturn(tok) && tok->strAt(-1) != "=")
         return "exit";
 
     if (varid > 0 && (getReallocationType(tok, varid) != No || getDeallocationType(tok, varid) != No))
@@ -597,7 +597,7 @@ const char * CheckMemoryLeakInFunction::call_func(const Token *tok, std::list<co
     // lock/unlock..
     if (varid == 0) {
         const Function* func = tok->function();
-        if (!func || !func->hasBody)
+        if (!func || !func->hasBody())
             return 0;
 
         Token *ftok = getcode(func->functionScope->classStart->next(), callstack, 0, alloctype, dealloctype, false, 1);
@@ -623,7 +623,7 @@ const char * CheckMemoryLeakInFunction::call_func(const Token *tok, std::list<co
             std::string temp;
             if (!_settings->library.isScopeNoReturn(tok->function()->functionScope->classEnd, &temp) && temp.empty())
                 return nullptr;
-        } else if (_settings->library.isnotnoreturn(funcname))
+        } else if (_settings->library.isnotnoreturn(tok))
             return nullptr;
 
         return "callfunc";
@@ -1283,7 +1283,7 @@ Token *CheckMemoryLeakInFunction::getcode(const Token *tok, std::list<const Toke
             // just add a "::use"
             // The "::use" means that a member function was probably called but it wasn't analysed further
             else if (classmember) {
-                if (_settings->library.isnoreturn(tok->str()) || (tok->function() && tok->function()->isAttributeNoreturn()))
+                if (_settings->library.isnoreturn(tok))
                     addtoken(&rettail, tok, "exit");
 
                 else if (!test_white_list_with_lib(tok->str(), _settings)) {
@@ -2317,7 +2317,7 @@ void CheckMemoryLeakInClass::variable(const Scope *scope, const Token *tokVarnam
     for (func = scope->functionList.begin(); func != scope->functionList.end(); ++func) {
         const bool constructor = func->isConstructor();
         const bool destructor = func->isDestructor();
-        if (!func->hasBody) {
+        if (!func->hasBody()) {
             if (destructor) { // implementation for destructor is not seen => assume it deallocates all variables properly
                 deallocInDestructor = true;
                 Dealloc = CheckMemoryLeak::Many;
@@ -2445,7 +2445,7 @@ void CheckMemoryLeakInClass::checkPublicFunctions(const Scope *scope, const Toke
 
     for (func = scope->functionList.begin(); func != scope->functionList.end(); ++func) {
         if ((func->type == Function::eFunction || func->type == Function::eOperatorEqual) &&
-            func->access == Public && func->hasBody) {
+            func->access == Public && func->hasBody()) {
             const Token *tok2 = func->token;
             while (tok2->str() != "{")
                 tok2 = tok2->next();
@@ -2785,7 +2785,7 @@ void CheckMemoryLeakNoVar::checkForUnsafeArgAlloc(const Scope *scope)
             // Scan through the arguments to the function call
             for (const Token *tok2 = tok->tokAt(2); tok2 && tok2 != endParamToken; tok2 = tok2->nextArgument()) {
                 const Function *pFunc = tok2->function();
-                const bool isNothrow = pFunc && (pFunc->isDeclspecNothrow() || pFunc->isAttributeNothrow());
+                const bool isNothrow = pFunc && pFunc->isAttributeNothrow();
 
                 if (Token::Match(tok2, "shared_ptr|unique_ptr < %var% > ( new %var%")) {
                     pointerType = tok2->str();

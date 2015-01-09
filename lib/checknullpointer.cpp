@@ -57,17 +57,17 @@ void CheckNullPointer::parseFunctionCall(const Token &tok, std::list<const Token
         (value == 0 && Token::Match(firstParam, "0|NULL ,|)"))) {
         if (value == 0 && Token::Match(&tok, "snprintf|vsnprintf|fnprintf|vfnprintf") && secondParam && secondParam->str() != "0") // Only if length (second parameter) is not zero
             var.push_back(firstParam);
-        else if (value == 0 && library != nullptr && library->isnullargbad(tok.str(), 1) && checkNullpointerFunctionCallPlausibility(tok.function(), 1))
+        else if (value == 0 && library != nullptr && library->isnullargbad(&tok, 1) && checkNullpointerFunctionCallPlausibility(tok.function(), 1))
             var.push_back(firstParam);
-        else if (value == 1 && library != nullptr && library->isuninitargbad(tok.str(), 1))
+        else if (value == 1 && library != nullptr && library->isuninitargbad(&tok, 1))
             var.push_back(firstParam);
     }
 
     // 2nd parameter..
     if ((value == 0 && Token::Match(secondParam, "0|NULL ,|)")) || (secondParam && secondParam->varId() > 0 && Token::Match(secondParam->next(),"[,)]"))) {
-        if (value == 0 && library != nullptr && library->isnullargbad(tok.str(), 2) && checkNullpointerFunctionCallPlausibility(tok.function(), 2))
+        if (value == 0 && library != nullptr && library->isnullargbad(&tok, 2) && checkNullpointerFunctionCallPlausibility(tok.function(), 2))
             var.push_back(secondParam);
-        else if (value == 1 && library != nullptr && library->isuninitargbad(tok.str(), 2))
+        else if (value == 1 && library != nullptr && library->isuninitargbad(&tok, 2))
             var.push_back(secondParam);
     }
 
@@ -379,7 +379,7 @@ void CheckNullPointer::nullConstantDereference()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        if (scope->function == 0 || !scope->function->hasBody) // We only look for functions with a body
+        if (scope->function == 0 || !scope->function->hasBody()) // We only look for functions with a body
             continue;
 
         const Token *tok = scope->classStart;
@@ -484,7 +484,7 @@ void CheckNullPointer::nullPointerDefaultArgument()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        if (scope->function == 0 || !scope->function->hasBody) // We only look for functions with a body
+        if (scope->function == 0 || !scope->function->hasBody()) // We only look for functions with a body
             continue;
 
         // Scan the argument list for default arguments that are pointers and

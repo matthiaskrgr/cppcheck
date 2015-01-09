@@ -345,7 +345,7 @@ static bool checkMinSizes(const std::list<Library::ArgumentChecks::MinSize> &min
 
 void CheckBufferOverrun::checkFunctionParameter(const Token &ftok, unsigned int par, const ArrayInfo &arrayInfo, const std::list<const Token *>& callstack)
 {
-    const std::list<Library::ArgumentChecks::MinSize> * const minsizes = _settings->library.argminsizes(ftok.str(),par);
+    const std::list<Library::ArgumentChecks::MinSize> * const minsizes = _settings->library.argminsizes(&ftok,par);
 
     if (minsizes && (!(Token::simpleMatch(ftok.previous(), ".") || Token::Match(ftok.tokAt(-2), "!!std ::")))) {
         if (arrayInfo.element_size() == 0)
@@ -367,7 +367,7 @@ void CheckBufferOverrun::checkFunctionParameter(const Token &ftok, unsigned int 
     else if (arrayInfo.num().size() == 1) {
         const Function* const func = ftok.function();
 
-        if (func && func->hasBody) {
+        if (func && func->hasBody()) {
             // Get corresponding parameter..
             const Variable* const parameter = func->getArgumentVar(par-1);
 
@@ -1633,7 +1633,7 @@ void CheckBufferOverrun::checkStringArgument()
                 const Token *strtoken = argtok->getValueTokenMinStrSize();
                 if (!strtoken)
                     continue;
-                const std::list<Library::ArgumentChecks::MinSize> *minsizes = _settings->library.argminsizes(tok->str(), argnr);
+                const std::list<Library::ArgumentChecks::MinSize> *minsizes = _settings->library.argminsizes(tok, argnr);
                 if (!minsizes)
                     continue;
                 if (checkMinSizes(*minsizes, tok, Token::getStrSize(strtoken), nullptr))
@@ -1904,7 +1904,7 @@ Check::FileInfo* CheckBufferOverrun::getFileInfo(const Tokenizer *tokenizer, con
     const std::list<Variable> &varlist = symbolDatabase->scopeList.front().varlist;
     for (std::list<Variable>::const_iterator it = varlist.begin(); it != varlist.end(); ++it) {
         const Variable &var = *it;
-        if (!var.isStatic() && var.isArray() && var.dimensions().size() == 1U)
+        if (!var.isStatic() && var.isArray() && var.dimensions().size() == 1U && var.dimension(0U) > 0U)
             fileInfo->arraySize[var.name()] = var.dimension(0U);
     }
 

@@ -66,7 +66,7 @@ static bool isConstExpression(const Token *tok, const std::set<std::string> &con
     if (tok->isName() && tok->next()->str() == "(") {
         if (!tok->function() && !Token::Match(tok->previous(), ".|::") && constFunctions.find(tok->str()) == constFunctions.end())
             return false;
-        else if (tok->function() && !tok->function()->isConst)
+        else if (tok->function() && !tok->function()->isConst())
             return false;
     }
     if (tok->type() == Token::eIncDecOp)
@@ -96,7 +96,7 @@ bool isSameExpression(const Token *tok1, const Token *tok2, const std::set<std::
     if (tok1->isName() && tok1->next()->str() == "(") {
         if (!tok1->function() && !Token::Match(tok1->previous(), ".|::") && constFunctions.find(tok1->str()) == constFunctions.end() && !tok1->isAttributeConst() && !tok1->isAttributePure())
             return false;
-        else if (tok1->function() && !tok1->function()->isConst && !tok1->function()->isAttributeConst() && !tok1->function()->isAttributePure())
+        else if (tok1->function() && !tok1->function()->isConst() && !tok1->function()->isAttributeConst() && !tok1->function()->isAttributePure())
             return false;
     }
     // templates/casts
@@ -105,7 +105,7 @@ bool isSameExpression(const Token *tok1, const Token *tok2, const std::set<std::
 
         // non-const template function that is not a dynamic_cast => return false
         if (Token::simpleMatch(tok1->next()->link(), "> (") &&
-            !(tok1->function() && tok1->function()->isConst) &&
+            !(tok1->function() && tok1->function()->isConst()) &&
             tok1->str() != "dynamic_cast")
             return false;
 
@@ -700,7 +700,7 @@ void CheckOther::checkRedundantAssignment()
                     }
                 } else if (scope->type == Scope::eSwitch) { // Avoid false positives if noreturn function is called in switch
                     const Function* const func = tok->function();
-                    if (!func || !func->hasBody) {
+                    if (!func || !func->hasBody()) {
                         varAssignments.clear();
                         memAssignments.clear();
                         continue;
@@ -1068,27 +1068,27 @@ void CheckOther::invalidFunctionUsage()
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
             if (!Token::Match(tok, "%var% ( !!)"))
                 continue;
-            const std::string& functionName = tok->str();
+            const Token * const functionToken = tok;
             int argnr = 1;
             const Token *argtok = tok->tokAt(2);
             while (argtok && argtok->str() != ")") {
                 if (Token::Match(argtok,"%num% [,)]")) {
                     if (MathLib::isInt(argtok->str()) &&
-                        !_settings->library.isargvalid(functionName, argnr, MathLib::toLongNumber(argtok->str())))
-                        invalidFunctionArgError(argtok,functionName,argnr,_settings->library.validarg(functionName,argnr));
+                        !_settings->library.isargvalid(functionToken, argnr, MathLib::toLongNumber(argtok->str())))
+                        invalidFunctionArgError(argtok,functionToken->str(),argnr,_settings->library.validarg(functionToken,argnr));
                 } else {
                     const Token *top = argtok;
                     while (top->astParent() && top->astParent()->str() != "," && top->astParent() != tok->next())
                         top = top->astParent();
                     if (top->isComparisonOp() || Token::Match(top, "%oror%|&&")) {
-                        if (_settings->library.isboolargbad(functionName, argnr))
-                            invalidFunctionArgBoolError(top, functionName, argnr);
+                        if (_settings->library.isboolargbad(functionToken, argnr))
+                            invalidFunctionArgBoolError(top, functionToken->str(), argnr);
 
                         // Are the values 0 and 1 valid?
-                        else if (!_settings->library.isargvalid(functionName, argnr, 0))
-                            invalidFunctionArgError(top, functionName, argnr, _settings->library.validarg(functionName,argnr));
-                        else if (!_settings->library.isargvalid(functionName, argnr, 1))
-                            invalidFunctionArgError(top, functionName, argnr, _settings->library.validarg(functionName,argnr));
+                        else if (!_settings->library.isargvalid(functionToken, argnr, 0))
+                            invalidFunctionArgError(top, functionToken->str(), argnr, _settings->library.validarg(functionToken,argnr));
+                        else if (!_settings->library.isargvalid(functionToken, argnr, 1))
+                            invalidFunctionArgError(top, functionToken->str(), argnr, _settings->library.validarg(functionToken,argnr));
                     }
                 }
                 argnr++;
@@ -1154,7 +1154,7 @@ void CheckOther::checkUnreachableCode()
             } else if (Token::Match(tok, "goto %any% ;")) {
                 secondBreak = tok->tokAt(3);
                 labelName = tok->next();
-            } else if (Token::Match(tok, "%var% (") && (_settings->library.isnoreturn(tok->str()) || (tok->function() && tok->function()->isAttributeNoreturn())) && tok->strAt(-1) != ".") {
+            } else if (Token::Match(tok, "%var% (") && _settings->library.isnoreturn(tok)) {
                 if ((!tok->function() || (tok->function()->token != tok && tok->function()->tokenDef != tok)) && tok->linkAt(1)->strAt(1) != "{")
                     secondBreak = tok->linkAt(1)->tokAt(2);
             }
@@ -2252,7 +2252,7 @@ void CheckOther::doubleCloseDirError(const Token *tok, const std::string &varnam
 namespace {
     bool notconst(const Function* func)
     {
-        return !func->isConst;
+        return !func->isConst();
     }
 
     void getConstFunctions(const SymbolDatabase *symbolDatabase, std::list<const Function*> &constFunctions)
