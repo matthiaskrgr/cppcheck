@@ -20,6 +20,7 @@
 #include "testutils.h"
 #include "symboldatabase.h"
 #include <sstream>
+#include <stdexcept>
 
 #define GET_SYMBOL_DB(code) \
     errout.str(""); \
@@ -128,6 +129,7 @@ private:
         TEST_CASE(arrayMemberVar2);
         TEST_CASE(arrayMemberVar3);
         TEST_CASE(staticMemberVar);
+        TEST_CASE(getVariableFromVarIdBoundsCheck);
 
         TEST_CASE(hasRegularFunction);
         TEST_CASE(hasInlineClassFunction);
@@ -748,6 +750,17 @@ private:
         const Variable* v = db->getVariableFromVarId(1);
         ASSERT(v && db->getVariableListSize() == 2);
         ASSERT(v && v->isStatic() && v->isConst() && v->isPrivate());
+    }
+
+    void getVariableFromVarIdBoundsCheck() {
+        GET_SYMBOL_DB("int x;\n"
+                      "int y;\n");
+
+        const Variable* v = db->getVariableFromVarId(2);
+        // three elements: varId 0 also counts via a fake-entry
+        ASSERT(v && db->getVariableListSize() == 3);
+
+        ASSERT_THROW(db->getVariableFromVarId(3), std::out_of_range);
     }
 
     void hasRegularFunction() {

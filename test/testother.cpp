@@ -3372,6 +3372,27 @@ private:
               "    this->var = var;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        // #6406 - false positive for struct with designated initializer
+        check("struct callbacks {\n"
+              "    void (*something)(void);\n"
+              "};\n"
+              "void something(void) {}\n"
+              "void f() {\n"
+              "    struct callbacks ops = { .something = something };\n"
+              "}\n");
+        TODO_ASSERT_EQUALS("", "[test.cpp:6]: (warning) Redundant assignment of 'something' to itself.\n", errout.str());
+
+        // #6406 - designated initializer doing bogus self assignment
+        check("struct callbacks {\n"
+              "    void (*something)(void);\n"
+              "};\n"
+              "void something(void) {}\n"
+              "void f() {\n"
+              "    struct callbacks ops = { .something = ops.something };\n"
+              "}\n");
+        TODO_ASSERT_EQUALS("[test.cpp:6]: (warning) Redundant assignment of 'something' to itself.\n", "", errout.str());
+
     }
 
     void trac1132() {
