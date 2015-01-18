@@ -206,9 +206,9 @@ static const Token * functionThrowsRecursive(const Function * function, std::set
         } else if (tok->function()) {
             const Function * called = tok->function();
             // check if called function has an exception specification
-            if (called->isThrow && called->throwArg) {
+            if (called->isThrow() && called->throwArg) {
                 return tok;
-            } else if (called->isNoExcept && called->noexceptArg &&
+            } else if (called->isNoExcept() && called->noexceptArg &&
                        called->noexceptArg->str() != "true") {
                 return tok;
             } else if (functionThrowsRecursive(called, recursive)) {
@@ -243,8 +243,8 @@ void CheckExceptionSafety::nothrowThrows()
         if (!function)
             continue;
 
-        // check noexcept functions
-        if (function->isNoExcept &&
+        // check noexcept and noexcept(true) functions
+        if (function->isNoExcept() &&
             (!function->noexceptArg || function->noexceptArg->str() == "true")) {
             const Token *throws = functionThrows(function);
             if (throws)
@@ -252,24 +252,17 @@ void CheckExceptionSafety::nothrowThrows()
         }
 
         // check throw() functions
-        else if (function->isThrow && !function->throwArg) {
+        else if (function->isThrow() && !function->throwArg) {
             const Token *throws = functionThrows(function);
             if (throws)
-                nothrowThrowError(throws);
+                noexceptThrowError(throws);
         }
 
-        // check __attribute__((nothrow)) functions
+        // check __attribute__((nothrow)) or __declspec(nothrow) functions
         else if (function->isAttributeNothrow()) {
             const Token *throws = functionThrows(function);
             if (throws)
-                nothrowAttributeThrowError(throws);
-        }
-
-        // check __declspec(nothrow) functions
-        else if (function->isDeclspecNothrow()) {
-            const Token *throws = functionThrows(function);
-            if (throws)
-                nothrowDeclspecThrowError(throws);
+                noexceptThrowError(throws);
         }
     }
 }
@@ -288,7 +281,7 @@ void CheckExceptionSafety::unhandledExceptionSpecification()
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
         // only check functions without exception epecification
-        if (scope->function && !scope->function->isThrow &&
+        if (scope->function && !scope->function->isThrow() &&
             scope->className != "main" && scope->className != "wmain" &&
             scope->className != "_tmain" && scope->className != "WinMain") {
             for (const Token *tok = scope->function->functionScope->classStart->next();
@@ -298,7 +291,7 @@ void CheckExceptionSafety::unhandledExceptionSpecification()
                 } else if (tok->function()) {
                     const Function * called = tok->function();
                     // check if called function has an exception specification
-                    if (called->isThrow && called->throwArg) {
+                    if (called->isThrow() && called->throwArg) {
                         unhandledExceptionSpecificationError(tok, called->tokenDef, scope->function->name());
                         break;
                     }

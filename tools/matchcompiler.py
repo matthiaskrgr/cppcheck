@@ -25,8 +25,9 @@ import argparse
 
 class MatchCompiler:
 
-    def __init__(self, verify_mode=False):
+    def __init__(self, verify_mode=False, show_skipped=False):
         self._verifyMode = verify_mode
+        self._showSkipped = show_skipped
         self._reset()
 
     def _reset(self):
@@ -396,8 +397,10 @@ class MatchCompiler:
             if len(res) == 4:
                 varId = res[3]
 
-            res = re.match(r'\s*"([^"]*)"\s*$', raw_pattern)
+            res = re.match(r'\s*"((?:.|\\")*?)"\s*$', raw_pattern)
             if res is None:
+                if self._showSkipped:
+                    print("[SKIPPING] match pattern: " + raw_pattern)
                 break  # Non-const pattern - bailout
 
             pattern = res.group(1)
@@ -550,8 +553,10 @@ class MatchCompiler:
                 elif varId is None and len(res) == 4:
                     endToken = res[3]
 
-            res = re.match(r'\s*"([^"]*)"\s*$', pattern)
+            res = re.match(r'\s*"((?:.|\\")*?)"\s*$', pattern)
             if res is None:
+                if self._showSkipped:
+                    print("[SKIPPING] findmatch pattern: " + pattern)
                 break  # Non-const pattern - bailout
 
             pattern = res.group(1)
@@ -569,9 +574,9 @@ class MatchCompiler:
 
     def _replaceCStrings(self, line):
         while True:
-            match = re.search('str\(\) (==|!=) "', line)
+            match = re.search('str\(\) *(==|!=) *"', line)
             if not match:
-                match = re.search('strAt\(.+?\) (==|!=) "', line)
+                match = re.search('strAt\(.+?\) *(==|!=) *"', line)
             if not match:
                 break
 
@@ -648,9 +653,12 @@ def main():
         description='Compile Token::Match() calls into native C++ code')
     parser.add_argument('--verify', action='store_true', default=False,
                         help='verify compiled matches against on-the-fly parser. Slow!')
+    parser.add_argument('--show-skipped', action='store_true', default=False,
+                        help='show skipped (non-static) patterns')
     args = parser.parse_args()
 
-    mc = MatchCompiler(verify_mode=args.verify)
+    mc = MatchCompiler(verify_mode=args.verify,
+                       show_skipped=args.show_skipped)
 
     # convert all lib/*.cpp files
     for f in glob.glob('lib/*.cpp'):

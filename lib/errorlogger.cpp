@@ -29,6 +29,8 @@
 #include <sstream>
 #include <vector>
 
+static std::string fixInvalidChars(const std::string& raw);
+
 InternalError::InternalError(const Token *tok, const std::string &errorMsg, Type type) :
     token(tok), errorMessage(errorMsg)
 {
@@ -107,8 +109,12 @@ std::string ErrorLogger::ErrorMessage::serialize() const
         const std::string inconclusive("inconclusive");
         oss << inconclusive.length() << " " << inconclusive;
     }
-    oss << _shortMessage.length() << " " << _shortMessage;
-    oss << _verboseMessage.length() << " " << _verboseMessage;
+
+    const std::string saneShortMessage = fixInvalidChars(_shortMessage);
+    const std::string saneVerboseMessage = fixInvalidChars(_verboseMessage);
+
+    oss << saneShortMessage.length() << " " << saneShortMessage;
+    oss << saneVerboseMessage.length() << " " << saneVerboseMessage;
     oss << _callStack.size() << " ";
 
     for (std::list<ErrorLogger::ErrorMessage::FileLocation>::const_iterator tok = _callStack.begin(); tok != _callStack.end(); ++tok) {
@@ -147,6 +153,9 @@ bool ErrorLogger::ErrorMessage::deserialize(const std::string &data)
         if (results.size() == 4)
             break;
     }
+
+    if (results.size() != 4)
+        throw InternalError(0, "Internal Error: Deserialization of error message failed");
 
     _id = results[0];
     _severity = Severity::fromString(results[1]);

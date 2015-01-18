@@ -1955,6 +1955,9 @@ void Tokenizer::simplifySQL()
 
 void Tokenizer::simplifyDebugNew()
 {
+    if (!_settings->isWindowsPlatform())
+        return;
+
     // convert Microsoft DEBUG_NEW macro to new
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         if (tok->str() == "DEBUG_NEW")
@@ -3378,6 +3381,11 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // remove some unhandled macros in global scope
     removeMacrosInGlobalScope();
 
+    // remove undefined macro in class definition:
+    // class DLLEXPORT Fred { };
+    // class Fred FINAL : Base { };
+    removeMacroInClassDef();
+
     // remove __attribute__((?))
     simplifyAttribute();
 
@@ -4061,6 +4069,22 @@ void Tokenizer::removeMacrosInGlobalScope()
             tok = tok->link();
     }
 }
+
+//---------------------------------------------------------------------------
+
+void Tokenizer::removeMacroInClassDef()
+{
+    for (Token *tok = list.front(); tok; tok = tok->next()) {
+        if (Token::Match(tok, "class|struct %var% %var% {|:") &&
+            (tok->next()->isUpperCaseName() || tok->tokAt(2)->isUpperCaseName())) {
+            if (tok->next()->isUpperCaseName() && !tok->tokAt(2)->isUpperCaseName())
+                tok->deleteNext();
+            else if (!tok->next()->isUpperCaseName() && tok->tokAt(2)->isUpperCaseName())
+                tok->next()->deleteNext();
+        }
+    }
+}
+
 //---------------------------------------------------------------------------
 
 void Tokenizer::removeMacroInVarDecl()
@@ -4271,7 +4295,7 @@ void Tokenizer::simplifyFlowControl()
 
             } else if (Token::Match(tok,"return|goto") ||
                        (Token::Match(tok->previous(), "[;{}] %var% (") &&
-                        (_settings->library.isnoreturn(tok->str()) || (tok->function() && tok->function()->isAttributeNoreturn()))) ||
+                        _settings->library.isnoreturn(tok)) ||
                        (tok->str() == "throw" && !isC())) {
                 //TODO: ensure that we exclude user-defined 'exit|abort|throw', except for 'noreturn'
                 //catch the first ';'
@@ -9196,7 +9220,7 @@ void Tokenizer::simplifyDeclspec()
                     if (tok->strAt(2) == "noreturn")
                         tok1->isAttributeNoreturn(true);
                     else
-                        tok1->isDeclspecNothrow(true);
+                        tok1->isAttributeNothrow(true);
                 }
             } else if (tok->strAt(2) == "property")
                 tok->next()->link()->insertToken("__property");
@@ -9210,6 +9234,12 @@ void Tokenizer::simplifyDeclspec()
 void Tokenizer::simplifyAttribute()
 {
     for (Token *tok = list.front(); tok; tok = tok->next()) {
+        if (Token::Match(tok, "%type% (") && !_settings->library.isNotLibraryFunction(tok)) {
+            if (_settings->library.functionpure.find(tok->str()) != _settings->library.functionpure.end())
+                tok->isAttributePure(true);
+            if (_settings->library.functionconst.find(tok->str()) != _settings->library.functionconst.end())
+                tok->isAttributeConst(true);
+        }
         while (Token::Match(tok, "__attribute__|__attribute (") && tok->next()->link() && tok->next()->link()->next()) {
             if (Token::Match(tok->tokAt(2), "( constructor|__constructor__")) {
                 // prototype for constructor is: void func(void);
@@ -9677,9 +9707,7 @@ void Tokenizer::simplifyNamespaceStd()
 void Tokenizer::simplifyMicrosoftMFC()
 {
     // skip if not Windows
-    if (!(_settings->platformType == Settings::Win32A ||
-          _settings->platformType == Settings::Win32W ||
-          _settings->platformType == Settings::Win64))
+    if (!_settings->isWindowsPlatform())
         return;
 
     for (Token *tok = list.front(); tok; tok = tok->next()) {
@@ -9694,9 +9722,7 @@ void Tokenizer::simplifyMicrosoftMFC()
 void Tokenizer::simplifyMicrosoftMemoryFunctions()
 {
     // skip if not Windows
-    if (!(_settings->platformType == Settings::Win32A ||
-          _settings->platformType == Settings::Win32W ||
-          _settings->platformType == Settings::Win64))
+    if (!_settings->isWindowsPlatform())
         return;
 
     for (Token *tok = list.front(); tok; tok = tok->next()) {
