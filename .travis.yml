@@ -32,3 +32,4 @@ script:
   - grep "process crashed with signal\|Internal error\. compiled" /tmp/clang.cppcheck || STATUS=0
   - exit $STATUS
 
+

@@ -1955,6 +1955,9 @@ void Tokenizer::simplifySQL()
 
 void Tokenizer::simplifyDebugNew()
 {
+    if (!_settings->isWindowsPlatform())
+        return;
+
     // convert Microsoft DEBUG_NEW macro to new
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         if (tok->str() == "DEBUG_NEW")
@@ -9704,9 +9707,7 @@ void Tokenizer::simplifyNamespaceStd()
 void Tokenizer::simplifyMicrosoftMFC()
 {
     // skip if not Windows
-    if (!(_settings->platformType == Settings::Win32A ||
-          _settings->platformType == Settings::Win32W ||
-          _settings->platformType == Settings::Win64))
+    if (!_settings->isWindowsPlatform())
         return;
 
     for (Token *tok = list.front(); tok; tok = tok->next()) {
@@ -9721,9 +9722,7 @@ void Tokenizer::simplifyMicrosoftMFC()
 void Tokenizer::simplifyMicrosoftMemoryFunctions()
 {
     // skip if not Windows
-    if (!(_settings->platformType == Settings::Win32A ||
-          _settings->platformType == Settings::Win32W ||
-          _settings->platformType == Settings::Win64))
+    if (!_settings->isWindowsPlatform())
         return;
 
     for (Token *tok = list.front(); tok; tok = tok->next()) {
