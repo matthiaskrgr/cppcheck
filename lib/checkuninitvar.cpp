@@ -1432,8 +1432,13 @@ bool CheckUninitVar::checkScopeForVariable(const Scope* scope, const Token *tok,
             return true;
         }
 
-        // bailout if there is assembler code
-        if (Token::simpleMatch(tok, "asm (")) {
+        // bailout if there is assembler code or setjmp
+        if (Token::Match(tok, "asm|setjmp (")) {
+            return true;
+        }
+
+        // bailout on ternary operator. TODO: This can be solved much better. For example, if the variable is not accessed in the branches of the ternary operator, we could just continue.
+        if (tok->str() == "?") {
             return true;
         }
 
@@ -1486,6 +1491,11 @@ bool CheckUninitVar::checkScopeForVariable(const Scope* scope, const Token *tok,
                 Token::Match(tok->next(), "= %var% (") &&
                 Token::simpleMatch(tok->linkAt(3), ") ;") &&
                 _settings->library.returnuninitdata.count(tok->strAt(2)) > 0U) {
+                if (alloc)
+                    *alloc = true;
+                continue;
+            }
+            if (var.isPointer() && (_tokenizer->isC() || var.typeStartToken()->isStandardType() || (var.type() && var.type()->needInitialization == Type::True)) && Token::Match(tok->next(), "= new")) {
                 if (alloc)
                     *alloc = true;
                 continue;
@@ -1671,7 +1681,7 @@ void CheckUninitVar::checkRhs(const Token *tok, const Variable &var, bool alloc,
 
 bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool alloc) const
 {
-    if (!alloc && vartok->previous()->str() == "return")
+    if (!alloc && ((Token::Match(vartok->previous(), "return|delete") && vartok->strAt(1) != "=") || (vartok->strAt(-1) == "]" && vartok->linkAt(-1)->strAt(-1) == "delete")))
         return true;
 
     // Passing variable to typeof/__alignof__
@@ -1690,13 +1700,22 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
                 tok2 = tok2->tokAt(2);
             if (Token::Match(tok2, "[,)]"))
                 return false;
+        } else if (pointer && Token::Match(vartok, "%var% . %var% (")) {
+            return true;
         }
+
         bool assignment = false;
         const Token* parent = vartok->astParent();
         while (parent) {
             if (parent->str() == "=") {
                 assignment = true;
                 break;
+            }
+            if (alloc && parent->str() == "(") {
+                if (_settings->library.functionpure.find(parent->strAt(-1)) == _settings->library.functionpure.end()) {
+                    assignment = true;
+                    break;
+                }
             }
             parent = parent->astParent();
         }
@@ -1726,15 +1745,15 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
                 if (arg) {
                     const bool address(vartok->previous()->str() == "&");
                     const Token *argStart = arg->typeStartToken();
-                    while (argStart->previous() && argStart->previous()->isName())
-                        argStart = argStart->previous();
-                    if (!address && Token::Match(argStart, "const| struct| %type% [,)]"))
+                    if (!address && Token::Match(argStart, "struct| %type% [,)]"))
                         return true;
-                    if (!address && Token::Match(argStart, "const| struct| %type% %var% [,)]"))
-                        return true;
-                    if (Token::Match(argStart, "const %type% & %var% [,)]"))
+                    if (!address && Token::Match(argStart, "struct| %type% %var% [,)]"))
                         return true;
                     if (pointer && !address && !alloc && Token::Match(argStart, "struct| %type% * %var% [,)]"))
+                        return true;
+                    while (argStart->previous() && argStart->previous()->isName())
+                        argStart = argStart->previous();
+                    if (Token::Match(argStart, "const %type% & %var% [,)]"))
                         return true;
                     if ((pointer || address) && !alloc && Token::Match(argStart, "const struct| %type% * %var% [,)]"))
                         return true;
@@ -1745,14 +1764,22 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
             } else if (Token::Match(start->previous(), "if|while|for")) {
                 // control-flow statement reading the variable "by value"
                 return !alloc;
+            } else {
+                bool isnullbad = _settings->library.isnullargbad(start->previous(), argumentNumber + 1);
+                bool isuninitbad = _settings->library.isuninitargbad(start->previous(), argumentNumber + 1);
+                if (alloc)
+                    return isnullbad && isuninitbad;
+                return isuninitbad;
             }
         }
     }
 
     if (Token::Match(vartok->previous(), "++|--|%cop%")) {
-        if (_tokenizer->isCPP() && vartok->previous()->str() == ">>") {
-            // assume that variable is initialized
-            return false;
+        if (_tokenizer->isCPP() && Token::Match(vartok->previous(), ">>|<<")) {
+            if (Token::Match(vartok->previous()->astOperand1(), ">>|<<"))
+                return false; // Looks like stream operator
+            const Variable *var = vartok->tokAt(-2)->variable();
+            return (var && var->typeStartToken()->isStandardType());
         }
 
         // is there something like: ; "*((&var ..expr.. ="  => the variable is assigned
@@ -1808,11 +1835,6 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
         // if this is not a function parameter report this dereference as variable usage
         if (!functionParameter)
             return true;
-    }
-
-    if (pointer && Token::Match(vartok, "%var% . %var% (")) {
-        const Function *function = vartok->tokAt(2)->function();
-        return (!function || !function->isStatic());
     }
 
     if (_tokenizer->isCPP() && Token::Match(vartok->next(), "<<|>>")) {
