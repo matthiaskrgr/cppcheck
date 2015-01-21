@@ -1060,35 +1060,36 @@ void CheckUninitVar::checkScope(const Scope* scope)
         if ((_tokenizer->isCPP() && i->type() && !i->isPointer() && i->type()->needInitialization != Type::True) ||
             i->isStatic() || i->isExtern() || i->isConst() || i->isArray() || i->isReference())
             continue;
+
         // don't warn for try/catch exception variable
-        {
-            const Token *start = i->typeStartToken();
-            while (start && start->isName())
-                start = start->previous();
-            if (start && Token::simpleMatch(start->previous(), "catch ("))
-                continue;
-        }
+        if (i->isThrow())
+            continue;
+
         if (i->nameToken()->strAt(1) == "(" || i->nameToken()->strAt(1) == "{")
             continue;
+
+        if (Token::Match(i->nameToken(), "%var% =")) { // Variable is initialized, but Rhs might be not
+            checkRhs(i->nameToken(), *i, false, "");
+            continue;
+        }
+
         bool stdtype = _tokenizer->isC();
         const Token* tok = i->typeStartToken();
         for (; tok && tok->str() != ";" && tok->str() != "<"; tok = tok->next()) {
             if (tok->isStandardType())
                 stdtype = true;
         }
+
         while (tok && tok->str() != ";")
             tok = tok->next();
         if (!tok)
             continue;
-        if (Token::Match(i->nameToken(), "%var% =")) {
-            checkRhs(i->nameToken(), *i, false, "");
-            continue;
-        }
+
         if (stdtype || i->isPointer()) {
             bool alloc = false;
             checkScopeForVariable(scope, tok, *i, nullptr, nullptr, &alloc, "");
         }
-        if (Token::Match(i->typeStartToken(), "struct %type% *| %var% ;"))
+        if (i->type())
             checkStruct(scope, tok, *i);
     }
 
@@ -1125,28 +1126,30 @@ void CheckUninitVar::checkStruct(const Scope* scope, const Token *tok, const Var
         if (scope2->className == structname && scope2->numConstructors == 0U) {
             for (std::list<Variable>::const_iterator it = scope2->varlist.begin(); it != scope2->varlist.end(); ++it) {
                 const Variable &var = *it;
-                if (!var.hasDefault() && !var.isArray()) {
-                    // is the variable declared in a inner union?
-                    bool innerunion = false;
-                    for (std::list<Scope>::const_iterator it2 = symbolDatabase->scopeList.begin(); it2 != symbolDatabase->scopeList.end(); ++it2) {
-                        const Scope &innerScope = *it2;
-                        if (innerScope.type == Scope::eUnion && innerScope.nestedIn == scope2) {
-                            if (var.typeStartToken()->linenr() >= innerScope.classStart->linenr() &&
-                                var.typeStartToken()->linenr() <= innerScope.classEnd->linenr()) {
-                                innerunion = true;
-                                break;
-                            }
 
+                if (var.hasDefault() || var.isArray() || (!_tokenizer->isC() && var.isClass() && (!var.type() || var.type()->needInitialization != Type::True)))
+                    continue;
+
+                // is the variable declared in a inner union?
+                bool innerunion = false;
+                for (std::list<Scope>::const_iterator it2 = symbolDatabase->scopeList.begin(); it2 != symbolDatabase->scopeList.end(); ++it2) {
+                    const Scope &innerScope = *it2;
+                    if (innerScope.type == Scope::eUnion && innerScope.nestedIn == scope2) {
+                        if (var.typeStartToken()->linenr() >= innerScope.classStart->linenr() &&
+                            var.typeStartToken()->linenr() <= innerScope.classEnd->linenr()) {
+                            innerunion = true;
+                            break;
                         }
-                    }
 
-                    if (!innerunion) {
-                        bool alloc = false;
-                        const Token *tok2 = tok;
-                        if (tok->str() == "}")
-                            tok2 = tok2->next();
-                        checkScopeForVariable(scope, tok2, structvar, nullptr, nullptr, &alloc, var.name());
                     }
+                }
+
+                if (!innerunion) {
+                    bool alloc = false;
+                    const Token *tok2 = tok;
+                    if (tok->str() == "}")
+                        tok2 = tok2->next();
+                    checkScopeForVariable(scope, tok2, structvar, nullptr, nullptr, &alloc, var.name());
                 }
             }
         }
@@ -1429,8 +1432,13 @@ bool CheckUninitVar::checkScopeForVariable(const Scope* scope, const Token *tok,
             return true;
         }
 
-        // bailout if there is assembler code
-        if (Token::simpleMatch(tok, "asm (")) {
+        // bailout if there is assembler code or setjmp
+        if (Token::Match(tok, "asm|setjmp (")) {
+            return true;
+        }
+
+        // bailout on ternary operator. TODO: This can be solved much better. For example, if the variable is not accessed in the branches of the ternary operator, we could just continue.
+        if (tok->str() == "?") {
             return true;
         }
 
@@ -1449,7 +1457,7 @@ bool CheckUninitVar::checkScopeForVariable(const Scope* scope, const Token *tok,
                     }
 
                     // Use variable
-                    else if (!suppressErrors && isVariableUsage(tok, var.isPointer(), alloc && *alloc, _tokenizer->isCPP())) {
+                    else if (!suppressErrors && isVariableUsage(tok, var.isPointer(), alloc && *alloc)) {
                         if (alloc && *alloc)
                             uninitdataError(tok, tok->str());
                         else
@@ -1487,6 +1495,11 @@ bool CheckUninitVar::checkScopeForVariable(const Scope* scope, const Token *tok,
                     *alloc = true;
                 continue;
             }
+            if (var.isPointer() && (_tokenizer->isC() || var.typeStartToken()->isStandardType() || (var.type() && var.type()->needInitialization == Type::True)) && Token::Match(tok->next(), "= new")) {
+                if (alloc)
+                    *alloc = true;
+                continue;
+            }
 
 
             if (!membervar.empty()) {
@@ -1503,7 +1516,7 @@ bool CheckUninitVar::checkScopeForVariable(const Scope* scope, const Token *tok,
 
             } else {
                 // Use variable
-                if (!suppressErrors && isVariableUsage(tok, var.isPointer(), alloc && *alloc, _tokenizer->isCPP())) {
+                if (!suppressErrors && isVariableUsage(tok, var.isPointer(), alloc && *alloc)) {
                     if (alloc && *alloc)
                         uninitdataError(tok, tok->str());
                     else
@@ -1542,7 +1555,7 @@ bool CheckUninitVar::checkIfForWhileHead(const Token *startparentheses, const Va
                 continue;
             }
 
-            if (isVariableUsage(tok, var.isPointer(), alloc, _tokenizer->isCPP())) {
+            if (isVariableUsage(tok, var.isPointer(), alloc)) {
                 if (!suppressErrors)
                     uninitvarError(tok, tok->str());
                 else
@@ -1592,7 +1605,7 @@ bool CheckUninitVar::checkLoopBody(const Token *tok, const Variable& var, const 
                 else if (Token::Match(tok->previous(), "[(,] %var% [,)]"))
                     return true;
             } else {
-                if (isVariableUsage(tok, var.isPointer(), alloc, _tokenizer->isCPP()))
+                if (isVariableUsage(tok, var.isPointer(), alloc))
                     usetok = tok;
                 else if (tok->strAt(1) == "=") {
                     // Is var used in rhs?
@@ -1648,7 +1661,7 @@ void CheckUninitVar::checkRhs(const Token *tok, const Variable &var, bool alloc,
         if (tok->str() == "=")
             rhs = true;
         else if (rhs && tok->varId() == var.declarationId()) {
-            if (membervar.empty() && isVariableUsage(tok, var.isPointer(), alloc, _tokenizer->isCPP()))
+            if (membervar.empty() && isVariableUsage(tok, var.isPointer(), alloc))
                 uninitvarError(tok, tok->str());
             else if (!membervar.empty() && isMemberVariableUsage(tok, var.isPointer(), alloc, membervar))
                 uninitStructMemberError(tok, tok->str() + "." + membervar);
@@ -1666,9 +1679,9 @@ void CheckUninitVar::checkRhs(const Token *tok, const Variable &var, bool alloc,
     }
 }
 
-bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool alloc, bool cpp)
+bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool alloc) const
 {
-    if (!alloc && vartok->previous()->str() == "return")
+    if (!alloc && ((Token::Match(vartok->previous(), "return|delete") && vartok->strAt(1) != "=") || (vartok->strAt(-1) == "]" && vartok->linkAt(-1)->strAt(-1) == "delete")))
         return true;
 
     // Passing variable to typeof/__alignof__
@@ -1687,13 +1700,22 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
                 tok2 = tok2->tokAt(2);
             if (Token::Match(tok2, "[,)]"))
                 return false;
+        } else if (pointer && Token::Match(vartok, "%var% . %var% (")) {
+            return true;
         }
+
         bool assignment = false;
         const Token* parent = vartok->astParent();
         while (parent) {
             if (parent->str() == "=") {
                 assignment = true;
                 break;
+            }
+            if (alloc && parent->str() == "(") {
+                if (_settings->library.functionpure.find(parent->strAt(-1)) == _settings->library.functionpure.end()) {
+                    assignment = true;
+                    break;
+                }
             }
             parent = parent->astParent();
         }
@@ -1723,15 +1745,15 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
                 if (arg) {
                     const bool address(vartok->previous()->str() == "&");
                     const Token *argStart = arg->typeStartToken();
-                    while (argStart->previous() && argStart->previous()->isName())
-                        argStart = argStart->previous();
-                    if (!address && Token::Match(argStart, "const| struct| %type% [,)]"))
+                    if (!address && Token::Match(argStart, "struct| %type% [,)]"))
                         return true;
-                    if (!address && Token::Match(argStart, "const| struct| %type% %var% [,)]"))
-                        return true;
-                    if (Token::Match(argStart, "const %type% & %var% [,)]"))
+                    if (!address && Token::Match(argStart, "struct| %type% %var% [,)]"))
                         return true;
                     if (pointer && !address && !alloc && Token::Match(argStart, "struct| %type% * %var% [,)]"))
+                        return true;
+                    while (argStart->previous() && argStart->previous()->isName())
+                        argStart = argStart->previous();
+                    if (Token::Match(argStart, "const %type% & %var% [,)]"))
                         return true;
                     if ((pointer || address) && !alloc && Token::Match(argStart, "const struct| %type% * %var% [,)]"))
                         return true;
@@ -1742,14 +1764,22 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
             } else if (Token::Match(start->previous(), "if|while|for")) {
                 // control-flow statement reading the variable "by value"
                 return !alloc;
+            } else {
+                bool isnullbad = _settings->library.isnullargbad(start->previous(), argumentNumber + 1);
+                bool isuninitbad = _settings->library.isuninitargbad(start->previous(), argumentNumber + 1);
+                if (alloc)
+                    return isnullbad && isuninitbad;
+                return isuninitbad;
             }
         }
     }
 
     if (Token::Match(vartok->previous(), "++|--|%cop%")) {
-        if (cpp && vartok->previous()->str() == ">>") {
-            // assume that variable is initialized
-            return false;
+        if (_tokenizer->isCPP() && Token::Match(vartok->previous(), ">>|<<")) {
+            if (Token::Match(vartok->previous()->astOperand1(), ">>|<<"))
+                return false; // Looks like stream operator
+            const Variable *var = vartok->tokAt(-2)->variable();
+            return (var && var->typeStartToken()->isStandardType());
         }
 
         // is there something like: ; "*((&var ..expr.. ="  => the variable is assigned
@@ -1807,12 +1837,7 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, bool all
             return true;
     }
 
-    if (pointer && Token::Match(vartok, "%var% . %var% (")) {
-        const Function *function = vartok->tokAt(2)->function();
-        return (!function || !function->isStatic());
-    }
-
-    if (cpp && Token::Match(vartok->next(), "<<|>>")) {
+    if (_tokenizer->isCPP() && Token::Match(vartok->next(), "<<|>>")) {
         // Is this calculation done in rhs?
         const Token *tok = vartok;
         while (tok && Token::Match(tok, "%var%|.|::"))
@@ -1891,7 +1916,7 @@ bool CheckUninitVar::isMemberVariableUsage(const Token *tok, bool isPointer, boo
 
     if (Token::Match(tok, "%var% . %var%") && tok->strAt(2) == membervar)
         return true;
-    else if (!isPointer && Token::Match(tok->previous(), "[(,] %var% [,)]") && isVariableUsage(tok, isPointer, alloc, _tokenizer->isCPP()))
+    else if (!isPointer && Token::Match(tok->previous(), "[(,] %var% [,)]") && isVariableUsage(tok, isPointer, alloc))
         return true;
 
     else if (!isPointer && Token::Match(tok->previous(), "= %var% ;"))
@@ -1908,7 +1933,7 @@ bool CheckUninitVar::isMemberVariableUsage(const Token *tok, bool isPointer, boo
     else if (_settings->experimental &&
              !isPointer &&
              Token::Match(tok->tokAt(-2), "[(,] & %var% [,)]") &&
-             isVariableUsage(tok, isPointer, alloc, _tokenizer->isCPP()))
+             isVariableUsage(tok, isPointer, alloc))
         return true;
 
     return false;
@@ -1939,7 +1964,6 @@ void CheckUninitVar::uninitStructMemberError(const Token *tok, const std::string
 
 void CheckUninitVar::deadPointer()
 {
-    const bool cpp = _tokenizer->isCPP();
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
     std::list<Scope>::const_iterator scope;
 
@@ -1951,7 +1975,7 @@ void CheckUninitVar::deadPointer()
         for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
             if (tok->variable() &&
                 tok->variable()->isPointer() &&
-                isVariableUsage(tok, true, false, cpp)) {
+                isVariableUsage(tok, true, false)) {
                 const Token *alias = tok->getValueTokenDeadPointer();
                 if (alias) {
                     deadPointerError(tok,alias);
