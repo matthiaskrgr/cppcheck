@@ -248,6 +248,9 @@ test:	all
 check:	all
 	./testrunner -g -q
 
+checkcfg:	cppcheck
+	./test/cfg/runtests.sh
+
 dmake:	tools/dmake.o cli/filelister.o lib/path.o
 	$(CXX) $(CXXFLAGS) -std=c++0x -o dmake tools/dmake.o cli/filelister.o lib/path.o -Ilib $(LDFLAGS)
 	./dmake
@@ -315,7 +318,7 @@ $(SRCDIR)/checkinternal.o: lib/checkinternal.cpp lib/cxx11emu.h lib/checkinterna
 $(SRCDIR)/checkio.o: lib/checkio.cpp lib/cxx11emu.h lib/checkio.h lib/check.h lib/config.h lib/token.h lib/valueflow.h lib/mathlib.h lib/tokenize.h lib/errorlogger.h lib/suppressions.h lib/tokenlist.h lib/settings.h lib/library.h lib/path.h lib/symboldatabase.h lib/standards.h lib/timer.h
 	$(CXX) ${INCLUDE_FOR_LIB} $(CPPFLAGS) $(CFG) $(CXXFLAGS) $(UNDEF_STRICT_ANSI) -std=c++0x -c -o $(SRCDIR)/checkio.o $(SRCDIR)/checkio.cpp
 
-$(SRCDIR)/checkleakautovar.o: lib/checkleakautovar.cpp lib/cxx11emu.h lib/checkleakautovar.h lib/config.h lib/check.h lib/token.h lib/valueflow.h lib/mathlib.h lib/tokenize.h lib/errorlogger.h lib/suppressions.h lib/tokenlist.h lib/settings.h lib/library.h lib/path.h lib/symboldatabase.h lib/standards.h lib/timer.h lib/checkmemoryleak.h lib/checkother.h
+$(SRCDIR)/checkleakautovar.o: lib/checkleakautovar.cpp lib/cxx11emu.h lib/checkleakautovar.h lib/config.h lib/check.h lib/token.h lib/valueflow.h lib/mathlib.h lib/tokenize.h lib/errorlogger.h lib/suppressions.h lib/tokenlist.h lib/settings.h lib/library.h lib/path.h lib/symboldatabase.h lib/standards.h lib/timer.h lib/checkmemoryleak.h
 	$(CXX) ${INCLUDE_FOR_LIB} $(CPPFLAGS) $(CFG) $(CXXFLAGS) $(UNDEF_STRICT_ANSI) -std=c++0x -c -o $(SRCDIR)/checkleakautovar.o $(SRCDIR)/checkleakautovar.cpp
 
 $(SRCDIR)/checkmemoryleak.o: lib/checkmemoryleak.cpp lib/cxx11emu.h lib/checkmemoryleak.h lib/config.h lib/check.h lib/token.h lib/valueflow.h lib/mathlib.h lib/tokenize.h lib/errorlogger.h lib/suppressions.h lib/tokenlist.h lib/settings.h lib/library.h lib/path.h lib/symboldatabase.h lib/standards.h lib/timer.h lib/checkuninitvar.h
