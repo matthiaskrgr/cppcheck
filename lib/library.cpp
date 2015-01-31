@@ -503,7 +503,7 @@ Library::Error Library::load(const tinyxml2::XMLDocument &doc)
             if (!name)
                 return Error(MISSING_ATTRIBUTE, "name");
             PodType podType = {0};
-            const char * const size = node->Attribute("sizeof");
+            const char * const size = node->Attribute("size");
             if (size)
                 podType.size = atoi(size);
             const char * const sign = node->Attribute("sign");
@@ -681,10 +681,9 @@ const Library::Container* Library::detectContainer(const Token* typeStart) const
 // returns true if ftok is not a library function
 bool Library::isNotLibraryFunction(const Token *ftok) const
 {
-    if (!ftok->astParent())
+    // called from tokenizer, ast is not created properly yet
+    if (Token::Match(ftok->previous(),"::|."))
         return false;
-    if (ftok->astParent()->str() != "(")
-        return true;
 
     int callargs = 0;
     for (const Token *tok = ftok->tokAt(2); tok && tok->str() != ")"; tok = tok->next()) {

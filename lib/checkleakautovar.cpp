@@ -150,11 +150,14 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
     // Parse all tokens
     const Token * const endToken = startToken->link();
     for (const Token *tok = startToken; tok && tok != endToken; tok = tok->next()) {
+        if (!tok->scope()->isExecutable())
+            tok = tok->scope()->classEnd;
+
         // Deallocation and then dereferencing pointer..
         if (tok->varId() > 0) {
             const std::map<unsigned int, VarInfo::AllocInfo>::iterator var = alloctype.find(tok->varId());
             if (var != alloctype.end()) {
-                if (var->second.status == VarInfo::DEALLOC && !Token::Match(tok->previous(), "[;{},=] %var% =")) {
+                if (var->second.status == VarInfo::DEALLOC && (!Token::Match(tok, "%var% =") || tok->strAt(-1) == "*")) {
                     deallocUseError(tok, tok->str());
                 } else if (Token::simpleMatch(tok->tokAt(-2), "= &")) {
                     varInfo->erase(tok->varId());
@@ -181,7 +184,9 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
         if (!tok || tok == endToken)
             break;
 
-        // parse statement
+        // parse statement, skip to last member
+        while (Token::Match(tok, "%var% ::|. %var% !!("))
+            tok = tok->tokAt(2);
 
         // assignment..
         if (tok->varId() && Token::Match(tok, "%var% =")) {
@@ -412,7 +417,7 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
                 tok = tok->next();
             while (Token::Match(tok, "%var% ::|."))
                 tok = tok->tokAt(2);
-            if (tok->varId()) {
+            if (tok->varId() && tok->strAt(1) != "[") {
                 VarInfo::AllocInfo allocation(-1, VarInfo::DEALLOC);
                 changeAllocStatus(varInfo, allocation, tok, tok);
             }

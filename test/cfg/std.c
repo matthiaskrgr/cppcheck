@@ -9,6 +9,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <tgmath.h> // frexp
 
 void strcpy_ok(char *a, char *b) {
     strcpy(a,b);
@@ -56,9 +57,12 @@ void nullpointer(int value){
   // cppcheck-suppress nullPointer
   fgetpos(0,0);
   // cppcheck-suppress nullPointer
+  frexp(1.0,0);
+  // cppcheck-suppress nullPointer
   fsetpos(0,0);
   // cppcheck-suppress nullPointer
   itoa(123,0,10);
+  putchar(0);
   // cppcheck-suppress nullPointer
   strchr(0,0);
   // cppcheck-suppress nullPointer
@@ -113,4 +117,143 @@ void nullpointerMemchr3(char *p) {
   char *s = 0;
   // cppcheck-suppress nullPointer
   p = memchr (s, 0, strlen(s));
+}
+
+void nullpointerMemcmp(char *p) {
+  // cppcheck-suppress nullPointer
+  memcmp(p, 0, 123);
+}
+
+
+// uninit pointers
+
+void uninit_clearerr(void) {
+    FILE *fp;
+    // cppcheck-suppress uninitvar
+    clearerr(fp);
+}
+
+void uninit_fclose(void) {
+    FILE *fp;
+    // cppcheck-suppress uninitvar
+    fclose(fp);
+}
+
+void uninit_fopen(void) {
+    const char *filename, *mode;
+    FILE *fp;
+    // cppcheck-suppress uninitvar
+    fp = fopen(filename, "rt");
+    fclose(fp);
+    // cppcheck-suppress uninitvar
+    fp = fopen("filename.txt", mode);
+    fclose(fp);
+}
+
+void uninit_feof(void) {
+    FILE *fp;
+    // cppcheck-suppress uninitvar
+    feof(fp);
+}
+
+void uninit_ferror(void) {
+    FILE *fp;
+    // cppcheck-suppress uninitvar
+    ferror(fp);
+}
+
+void uninit_fflush(void) {
+    FILE *fp;
+    // cppcheck-suppress uninitvar
+    fflush(fp);
+}
+
+void uninit_fgetc(void) {
+    FILE *fp;
+    // cppcheck-suppress uninitvar
+    fgetc(fp);
+}
+
+void uninit_fgetpos(void) {
+    FILE *fp;
+    fpos_t pos;
+    fpos_t *ppos;
+    // cppcheck-suppress uninitvar
+    fgetpos(fp,&pos);
+
+    fp = fopen("filename","rt");
+    // cppcheck-suppress uninitvar
+    fgetpos(fp,ppos);
+    fclose(fp);    
+}
+
+void uninit_fsetpos(void) {
+    FILE *fp;
+    fpos_t pos;
+    fpos_t *ppos;
+    // cppcheck-suppress uninitvar
+    fsetpos(fp,&pos);
+
+    fp = fopen("filename","rt");
+    // cppcheck-suppress uninitvar
+    fsetpos(fp,ppos);
+    fclose(fp);    
+}
+
+void uninit_fgets(void) {
+    FILE *fp;
+    char buf[10];
+    char *str;
+
+    fgets(buf,10,stdin);
+
+    // cppcheck-suppress uninitvar
+    fgets(str,10,stdin);
+
+    // cppcheck-suppress uninitvar
+    fgets(buf,10,fp);
+}
+
+void uninit_fputc(void) {
+    int i;
+    FILE *fp;
+
+    fputc('a', stdout);
+
+    // cppcheck-suppress uninitvar
+    fputc(i, stdout);
+
+    // cppcheck-suppress uninitvar
+    fputc('a', fp);
+}
+
+void uninit_fputs(void) {
+    const char *s;
+    FILE *fp;
+
+    fputs("a", stdout);
+
+    // cppcheck-suppress uninitvar
+    fputs(s, stdout);
+
+    // cppcheck-suppress uninitvar
+    fputs("a", fp);
+}
+
+void uninit_ftell(void) {
+    FILE *fp;
+    // cppcheck-suppress uninitvar
+    ftell(fp);
+}
+
+void uninit_puts(void) {
+    const char *s;
+    // cppcheck-suppress uninitvar
+    puts(s);
+}
+
+void uninit_putchar(void) {
+    char c;
+    // cppcheck-suppress uninitvar
+    putchar(c);
 }
