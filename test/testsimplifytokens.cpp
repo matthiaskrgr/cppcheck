@@ -104,7 +104,9 @@ private:
         TEST_CASE(test_4881); // similar to doWhileAssign (#4911), taken from #4881 with full code
 
         // "if(0==x)" => "if(!x)"
-        TEST_CASE(ifnot);
+        TEST_CASE(simplifyIfNot);
+        TEST_CASE(simplifyIfNotNull);
+
         TEST_CASE(combine_wstrings);
 
         // Simplify "not" to "!" (#345)
@@ -261,7 +263,6 @@ private:
         TEST_CASE(removeUnnecessaryQualification9);  // ticket #3151
         TEST_CASE(removeUnnecessaryQualification10); // ticket #3310 segmentation fault
 
-        TEST_CASE(simplifyIfNotNull);
         TEST_CASE(simplifyVarDecl1); // ticket # 2682 segmentation fault
         TEST_CASE(simplifyVarDecl2); // ticket # 2834 segmentation fault
         TEST_CASE(return_strncat); // ticket # 2860 Returning value of strncat() reported as memory leak
@@ -717,6 +718,10 @@ private:
         const char code3[] = "char str [ ] = \"\\0\";";
         const char expected3[] = "char str [ 2 ] = \"\\0\" ;";
         ASSERT_EQUALS(expected3, tok(code3));
+
+        const char code4[] = "char str [ ] = \"\\n\\n\";";
+        const char expected4[] = "char str [ 3 ] = \"\\n\\n\" ;";
+        ASSERT_EQUALS(expected4, tok(code4));
     }
 
     void dontRemoveIncrement() {
@@ -1668,17 +1673,24 @@ private:
         ASSERT_EQUALS("; do { current = f ( ) ; } while ( ( current ) != 0 ) ;", simplifyIfAndWhileAssign(";do { } while((current=f()) != NULL);"));
     }
 
-    void ifnot() {
-        ASSERT_EQUALS("if ( ! x ) { ; }", tok("if(0==x);", false));
-        ASSERT_EQUALS("if ( ! x ) { ; }", tok("if(x==0);", false));
-        ASSERT_EQUALS("if ( ! ( a = b ) ) { ; }", tok("if(0==(a=b));", false));
-        ASSERT_EQUALS("if ( ! a && b ( ) ) { ; }", tok("if( 0 == a && b() );", false));
-        ASSERT_EQUALS("if ( b ( ) && ! a ) { ; }", tok("if( b() && 0 == a );", false));
-        ASSERT_EQUALS("if ( ! ( a = b ) ) { ; }", tok("if((a=b)==0);", false));
-        ASSERT_EQUALS("if ( ! x . y ) { ; }", tok("if(x.y==0);", false));
-        ASSERT_EQUALS("if ( ! x ) { ; }", tok("if((x==0));", false));
-        ASSERT_EQUALS("if ( ( ! x ) && ! y ) { ; }", tok("if((x==0) && y==0);", false));
-        ASSERT_EQUALS("if ( ! ( ! fclose ( fd ) ) ) { ; }", tok("if(!(fclose(fd) == 0));", false));
+    void simplifyIfNot() {
+        ASSERT_EQUALS("if ( ! x ) { ; }", tok("if(0==x);"));
+        ASSERT_EQUALS("if ( ! x ) { ; }", tok("if(x==0);"));
+        ASSERT_EQUALS("if ( ! ( a = b ) ) { ; }", tok("if(0==(a=b));"));
+        ASSERT_EQUALS("if ( ! a && b ( ) ) { ; }", tok("if( 0 == a && b() );"));
+        ASSERT_EQUALS("if ( b ( ) && ! a ) { ; }", tok("if( b() && 0 == a );"));
+        ASSERT_EQUALS("if ( ! ( a = b ) ) { ; }", tok("if((a=b)==0);"));
+        ASSERT_EQUALS("if ( ! x . y ) { ; }", tok("if(x.y==0);"));
+        ASSERT_EQUALS("if ( ! x ) { ; }", tok("if((x==0));"));
+        ASSERT_EQUALS("if ( ( ! x ) && ! y ) { ; }", tok("if((x==0) && y==0);"));
+        ASSERT_EQUALS("if ( ! ( ! fclose ( fd ) ) ) { ; }", tok("if(!(fclose(fd) == 0));"));
+    }
+
+    void simplifyIfNotNull() {
+        const char code[] = "void f(int x) {\n"
+                            "    x = (x != 0);\n"
+                            "}";
+        ASSERT_EQUALS("void f ( int x ) { }", tok(code, true));
     }
 
     void not1() {
@@ -3998,22 +4010,6 @@ private:
                             "};\n";
         tok(code, false);
         ASSERT_EQUALS("", errout.str());
-    }
-
-    void simplifyIfNotNull() {
-        {
-            // ticket # 2601 segmentation fault
-            const char code[] = "|| #if #define <=";
-            tok(code, false);
-            ASSERT_EQUALS("", errout.str());
-        }
-
-        {
-            const char code[] = "void f(int x) {\n"
-                                "    x = (x != 0);\n"
-                                "}";
-            ASSERT_EQUALS("void f ( int x ) { }", tok(code, false));
-        }
     }
 
     void simplifyVarDecl1() { // ticket # 2682 segmentation fault

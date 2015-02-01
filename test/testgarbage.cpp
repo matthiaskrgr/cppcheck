@@ -69,6 +69,7 @@ private:
         TEST_CASE(garbageCode26);
         TEST_CASE(garbageCode27);
         TEST_CASE(garbageCode28);
+        TEST_CASE(garbageCode29);
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -379,6 +380,11 @@ private:
                                "};\n"), InternalError);
     }
 
+    void garbageCode29() {
+        // ticket #2601 segmentation fault
+        checkCode("|| #if #define <=");
+    }
+
     void garbageValueFlow() {
         // #6089
         const char* code = "{} int foo(struct, x1, struct x2, x3, int, x5, x6, x7)\n"
@@ -393,6 +399,9 @@ private:
 
         // 6122 survive garbage code
         code = "; { int i ; for ( i = 0 ; = 123 ; ) - ; }";
+        checkCode(code);
+
+        code = "void f1() { for (int n = 0 n < 10 n++); }";
         checkCode(code);
     }
 

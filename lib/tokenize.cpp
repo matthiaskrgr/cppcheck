@@ -1638,7 +1638,7 @@ bool Tokenizer::tokenize(std::istream &code,
             }
 
             list.createAst();
-            ValueFlow::setValues(&list, _errorLogger, _settings);
+            ValueFlow::setValues(&list, _symbolDatabase, _errorLogger, _settings);
         }
 
         return true;
@@ -2050,8 +2050,8 @@ void Tokenizer::simplifyDoublePlusAndDoubleMinus()
 
 void Tokenizer::arraySize()
 {
-    bool addlength = false;
     for (Token *tok = list.front(); tok; tok = tok->next()) {
+        bool addlength = false;
         if (Token::Match(tok, "%name% [ ] = { %str% } ;")) {
             Token *t = tok->tokAt(3);
             t->deleteNext();
@@ -2061,9 +2061,8 @@ void Tokenizer::arraySize()
 
         if (addlength || Token::Match(tok, "%name% [ ] = %str% ;")) {
             tok = tok->next();
-            std::size_t sz = tok->strAt(3).length() - 1;
+            std::size_t sz = Token::getStrSize(tok->tokAt(3));
             tok->insertToken(MathLib::toString((unsigned int)sz));
-            addlength = false;
             tok = tok->tokAt(5);
         }
 
@@ -3529,10 +3528,6 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // simplify bit fields..
     simplifyBitfields();
 
-    // Simplify '(p == 0)' to '(!p)'
-    simplifyIfNot();
-    simplifyIfNotNull();
-
     // The simplifyTemplates have inner loops
     if (_settings->terminated())
         return false;
@@ -3859,7 +3854,7 @@ bool Tokenizer::simplifyTokenList2()
 
     list.createAst();
 
-    ValueFlow::setValues(&list, _errorLogger, _settings);
+    ValueFlow::setValues(&list, _symbolDatabase, _errorLogger, _settings);
 
     if (_settings->terminated())
         return false;
@@ -6120,15 +6115,15 @@ void Tokenizer::simplifyIfNotNull()
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         Token *deleteFrom = nullptr;
 
-        // Remove 'x = (x != 0)'
-        if (Token::simpleMatch(tok, "= (")) {
+        // Remove 'x = x != 0;'
+        if (Token::simpleMatch(tok, "=")) {
             if (Token::Match(tok->tokAt(-2), "[;{}] %name%")) {
                 const std::string& varname(tok->previous()->str());
 
-                if (Token::simpleMatch(tok->tokAt(2), (varname + " != 0 ) ;").c_str()) ||
-                    Token::simpleMatch(tok->tokAt(2), ("0 != " + varname + " ) ;").c_str())) {
+                if (Token::simpleMatch(tok->next(), (varname + " != 0 ;").c_str()) ||
+                    Token::simpleMatch(tok->next(), ("0 != " + varname + " ;").c_str())) {
                     tok = tok->tokAt(-2);
-                    tok->deleteNext(8);
+                    tok->deleteNext(6);
                 }
             }
             continue;
