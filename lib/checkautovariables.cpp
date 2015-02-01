@@ -86,12 +86,12 @@ static bool checkRvalueExpression(const Token * const vartok)
     if (var == nullptr)
         return false;
 
-    if (Token::Match(vartok->previous(), "& %var% [") && var->isPointer())
+    if (Token::Match(vartok->previous(), "& %name% [") && var->isPointer())
         return false;
 
     const Token * const next = vartok->next();
     // &a.b[0]
-    if (Token::Match(vartok, "%var% . %var% [") && !var->isPointer()) {
+    if (Token::Match(vartok, "%name% . %var% [") && !var->isPointer()) {
         const Variable *var2 = next->next()->variable();
         return var2 && !var2->isPointer();
     }
@@ -349,8 +349,15 @@ static bool astHasAutoResult(const Token *tok)
     if (tok->astOperand2() && !astHasAutoResult(tok->astOperand2()))
         return false;
 
-    if (tok->isOp())
+    if (tok->isOp()) {
+        if ((tok->str() == "<<" || tok->str() == ">>") && tok->astOperand1()) {
+            const Token* tok2 = tok->astOperand1();
+            while (tok2 && tok2->str() == "*" && !tok2->astOperand2())
+                tok2 = tok2->astOperand1();
+            return tok2 && tok2->variable() && !tok2->variable()->isClass() && !tok2->variable()->isStlType(); // Class or unknown type on LHS: Assume it is a stream
+        }
         return true;
+    }
 
     if (tok->isLiteral())
         return true;
@@ -359,7 +366,7 @@ static bool astHasAutoResult(const Token *tok)
         // TODO: check function calls, struct members, arrays, etc also
         if (!tok->variable())
             return false;
-        if (tok->variable()->isStlType() && !Token::Match(tok->astParent(), "<<|>>"))
+        if (tok->variable()->isStlType())
             return true;
         if (tok->variable()->isClass() || tok->variable()->isPointer() || tok->variable()->isReference()) // TODO: Properly handle pointers/references to classes in symbol database
             return false;
@@ -414,7 +421,7 @@ void CheckAutoVariables::returnReference()
                 }
 
                 // return reference to temporary..
-                else if (Token::Match(tok2, "return %var% (") &&
+                else if (Token::Match(tok2, "return %name% (") &&
                          Token::simpleMatch(tok2->linkAt(2), ") ;")) {
                     if (returnTemporary(tok2->next())) {
                         // report error..

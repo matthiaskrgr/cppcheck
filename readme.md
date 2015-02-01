@@ -1,4 +1,4 @@
-# Cppcheck [![Build Status](https://travis-ci.org/danmar/cppcheck.svg?branch=master)](https://travis-ci.org/danmar/cppcheck) [![Coverity Scan Build Status](https://scan.coverity.com/projects/512/badge.svg)](https://scan.coverity.com/projects/512)
+# Cppcheck [![Build Status](https://travis-ci.org/danmar/cppcheck.svg?branch=master)](https://travis-ci.org/danmar/cppcheck) [![Coverity Scan Build Status](https://scan.coverity.com/projects/512/badge.svg)](https://scan.coverity.com/projects/512) [![Build status AppVeyor](https://ci.appveyor.com/api/projects/status/y242bl0lc5chu6j1?svg=true)](https://ci.appveyor.com/project/danmar/cppcheck)
 
 ## Donations
 

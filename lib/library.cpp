@@ -503,7 +503,7 @@ Library::Error Library::load(const tinyxml2::XMLDocument &doc)
             if (!name)
                 return Error(MISSING_ATTRIBUTE, "name");
             PodType podType = {0};
-            const char * const size = node->Attribute("sizeof");
+            const char * const size = node->Attribute("size");
             if (size)
                 podType.size = atoi(size);
             const char * const sign = node->Attribute("sign");
@@ -635,16 +635,16 @@ bool Library::isScopeNoReturn(const Token *end, std::string *unknownFunc) const
 
     const Token *funcname = end->linkAt(-2)->previous();
     const Token *start = funcname;
-    if (funcname && Token::Match(funcname->tokAt(-3),"( * %var% )")) {
+    if (funcname && Token::Match(funcname->tokAt(-3),"( * %name% )")) {
         funcname = funcname->previous();
         start = funcname->tokAt(-3);
     } else if (funcname->isName()) {
-        while (Token::Match(start, "%var%|.|::"))
+        while (Token::Match(start, "%name%|.|::"))
             start = start->previous();
     } else {
         return false;
     }
-    if (Token::Match(start,"[;{}]") && Token::Match(funcname, "%var% )| (")) {
+    if (Token::Match(start,"[;{}]") && Token::Match(funcname, "%name% )| (")) {
         if (funcname->str() == "exit")
             return true;
         if (!isnotnoreturn(funcname)) {
@@ -677,4 +677,32 @@ const Library::Container* Library::detectContainer(const Token* typeStart) const
         }
     }
     return nullptr;
+}
+// returns true if ftok is not a library function
+bool Library::isNotLibraryFunction(const Token *ftok) const
+{
+    // called from tokenizer, ast is not created properly yet
+    if (Token::Match(ftok->previous(),"::|."))
+        return true;
+
+    int callargs = 0;
+    for (const Token *tok = ftok->tokAt(2); tok && tok->str() != ")"; tok = tok->next()) {
+        if (callargs == 0)
+            callargs = 1;
+        if (tok->str() == ",")
+            callargs++;
+        else if (tok->link() && Token::Match(tok, "<|(|["))
+            tok = tok->link();
+    }
+    const std::map<std::string, std::map<int, ArgumentChecks> >::const_iterator it = argumentChecks.find(ftok->str());
+    if (it == argumentChecks.end())
+        return (callargs != 0);
+    int args = 0;
+    for (std::map<int, ArgumentChecks>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
+        if (it2->first > args)
+            args = it2->first;
+        if (it2->second.formatstr)
+            return args > callargs;
+    }
+    return args != callargs;
 }

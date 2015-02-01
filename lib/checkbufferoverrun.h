@@ -126,7 +126,7 @@ public:
 
     public:
         ArrayInfo();
-        ArrayInfo(const Variable *var, const Tokenizer *tokenizer, const unsigned int forcedeclid = 0);
+        ArrayInfo(const Variable *var, const Tokenizer *tokenizer, const Library *library, const unsigned int forcedeclid = 0);
 
         /**
          * Create array info with specified data
@@ -194,7 +194,7 @@ public:
 
     /**
      * Helper function that checks if the array is used and if so calls the checkFunctionCall
-     * @param tok token that matches "%var% ("
+     * @param tok token that matches "%name% ("
      * @param arrayInfo the array information
      * \param callstack call stack. This is used to prevent recursion and to provide better error messages. Pass a empty list from checkScope etc.
      */
