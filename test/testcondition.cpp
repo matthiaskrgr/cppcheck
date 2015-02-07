@@ -451,6 +451,18 @@ private:
               "  else if (dynamic_cast<LABEL*>(widget)){}\n"
               "}",false);
         ASSERT_EQUALS("", errout.str());
+
+        check("void f(int x) {\n" // #6482
+              "  if (x & 1) {}\n"
+              "  else if (x == 0) {}\n"
+              "}",false);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f(int x) {\n"
+              "  if (x & 15) {}\n"
+              "  else if (x == 40) {}\n"
+              "}",false);
+        ASSERT_EQUALS("[test.cpp:3]: (style) Expression is always false because 'else if' condition matches previous condition at line 2.\n", errout.str());
     }
 
     void invalidMissingSemicolon() {
@@ -1201,6 +1213,10 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
+        check("void f() {\n"
+              "    if (x = b < 0 ? 1 : 2) {}\n" // don't simplify and verify this code
+              "}", false);
+        ASSERT_EQUALS("", errout.str());
     }
 
     // clarify conditions with bitwise operator and comparison

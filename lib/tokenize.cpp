@@ -1638,7 +1638,7 @@ bool Tokenizer::tokenize(std::istream &code,
             }
 
             list.createAst();
-            ValueFlow::setValues(&list, _errorLogger, _settings);
+            ValueFlow::setValues(&list, _symbolDatabase, _errorLogger, _settings);
         }
 
         return true;
@@ -2300,9 +2300,6 @@ void Tokenizer::simplifyTemplates()
 static bool setVarIdParseDeclaration(const Token **tok, const std::map<std::string,unsigned int> &variableId, bool executableScope, bool cpp, bool c)
 {
     const Token *tok2 = *tok;
-
-    bool ref = false;
-
     if (!tok2->isName())
         return false;
 
@@ -2310,6 +2307,7 @@ static bool setVarIdParseDeclaration(const Token **tok, const std::map<std::stri
     unsigned int singleNameCount = 0;
     bool hasstruct = false;   // Is there a "struct" or "class"?
     bool bracket = false;
+    bool ref = false;
     while (tok2) {
         if (tok2->isName()) {
             if (cpp && Token::Match(tok2, "namespace|public|private|protected"))
@@ -2363,7 +2361,7 @@ static bool setVarIdParseDeclaration(const Token **tok, const std::map<std::stri
 
     // Check if array declaration is valid (#2638)
     // invalid declaration: AAA a[4] = 0;
-    if (typeCount >= 2 && tok2 && tok2->str() == "[" && executableScope) {
+    if (typeCount >= 2 && executableScope && tok2 && tok2->str() == "[") {
         const Token *tok3 = tok2;
         while (tok3 && tok3->str() == "[") {
             tok3 = tok3->link()->next();
@@ -3854,7 +3852,7 @@ bool Tokenizer::simplifyTokenList2()
 
     list.createAst();
 
-    ValueFlow::setValues(&list, _errorLogger, _settings);
+    ValueFlow::setValues(&list, _symbolDatabase, _errorLogger, _settings);
 
     if (_settings->terminated())
         return false;
@@ -7567,9 +7565,11 @@ void Tokenizer::simplifyEnum()
             //jump back once, see the comment at the end of the function
             goback = false;
             tok = tok->previous();
+            if (!tok)
+                break;
         }
 
-        if (tok && tok->next() &&
+        if (tok->next() &&
             (!tok->previous() || (tok->previous()->str() != "enum")) &&
             Token::Match(tok, "class|struct|namespace")) {
             className = tok->next()->str();
@@ -10248,7 +10248,30 @@ void Tokenizer::removeUnnecessaryQualification()
                 } else if (tok->strAt(2) == "~")
                     tok1 = tok1->next();
 
-                if (tok1 && Token::Match(tok1->link(), ") const| {|;|:")) {
+                if (!tok1 || !Token::Match(tok1->link(), ") const| {|;|:")) {
+                    continue;
+                }
+
+                const bool isConstructorOrDestructor =
+                    Token::Match(tok, "%type% :: ~| %type%") && (tok->strAt(2) == tok->str() || (tok->strAt(2) == "~" && tok->strAt(3) == tok->str()));
+                if (!isConstructorOrDestructor) {
+                    bool isPrependedByType = Token::Match(tok->previous(), "%type%");
+                    if (!isPrependedByType) {
+                        const Token* tok2 = tok->tokAt(-2);
+                        isPrependedByType = Token::Match(tok2, "%type% *|&");
+                    }
+                    if (!isPrependedByType) {
+                        const Token* tok3 = tok->tokAt(-3);
+                        isPrependedByType = Token::Match(tok3, "%type% * *|&");
+                    }
+                    if (!isPrependedByType) {
+                        // It's not a constructor declaration and it's not a function declaration so
+                        // this is a function call which can have all the qualifiers just fine - skip.
+                        continue;
+                    }
+                }
+
+                {
                     std::string qualification;
                     if (portabilityEnabled)
                         qualification = tok->str() + "::";

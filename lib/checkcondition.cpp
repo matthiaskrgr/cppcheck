@@ -286,7 +286,7 @@ static bool isOverlappingCond(const Token * const cond1, const Token * const con
 
         const MathLib::bigint value1 = MathLib::toLongNumber(num1->str());
         const MathLib::bigint value2 = MathLib::toLongNumber(num2->str());
-        return ((value1 & value2) == value2);
+        return ((value1 & value2) > 0);
     }
     return false;
 }
@@ -781,7 +781,8 @@ void CheckCondition::clarifyCondition()
                         // This might be a template
                         if (!isC && tok2->link())
                             break;
-
+                        if (Token::simpleMatch(tok2->astParent(), "?"))
+                            break;
                         clarifyConditionError(tok, tok->strAt(2) == "=", false);
                         break;
                     } else if (!tok2->isName() && !tok2->isNumber() && tok2->str() != ".")
