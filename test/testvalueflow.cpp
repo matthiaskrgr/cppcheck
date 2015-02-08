@@ -862,6 +862,17 @@ private:
                "}";
         ASSERT_EQUALS(false, testValueOfX(code, 6U, 3));
 
+        code = "int f(int *x) {\n" // #5980
+               "  if (!x) {\n"
+               "    switch (i) {\n"
+               "      default:\n"
+               "        throw std::runtime_error(msg);\n"
+               "    };\n"
+               "  }\n"
+               "  return *x;\n"  // <- x is not 0
+               "}";
+        ASSERT_EQUALS(false, testValueOfX(code, 8U, 0));
+
         // pointer/reference to x
         code = "int f(void) {\n"
                "  int x = 2;\n"
@@ -1232,6 +1243,14 @@ private:
                "        x;\n"
                "}";
         ASSERT_EQUALS(false, testValueOfX(code, 4U, 0));
+
+        code = "void f() {\n"
+               "    const char abc[] = \"abc\";\n"
+               "    int x;\n"
+               "    for (x = 0; abc[x] != '\\0'; x++) {}\n"
+               "    a[x] = 0;\n"
+               "}";
+        ASSERT_EQUALS(true, testValueOfX(code, 5U, 3));
 
         code = "void f() {\n" // #5939
                "    int x;\n"
