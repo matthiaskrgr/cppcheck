@@ -142,6 +142,8 @@ static std::map<unsigned int, MathLib::bigint> getProgramMemory(const Token *tok
 {
     std::map<unsigned int, MathLib::bigint> programMemory;
     programMemory[varid] = value.intvalue;
+    if (value.varId)
+        programMemory[value.varId] = value.varvalue;
     const std::map<unsigned int, MathLib::bigint> programMemory1(programMemory);
     int indentlevel = 0;
     for (const Token *tok2 = tok; tok2; tok2 = tok2->previous()) {
@@ -235,8 +237,11 @@ static bool bailoutSelfAssignment(const Token * const tok)
 
 static bool isReturn(const Token *tok)
 {
-    const Token *prev = tok ? tok->previous() : nullptr;
-    if (Token::simpleMatch(prev ? prev->previous() : nullptr, "} ;"))
+    if (!tok)
+        return false;
+
+    const Token *prev = tok->previous();
+    if (prev && Token::simpleMatch(prev->previous(), "} ;"))
         prev = prev->previous();
 
     if (Token::simpleMatch(prev, "}")) {
@@ -247,9 +252,7 @@ static bool isReturn(const Token *tok)
             !Token::findsimplematch(prev->link(), "break", prev)) {
             return true;
         }
-    }
-
-    if (Token::simpleMatch(prev, ";")) {
+    } else if (Token::simpleMatch(prev, ";")) {
         // noreturn function
         if (Token::simpleMatch(prev->previous(), ") ;") && Token::Match(prev->linkAt(-1)->tokAt(-2), "[;{}] %name% ("))
             return true;
@@ -385,9 +388,9 @@ static void valueFlowString(TokenList *tokenlist)
 
         if (Token::Match(tok, "const char %var% [ %num%| ] = %str% ;")) {
             const Token *vartok = tok->tokAt(2);
-            const Token *strtok = tok->linkAt(3)->tokAt(2);
+            const Token *strtok = vartok->next()->link()->tokAt(2);
             constantStrings[vartok->varId()] = strtok;
-            tok = tok->tokAt(3);
+            tok = vartok->next();
         }
 
         if (tok->varId() > 0U) {
