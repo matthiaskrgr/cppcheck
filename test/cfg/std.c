@@ -2,32 +2,55 @@
 // Test library configuration for std.cfg
 //
 // Usage:
-// $ cppcheck --check-library --enable=information --error-exitcode=1 --inline-suppr cfg/test/std.c
+// $ cppcheck --check-library --enable=information --error-exitcode=1 --suppress=missingIncludeSystem --inline-suppr test/cfg/std.c
 // =>
 // No warnings about bad library configuration, unmatched suppressions, etc. exitcode=0
 //
 
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <tgmath.h> // frexp
 
-void strcpy_ok(char *a, char *b) {
-    strcpy(a,b);
-}
-
-void strcpy_bad() {
-  char a[10];
+void bufferAccessOutOf(void) {
+  char a[5];
+  fgets(a,5,stdin);
   // cppcheck-suppress bufferAccessOutOfBounds
-  strcpy(a, "hello world!");
+  fgets(a,6,stdin);
+  sprintf(a, "ab%s", "cd");
+  // cppcheck-suppress bufferAccessOutOfBounds
+  sprintf(a, "ab%s", "cde");
+  snprintf(a, 5, "abcde%i", 1);
+  // cppcheck-suppress bufferAccessOutOfBounds
+  snprintf(a, 6, "abcde%i", 1);
+  strcpy(a,"abcd");
+  // cppcheck-suppress bufferAccessOutOfBounds
+  strcpy(a, "abcde");
+  strncpy(a,"abcde",5);
+  // cppcheck-suppress bufferAccessOutOfBounds
+  strncpy(a,"abcde",6);
+  fread(a,1,5,stdin);
+  // cppcheck-suppress bufferAccessOutOfBounds
+  fread(a,1,6,stdin);
+  fwrite(a,1,5,stdout);
+  // cppcheck-suppress bufferAccessOutOfBounds
+  fread(a,1,6,stdout);
 }
 
+// memory leak
+
+void ignoreleak(void) {
+    char *p = (char *)malloc(10);
+    memset(&(p[0]), 0, 10);
+    // cppcheck-suppress memleak
+}
 
 // null pointer
 
 void nullpointer(int value){
   int res = 0;
   FILE *fp;
-    
+
   // cppcheck-suppress nullPointer
   clearerr(0);
   // cppcheck-suppress nullPointer
@@ -95,8 +118,8 @@ void nullpointer(int value){
   strtol(0,0,0);
 
   // #6100 False positive nullPointer - calling mbstowcs(NULL,)
-  res += mbstowcs(0,value,0);
-  res += wcstombs(0,value,0);
+  res += mbstowcs(0,"",0);
+  res += wcstombs(0,L"",0);
 
   strtok(NULL,"xyz");
 
@@ -184,7 +207,7 @@ void uninit_fgetpos(void) {
     fp = fopen("filename","rt");
     // cppcheck-suppress uninitvar
     fgetpos(fp,ppos);
-    fclose(fp);    
+    fclose(fp);
 }
 
 void uninit_fsetpos(void) {
@@ -197,7 +220,7 @@ void uninit_fsetpos(void) {
     fp = fopen("filename","rt");
     // cppcheck-suppress uninitvar
     fsetpos(fp,ppos);
-    fclose(fp);    
+    fclose(fp);
 }
 
 void uninit_fgets(void) {

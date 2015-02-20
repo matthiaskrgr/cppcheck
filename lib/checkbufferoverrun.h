@@ -60,7 +60,6 @@ public:
         checkBufferOverrun.bufferOverrun();
         checkBufferOverrun.bufferOverrun2();
         checkBufferOverrun.arrayIndexThenCheck();
-        checkBufferOverrun.writeOutsideBufferSize();
     }
 
     /** @brief %Check for buffer overruns */
@@ -75,24 +74,13 @@ public:
     /** @brief %Check for buffer overruns by inspecting execution paths */
     void executionPaths();
 
-    /** @brief %Check using POSIX write function and writing outside buffer size */
-    void writeOutsideBufferSize();
-
     /**
      * @brief Get minimum length of format string result
      * @param input_string format string
      * @param parameters given parameters to sprintf
      * @return minimum length of resulting string
      */
-    static MathLib::bigint countSprintfLength(const std::string &input_string, const std::list<const Token*> &parameters);
-
-    /**
-     * @brief %Check code that matches: "sprintf ( %varid% , %str% [,)]" when varid is not 0,
-     * and report found errors.
-     * @param tok The "sprintf" token.
-     * @param size The size of the buffer where sprintf is writing.
-     */
-    void checkSprintfCall(const Token *tok, const MathLib::bigint size);
+    static MathLib::biguint countSprintfLength(const std::string &input_string, const std::list<const Token*> &parameters);
 
     /** Check for buffer overruns - locate struct variables and check them with the .._CheckScope function */
     void checkStructVariable();
@@ -180,9 +168,6 @@ public:
     /** Check for buffer overruns */
     void checkScope(const Token *tok, const std::vector<std::string> &varname, const ArrayInfo &arrayInfo);
 
-    /** Check readlink or readlinkat() buffer usage */
-    void checkReadlinkBufferUsage(const Token *ftok, const Token *scope_begin, const unsigned int varid, const MathLib::bigint total_size);
-
     /**
      * Helper function for checkFunctionCall - check a function parameter
      * \param tok token for the function name
@@ -243,9 +228,7 @@ private:
     void pointerOutOfBoundsError(const Token *tok, const Token *index=nullptr, const MathLib::bigint indexvalue=0);
     void arrayIndexThenCheckError(const Token *tok, const std::string &indexName);
     void possibleBufferOverrunError(const Token *tok, const std::string &src, const std::string &dst, bool cat);
-    void possibleReadlinkBufferOverrunError(const Token *tok, const std::string &funcname, const std::string &varname);
     void argumentSizeError(const Token *tok, const std::string &functionName, const std::string &varname);
-    void writeOutsideBufferSizeError(const Token *tok, const std::size_t stringLength, const MathLib::bigint writeLength, const std::string& functionName);
 
     void valueFlowCheckArrayIndex(const Token * const tok, const ArrayInfo &arrayInfo);
 
@@ -266,9 +249,7 @@ public:
         c.pointerOutOfBoundsError(nullptr, nullptr, 0);
         c.arrayIndexThenCheckError(0, "index");
         c.possibleBufferOverrunError(0, "source", "destination", false);
-        c.possibleReadlinkBufferOverrunError(0, "readlink", "buffer");
         c.argumentSizeError(0, "function", "array");
-        c.writeOutsideBufferSizeError(0,2,3,"write");
         c.negativeMemoryAllocationSizeError(0);
         c.reportError(nullptr, Severity::warning, "arrayIndexOutOfBoundsCond", "Array 'x[10]' accessed at index 20, which is out of bounds. Otherwise condition 'y==20' is redundant.");
     }
@@ -288,7 +269,6 @@ private:
                "- Unsafe usage of main(argv, argc) arguments\n"
                "- Accessing array with index variable before checking its value\n"
                "- Check for large enough arrays being passed to functions\n"
-               "- Writing beyond bounds of a buffer\n"
                "- Allocating memory with a negative size\n";
     }
 };
