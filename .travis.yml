@@ -1,5 +1,9 @@
 language: cpp
 
+cache:
+  apt: true
+
+
 compiler:
   - clang
   - gcc
