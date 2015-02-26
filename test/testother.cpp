@@ -3020,7 +3020,7 @@ private:
         ASSERT_EQUALS("[test.cpp:4]: (style) Consecutive return, break, continue, goto or throw statements are unnecessary.\n", errout.str());
 
         // #5707
-        check("extern int i,j\n"
+        check("extern int i,j;\n"
               "int foo() {\n"
               "    switch(i) {\n"
               "        default: j=1; break;\n"
@@ -3996,6 +3996,16 @@ private:
               "    if (x!=2 || x!=2) {}\n"
               "}");
         ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
+
+        check("void foo(int a, int b) {\n"
+              "    if ((a < b) && (b > a)) { }\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&&'.\n", errout.str());
+
+        check("void foo(int a, int b) {\n"
+              "    if ((a <= b) && (b >= a)) { }\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&&'.\n", errout.str());
 
         check("void foo() {\n"
               "    if (x!=2 || y!=3 || x!=2) {}\n"
@@ -5450,6 +5460,14 @@ private:
               "  s->foo[s->x++] = 2;\n"
               "  s->d[1].fc.i++;\n"
               "}");
+
+        // #6525 - inline assembly
+        check("void f(int i) {\n"
+              "    i = 1;\n"
+              "    asm(\"foo\");\n"
+              "    i = 1;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void redundantMemWrite() {

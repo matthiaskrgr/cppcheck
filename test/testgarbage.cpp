@@ -70,6 +70,8 @@ private:
         TEST_CASE(garbageCode27);
         TEST_CASE(garbageCode28);
         TEST_CASE(garbageCode29);
+        TEST_CASE(garbageCode30); // #5867
+        TEST_CASE(garbageCode31); // #6539
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -385,6 +387,17 @@ private:
         checkCode("|| #if #define <=");
     }
 
+    void garbageCode30() {
+        // simply survive - a syntax error would be even better (#5867)
+        checkCode("void f(int x) {\n"
+                  " x = 42\n"
+                  "}");
+    }
+
+    void garbageCode31() {
+        ASSERT_THROW(checkCode("typedef struct{}x[([],)]typedef e y;(y,x 0){}"), InternalError);
+    }
+
     void garbageValueFlow() {
         // #6089
         const char* code = "{} int foo(struct, x1, struct x2, x3, int, x5, x6, x7)\n"
@@ -412,11 +425,11 @@ private:
 
         ASSERT_THROW(checkCode("class Foo {}; class Bar : public Foo"), InternalError);
 
-        ASSERT_THROW(checkCode("YY_DECL { switch (yy_act) {\n"
-                               "    case 65: YY_BREAK\n"
-                               "    case YY_STATE_EOF(block):\n"
-                               "        yyterminate(); \n"
-                               "} }"), InternalError); // #5663
+        checkCode("YY_DECL { switch (yy_act) {\n"
+                  "    case 65: YY_BREAK\n"
+                  "    case YY_STATE_EOF(block):\n"
+                  "        yyterminate(); \n"
+                  "} }"); // #5663
     }
 
     void garbageAST() {

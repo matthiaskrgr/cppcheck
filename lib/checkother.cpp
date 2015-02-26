@@ -87,8 +87,14 @@ bool isSameExpression(const Token *tok1, const Token *tok2, const std::set<std::
         tok1 = tok1->astOperand2();
     if (tok2->str() == "." && tok2->astOperand1() && tok2->astOperand1()->str() == "this")
         tok2 = tok2->astOperand2();
-    if (tok1->varId() != tok2->varId() || tok1->str() != tok2->str())
+    if (tok1->varId() != tok2->varId() || tok1->str() != tok2->str()) {
+        if ((Token::Match(tok1,"<|>")   && Token::Match(tok2,"<|>")) ||
+            (Token::Match(tok1,"<=|>=") && Token::Match(tok2,"<=|>="))) {
+            return isSameExpression(tok1->astOperand1(), tok2->astOperand2(), constFunctions) &&
+                   isSameExpression(tok1->astOperand2(), tok2->astOperand1(), constFunctions);
+        }
         return false;
+    }
     if (tok1->str() == "." && tok1->originalName() != tok2->originalName())
         return false;
     if (tok1->isExpandedMacro() || tok2->isExpandedMacro())
@@ -614,7 +620,7 @@ void CheckOther::checkRedundantAssignment()
                 memAssignments.clear();
             } else if (Token::Match(tok, "for|if|while (")) {
                 tok = tok->linkAt(1);
-            } else if (Token::Match(tok, "break|return|continue|throw|goto")) {
+            } else if (Token::Match(tok, "break|return|continue|throw|goto|asm")) {
                 varAssignments.clear();
                 memAssignments.clear();
             } else if (tok->type() == Token::eVariable && !Token::Match(tok, "%name% (")) {
@@ -1878,16 +1884,17 @@ void CheckOther::checkMathFunctions()
                 continue;
             if (tok->strAt(-1) != "."
                 && Token::Match(tok, "log|logf|logl|log10|log10f|log10l ( %num% )")) {
-                bool isNegative = MathLib::isNegative(tok->strAt(2));
-                bool isInt = MathLib::isInt(tok->strAt(2));
-                bool isFloat = MathLib::isFloat(tok->strAt(2));
-                if (isNegative && isInt && MathLib::toLongNumber(tok->strAt(2)) <= 0) {
+                const std::string& number = tok->strAt(2);
+                bool isNegative = MathLib::isNegative(number);
+                bool isInt = MathLib::isInt(number);
+                bool isFloat = MathLib::isFloat(number);
+                if (isNegative && isInt && MathLib::toLongNumber(number) <= 0) {
                     mathfunctionCallWarning(tok); // case log(-2)
-                } else if (isNegative && isFloat && MathLib::toDoubleNumber(tok->strAt(2)) <= 0.) {
+                } else if (isNegative && isFloat && MathLib::toDoubleNumber(number) <= 0.) {
                     mathfunctionCallWarning(tok); // case log(-2.0)
-                } else if (!isNegative && isFloat && MathLib::toDoubleNumber(tok->strAt(2)) <= 0.) {
+                } else if (!isNegative && isFloat && MathLib::toDoubleNumber(number) <= 0.) {
                     mathfunctionCallWarning(tok); // case log(0.0)
-                } else if (!isNegative && isInt && MathLib::toLongNumber(tok->strAt(2)) <= 0) {
+                } else if (!isNegative && isInt && MathLib::toLongNumber(number) <= 0) {
                     mathfunctionCallWarning(tok); // case log(0)
                 }
             }
@@ -2750,7 +2757,9 @@ void CheckOther::checkLibraryMatchFunctions()
 
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
         if (Token::Match(tok, "%name% (") &&
+            !Token::Match(tok, "for|if|while|switch|sizeof|catch|asm|return") &&
             !tok->function() &&
+            !tok->varId() &&
             tok->astParent() == tok->next() &&
             _settings->library.isNotLibraryFunction(tok)) {
             reportError(tok,

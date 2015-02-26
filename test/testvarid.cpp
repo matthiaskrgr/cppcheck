@@ -88,6 +88,7 @@ private:
         TEST_CASE(varid53); // #4172 - Template instantiation: T<&functionName> list[4];
         TEST_CASE(varid54); // hang
         TEST_CASE(varid55); // #5868: Function::addArgument with varid 0 for argument named the same as a typedef
+        TEST_CASE(varid56); // function with a throw()
         TEST_CASE(varid_cpp_keywords_in_c_code);
         TEST_CASE(varid_cpp_keywords_in_c_code2); // #5373: varid=0 for argument called "delete"
         TEST_CASE(varidFunctionCall1);
@@ -970,6 +971,15 @@ private:
         ASSERT_EQUALS(expected, tokenize(code, false, "test.cpp"));
     }
 
+    void varid56() { // Ticket #6548 - function with a throw()
+        const char code[] =     "void fred(int x) throw() {}"
+                                "void wilma() { x++; }";
+        const char expected[] = "\n\n##file 0\n1: "
+                                "void fred ( int x@1 ) throw ( ) { } "
+                                "void wilma ( ) { x ++ ; }\n";
+        ASSERT_EQUALS(expected, tokenize(code, false, "test.cpp"));
+    }
+
     void varid_cpp_keywords_in_c_code() {
         const char code[] = "void f() {\n"
                             "    delete d;\n"
@@ -1655,6 +1665,18 @@ private:
                       "3: int x@2 ;\n"
                       "4: } ;\n",
                       tokenize(code6));
+
+        // #6520
+        const char code7[] = "class A {\n"
+                             "  A(int x) : y(a?0:1), x(x) {}\n"
+                             "  int x, y;\n"
+                             "};";
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class A {\n"
+                      "2: A ( int x@1 ) : y@3 ( a ? 0 : 1 ) , x@2 ( x@1 ) { }\n"
+                      "3: int x@2 ; int y@3 ;\n"
+                      "4: } ;\n",
+                      tokenize(code7));
     }
 
     void varid_operator() {
@@ -1817,7 +1839,7 @@ private:
         ASSERT_EQUALS("\n\n##file 0\n"
                       "1: void which_test ( ) {\n"
                       "2: const char * argv@1 [ 2 ] = { \"./test_runner\" , \"TestClass\" } ;\n"
-                      "3: options args@2 ( sizeof argv@1 / sizeof ( argv@1 [ 0 ] ) , argv@1 ) ;\n"
+                      "3: options args@2 ( sizeof ( argv@1 ) / sizeof ( argv@1 [ 0 ] ) , argv@1 ) ;\n"
                       "4: args@2 . which_test ( ) ;\n"
                       "5: }\n",
                       tokenize("void which_test() {\n"
