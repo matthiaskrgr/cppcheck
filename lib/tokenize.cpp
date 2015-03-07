@@ -2315,6 +2315,14 @@ void Tokenizer::simplifyTemplates()
             tok3->deleteNext(4);
             tok3->insertToken(MathLib::toString(sizeOfResult));
         }
+        // Ticket #6181: normalize C++11 template parameter list closing syntax
+        if (tok->str() == "<" && TemplateSimplifier::templateParameters(tok)) {
+            Token *endTok = tok->findClosingBracket();
+            if (endTok && endTok->str() == ">>") {
+                endTok->str(">");
+                endTok->insertToken(">");
+            }
+        }
     }
 
     TemplateSimplifier::simplifyTemplates(
@@ -5637,7 +5645,16 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, Token * tokEnd, bool only_k_r_
                     tok2 = tok2->next();
                 if (tok2 && tok2->str() != ",")
                     tok2 = nullptr;
-            } else
+            }
+
+            // parenthesis, functions can't be declared like:
+            // int f1(a,b), f2(c,d);
+            // so if there is a comma assume this is a variable declaration
+            else if (Token::Match(varName, "%name% (") && Token::simpleMatch(varName->linkAt(1), ") ,")) {
+                tok2 = varName->linkAt(1)->next();
+            }
+
+            else
                 tok2 = nullptr;
         } else {
             tok2 = nullptr;
@@ -8089,10 +8106,27 @@ bool Tokenizer::IsScopeNoReturn(const Token *endScopeToken, bool *unknown) const
     if (unknown)
         *unknown = !unknownFunc.empty();
     if (!unknownFunc.empty() && _settings->checkLibrary && _settings->isEnabled("information")) {
-        reportError(endScopeToken->previous(),
-                    Severity::information,
-                    "checkLibraryNoReturn",
-                    "--check-library: Function " + unknownFunc + "() should have <noreturn> configuration");
+        // Is function global?
+        bool globalFunction = true;
+        if (Token::simpleMatch(endScopeToken->tokAt(-2), ") ; }")) {
+            const Token * const ftok = endScopeToken->linkAt(-2)->previous();
+            if (ftok &&
+                ftok->isName() &&
+                ftok->function() &&
+                ftok->function()->nestedIn &&
+                ftok->function()->nestedIn->type != Scope::eGlobal) {
+                globalFunction = false;
+            }
+        }
+
+        // don't warn for nonglobal functions (class methods, functions hidden in namespaces) since they cant be configured yet
+        // FIXME: when methods and namespaces can be configured properly, remove the "globalFunction" check
+        if (globalFunction) {
+            reportError(endScopeToken->previous(),
+                        Severity::information,
+                        "checkLibraryNoReturn",
+                        "--check-library: Function " + unknownFunc + "() should have <noreturn> configuration");
+        }
     }
     return ret;
 }

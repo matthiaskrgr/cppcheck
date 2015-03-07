@@ -97,6 +97,7 @@ private:
         TEST_CASE(removeCast14);
         TEST_CASE(removeCast15); // #5996 - don't remove cast in 'a+static_cast<int>(b?60:0)'
         TEST_CASE(removeCast16); // #6278
+        TEST_CASE(removeCast17); // #6110 - don't remove any parentheses in 'a(b)(c)'
 
         TEST_CASE(simplifyFloatCasts); // float casting a integer
 
@@ -293,7 +294,8 @@ private:
         TEST_CASE(vardecl_template_2);
         TEST_CASE(vardecl_union);
         TEST_CASE(vardecl_par);     // #2743 - set links if variable type contains parentheses
-        TEST_CASE(vardecl_par2)     // #3912 - set correct links
+        TEST_CASE(vardecl_par2);    // #3912 - set correct links
+        TEST_CASE(vardecl_par3);    // #6556 - Fred x1(a), x2(b);
         TEST_CASE(volatile_variables);
         TEST_CASE(syntax_error);
         TEST_CASE(syntax_error_templates_1);
@@ -826,7 +828,7 @@ private:
                             "void z() {\n"
                             "    vector<int> VI;\n"
                             "}\n";
-        ASSERT_THROW(tokenizeAndStringify(code, true), InternalError);
+        tokenizeAndStringify(code, true);
     }
 
     void tokenize34() { // #6121
@@ -960,7 +962,7 @@ private:
     void removeCast4() {
         // ticket #970
         const char code[] = "if (a >= (unsigned)(b)) {}";
-        const char expected[] = "if ( a >= ( unsigned int ) b ) { }";
+        const char expected[] = "if ( a >= ( unsigned int ) ( b ) ) { }";
         ASSERT_EQUALS(expected, tokenizeAndStringify(code, true));
     }
 
@@ -984,7 +986,7 @@ private:
 
     void removeCast9() {
         ASSERT_EQUALS("f ( ( double ) ( v1 ) * v2 )", tokenizeAndStringify("f((double)(v1)*v2)", true));
-        ASSERT_EQUALS("int v1 ; f ( ( double ) v1 * v2 )", tokenizeAndStringify("int v1; f((double)(v1)*v2)", true));
+        ASSERT_EQUALS("int v1 ; f ( ( double ) ( v1 ) * v2 )", tokenizeAndStringify("int v1; f((double)(v1)*v2)", true));
         ASSERT_EQUALS("f ( ( A ) ( B ) & x )", tokenizeAndStringify("f((A)(B)&x)", true)); // #4439
     }
 
@@ -1037,6 +1039,11 @@ private:
     void removeCast16() { // #6278
         ASSERT_EQUALS("Get ( pArray ) ;",
                       tokenizeAndStringify("Get((CObject*&)pArray);", true));
+    }
+
+    void removeCast17() { // #6110 - don't remove any parentheses in 'a(b)(c)'
+        ASSERT_EQUALS("if ( a ( b ) ( c ) >= 3 )",
+                      tokenizeAndStringify("if (a(b)(c) >= 3)", true));
     }
 
     void simplifyFloatCasts() { // float casting integers
@@ -3810,6 +3817,12 @@ private:
         tokenizer.validate();
     }
 
+    void vardecl_par3() {
+        // ticket #6556- Fred x1(a), x2(b);
+        const char code[] = "Fred x1(a), x2(b);";
+        ASSERT_EQUALS("Fred x1 ( a ) ; Fred x2 ( b ) ;", tokenizeAndStringify(code));
+    }
+
     void vardec_static() {
         {
             // don't simplify declarations of static variables
@@ -5172,10 +5185,10 @@ private:
     }
 
     void cpp0xtemplate4() { // #6181, #6354, #6414
-        ASSERT_THROW(tokenizeAndStringify("class A; "
-                                          "template <class T> class Disposer; "
-                                          "template <typename T, class D = Disposer<T>> class Shim {}; "
-                                          "class B : public Shim<A> {};"), InternalError);
+        tokenizeAndStringify("class A; "
+                             "template <class T> class Disposer; "
+                             "template <typename T, class D = Disposer<T>> class Shim {}; "
+                             "class B : public Shim<A> {};");
         tokenizeAndStringify("template <class ELFT> class ELFObjectImage {}; "
                              "ObjectImage *createObjectImage() { "
                              "  return new ELFObjectImage<ELFType<little>>(Obj); "

@@ -565,8 +565,6 @@ static void eraseNotLocalArg(std::map<unsigned int, const Token*>& container, co
         const Variable* var = symbolDatabase->getVariableFromVarId(i->first);
         if (!var || nonLocal(var)) {
             container.erase(i++);
-            if (i == container.end())
-                break;
         } else
             ++i;
     }
@@ -1798,7 +1796,7 @@ void CheckOther::checkZeroDivision()
                     continue;
             }
             zerodivError(tok,false);
-        } else if (Token::Match(tok, "[/%]") && tok->astOperand2()) {
+        } else if (Token::Match(tok, "[/%]") && tok->astOperand2() && !astIsFloat(tok,false)) {
             // Value flow..
             const ValueFlow::Value *value = tok->astOperand2()->getValue(0LL);
             if (value) {
