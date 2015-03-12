@@ -681,8 +681,11 @@ const Library::Container* Library::detectContainer(const Token* typeStart) const
 // returns true if ftok is not a library function
 bool Library::isNotLibraryFunction(const Token *ftok) const
 {
+    // methods are not library functions
     // called from tokenizer, ast is not created properly yet
     if (Token::Match(ftok->previous(),"::|."))
+        return true;
+    if (ftok->function() && ftok->function()->nestedIn && ftok->function()->nestedIn->type != Scope::eGlobal)
         return true;
 
     // variables are not library functions.
@@ -709,4 +712,95 @@ bool Library::isNotLibraryFunction(const Token *ftok) const
             return args > callargs;
     }
     return args != callargs;
+}
+
+bool Library::isnoreturn(const Token *ftok) const
+{
+    if (ftok->function() && ftok->function()->isAttributeNoreturn())
+        return true;
+    if (isNotLibraryFunction(ftok))
+        return false;
+    std::map<std::string, bool>::const_iterator it = _noreturn.find(ftok->str());
+    return (it != _noreturn.end() && it->second);
+}
+
+bool Library::isnotnoreturn(const Token *ftok) const
+{
+    if (ftok->function() && ftok->function()->isAttributeNoreturn())
+        return false;
+    if (isNotLibraryFunction(ftok))
+        return false;
+    std::map<std::string, bool>::const_iterator it = _noreturn.find(ftok->str());
+    return (it != _noreturn.end() && !it->second);
+}
+
+bool Library::markupFile(const std::string &path) const
+{
+    return _markupExtensions.find(Path::getFilenameExtensionInLowerCase(path)) != _markupExtensions.end();
+}
+
+bool Library::processMarkupAfterCode(const std::string &path) const
+{
+    const std::map<std::string, bool>::const_iterator it = _processAfterCode.find(Path::getFilenameExtensionInLowerCase(path));
+    return (it == _processAfterCode.end() || it->second);
+}
+
+bool Library::reportErrors(const std::string &path) const
+{
+    const std::map<std::string, bool>::const_iterator it = _reporterrors.find(Path::getFilenameExtensionInLowerCase(path));
+    return (it == _reporterrors.end() || it->second);
+}
+
+bool Library::isexecutableblock(const std::string &file, const std::string &token) const
+{
+    const std::map<std::string, CodeBlock>::const_iterator it = _executableblocks.find(Path::getFilenameExtensionInLowerCase(file));
+    return (it != _executableblocks.end() && it->second.isBlock(token));
+}
+
+int Library::blockstartoffset(const std::string &file) const
+{
+    int offset = -1;
+    const std::map<std::string, CodeBlock>::const_iterator map_it
+        = _executableblocks.find(Path::getFilenameExtensionInLowerCase(file));
+
+    if (map_it != _executableblocks.end()) {
+        offset = map_it->second.offset();
+    }
+    return offset;
+}
+
+const std::string& Library::blockstart(const std::string &file) const
+{
+    const std::map<std::string, CodeBlock>::const_iterator map_it
+        = _executableblocks.find(Path::getFilenameExtensionInLowerCase(file));
+
+    if (map_it != _executableblocks.end()) {
+        return map_it->second.start();
+    }
+    return emptyString;
+}
+
+const std::string& Library::blockend(const std::string &file) const
+{
+    const std::map<std::string, CodeBlock>::const_iterator map_it
+        = _executableblocks.find(Path::getFilenameExtensionInLowerCase(file));
+
+    if (map_it != _executableblocks.end()) {
+        return map_it->second.end();
+    }
+    return emptyString;
+}
+
+bool Library::iskeyword(const std::string &file, const std::string &keyword) const
+{
+    const std::map<std::string, std::set<std::string> >::const_iterator it =
+        _keywords.find(Path::getFilenameExtensionInLowerCase(file));
+    return (it != _keywords.end() && it->second.count(keyword));
+}
+
+bool Library::isimporter(const std::string& file, const std::string &importer) const
+{
+    const std::map<std::string, std::set<std::string> >::const_iterator it =
+        _importers.find(Path::getFilenameExtensionInLowerCase(file));
+    return (it != _importers.end() && it->second.count(importer) > 0);
 }

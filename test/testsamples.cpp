@@ -16,10 +16,10 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include "filelister.h"
 #include "testsuite.h"
 #include "cppcheckexecutor.h"
+#include "path.h"
 #include <fstream>
 #include <cstring>
 #include <algorithm>

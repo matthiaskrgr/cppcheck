@@ -7,14 +7,16 @@
 // No warnings about bad library configuration, unmatched suppressions, etc. exitcode=0
 //
 
+#include <stdlib.h>
 #include <stdio.h> // <- FILE
 #include <dirent.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <fcntl.h>
 #include <netdb.h>
-#include <unistd.h>
 #include <regex.h>
+#include <time.h>
+#include <unistd.h>
 
 void bufferAccessOutOfBounds(int fd) {
   char a[5];
@@ -46,6 +48,8 @@ void nullPointer(char *p) {
     getcwd (0, 0);
     // cppcheck-suppress nullPointer
     readdir (0);
+    // cppcheck-suppress nullPointer
+    utime(NULL, NULL);
 }
 
 void memleak_getaddrinfo() {
@@ -126,6 +130,8 @@ void invalidFunctionArg() {
 void uninitvar(int fd) {
     int x;
     char buf[2];
+    int decimal, sign;  
+    double d;
     // cppcheck-suppress uninitvar
     write(x,"ab",2);
     // cppcheck-suppress uninitvar
@@ -143,13 +149,20 @@ void uninitvar(int fd) {
     pattern="";
     // cppcheck-suppress uninitvar
     regcomp(&reg, pattern, cflags);
-    int decimal, sign;  
-    double d;
     // cppcheck-suppress uninitvar
     // cppcheck-suppress unreadVariable
     char *buffer = ecvt(d, 11, &decimal, &sign);
     gcvt(3.141, 2, NULL);
+    
+    char *filename;
+    struct utimbuf *times;
+    // cppcheck-suppress uninitvar
+    utime(filename, times);
+    struct timeval times1[2];
+    // cppcheck-suppress uninitvar
+    utime(filename, times1);
 }
+
 
 void uninitvar_types(void) {
     // cppcheck-suppress unassignedVariable
@@ -160,4 +173,10 @@ void uninitvar_types(void) {
     struct dirent d;
     // cppcheck-suppress uninitvar
     d.d_ino + 1;
+}
+
+void timet_h() {
+  struct timespec* ptp;
+  // cppcheck-suppress uninitvar
+  clock_settime(CLOCK_REALTIME, ptp);
 }

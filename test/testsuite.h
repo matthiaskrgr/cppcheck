@@ -74,11 +74,15 @@ public:
     void warn(const char msg[]) const;
     void warnUnsimplified(const std::string& unsimplified, const std::string& simplified);
 
-    TestFixture(const std::string &_name);
+    explicit TestFixture(const std::string &_name);
     virtual ~TestFixture() { }
 
     static std::size_t runTests(const options& args);
 };
+
+extern std::ostringstream errout;
+extern std::ostringstream output;
+extern std::ostringstream warnings;
 
 #define TEST_CASE( NAME )  if ( prepareTest(#NAME) ) { NAME(); }
 #define ASSERT( CONDITION )  assert_(__FILE__, __LINE__, CONDITION)

@@ -245,25 +245,27 @@ static const char *signal_name(int signo)
     return "";
 }
 
-
-// 32 vs. 64bit
-#define ADDRESSDISPLAYLENGTH ((sizeof(long)==8)?12:8)
-
 /*
  * Try to print the callstack.
  * That is very sensitive to the operating system, hardware, compiler and runtime!
  * The code is not meant for production environment, it's using functions not whitelisted for usage in a signal handler function.
  */
-static void print_stacktrace(FILE* f, bool demangling)
+static void print_stacktrace(FILE* f, bool demangling, int maxdepth)
 {
 #if defined(USE_UNIX_BACKTRACE_SUPPORT)
+// 32 vs. 64bit
+#define ADDRESSDISPLAYLENGTH ((sizeof(long)==8)?12:8)
     void *array[32]= {0}; // the less resources the better...
     const int depth = backtrace(array, (int)GetArrayLength(array));
+    const int offset=3; // the first two entries are simply within our own exception handling code, third is within libc
+    if (maxdepth<0)
+        maxdepth=depth+offset;
+    else
+        maxdepth+=offset;
     char **symbolstrings = backtrace_symbols(array, depth);
     if (symbolstrings) {
         fputs("Callstack:\n", f);
-        const int offset=3; // the first two entries are simply within our own exception handling code, third is within libc
-        for (int i = offset; i < depth; ++i) {
+        for (int i = offset; i < maxdepth; ++i) {
             const char * const symbol = symbolstrings[i];
             char * realname = nullptr;
             const char * const firstBracketName = strchr(symbol, '(');
@@ -303,7 +305,25 @@ static void print_stacktrace(FILE* f, bool demangling)
     } else {
         fputs("Callstack could not be obtained\n", f);
     }
+#undef ADDRESSDISPLAYLENGTH
 #endif
+}
+
+static const size_t MYSTACKSIZE = 16*1024+SIGSTKSZ;
+static char mytstack[MYSTACKSIZE]; // alternative stack for signal handler
+static bool bStackBelowHeap=false;
+
+/*
+ * \return true if address is supposed to be on stack (contrary to heap or elsewhere).
+ * If unknown better return false.
+ */
+static bool isAddressOnStack(const void* ptr)
+{
+    char a;
+    if (bStackBelowHeap)
+        return ptr < &a;
+    else
+        return ptr > &a;
 }
 
 /*
@@ -326,6 +346,7 @@ static void CppcheckSignalHandler(int signo, siginfo_t * info, void * context)
     const char * const signame = signal_name(signo);
     const char * const sigtext = strsignal(signo);
     bool bPrintCallstack=true;
+    const bool isaddressonstack = isAddressOnStack(info->si_addr);
     FILE* f=CppCheckExecutor::getExceptionOutput()=="stderr" ? stderr : stdout;
     fputs("Internal error: cppcheck received signal ", f);
     fputs(signame, f);
@@ -420,8 +441,9 @@ static void CppcheckSignalHandler(int signo, siginfo_t * info, void * context)
         default:
             break;
         }
-        fprintf(f, " (at 0x%p).\n",
-                info->si_addr);
+        fprintf(f, " (at 0x%p).%s\n",
+                info->si_addr,
+                (isaddressonstack)?" Stackoverflow?":"");
         break;
     case SIGINT:
         bPrintCallstack=false;
@@ -438,17 +460,19 @@ static void CppcheckSignalHandler(int signo, siginfo_t * info, void * context)
         default:
             break;
         }
-        fprintf(f, " (%sat 0x%p).\n",
+        fprintf(f, " (%sat 0x%p).%s\n",
                 (type==-1)? "" :
                 (type==0) ? "reading " : "writing ",
-                info->si_addr);
+                info->si_addr,
+                (isaddressonstack)?" Stackoverflow?":""
+               );
         break;
     default:
         fputs(".\n", f);
         break;
     }
     if (bPrintCallstack) {
-        print_stacktrace(f, true);
+        print_stacktrace(f, true, -1 /*(isaddressonstack)?8:-1*/);
         fputs("\nPlease report this to the cppcheck developers!\n", f);
     }
 
@@ -591,7 +615,7 @@ static void writeMemoryErrorDetails(FILE* f, PEXCEPTION_POINTERS ex, const char*
 }
 
 /*
- * Any evaluation of the information about the exception needs to be done here!
+ * Any evaluation of the exception needs to be done here!
  */
 static int filterException(int code, PEXCEPTION_POINTERS ex)
 {
@@ -688,14 +712,28 @@ int CppCheckExecutor::check_wrapper(CppCheck& cppcheck, int argc, const char* co
     __try {
         return check_internal(cppcheck, argc, argv);
     } __except (filterException(GetExceptionCode(), GetExceptionInformation())) {
-        // reporting to stdout may not be helpful within a GUI application..
+        // reporting to stdout may not be helpful within a GUI application...
         fputs("Please report this to the cppcheck developers!\n", f);
         return -1;
     }
 #elif defined(USE_UNIX_SIGNAL_HANDLING)
+    // determine stack vs. heap
+    char stackVariable;
+    char *heapVariable=(char*)malloc(1);
+    bStackBelowHeap = &stackVariable < heapVariable;
+    free(heapVariable);
+
+    // set up alternative stack for signal handler
+    stack_t segv_stack;
+    segv_stack.ss_sp = mytstack;
+    segv_stack.ss_flags = 0;
+    segv_stack.ss_size = MYSTACKSIZE;
+    sigaltstack(&segv_stack, NULL);
+
+    // install signal handler
     struct sigaction act;
     memset(&act, 0, sizeof(act));
-    act.sa_flags=SA_SIGINFO;
+    act.sa_flags=SA_SIGINFO|SA_ONSTACK;
     act.sa_sigaction=CppcheckSignalHandler;
     for (std::size_t s=0; s<GetArrayLength(listofsignals); ++s) {
         sigaction(listofsignals[s].signalnumber, &act, NULL);
@@ -909,7 +947,7 @@ const std::string& CppCheckExecutor::getExceptionOutput()
 
 bool CppCheckExecutor::tryLoadLibrary(Library& destination, const char* basepath, const char* filename)
 {
-    Library::Error err = destination.load(basepath, filename);
+    const Library::Error err = destination.load(basepath, filename);
 
     if (err.errorcode == Library::UNKNOWN_ELEMENT)
         std::cout << "cppcheck: Found unknown elements in configuration file '" << filename << "': " << err.reason << std::endl;
