@@ -43,6 +43,7 @@ void bufferAccessOutOfBounds(int fd) {
 }
 
 void nullPointer(char *p) {
+    // cppcheck-suppress ignoredReturnValue
     isatty (0);
     mkdir (p, 0);
     getcwd (0, 0);
@@ -152,7 +153,7 @@ void uninitvar(int fd) {
     // cppcheck-suppress uninitvar
     // cppcheck-suppress unreadVariable
     char *buffer = ecvt(d, 11, &decimal, &sign);
-    gcvt(3.141, 2, NULL);
+    gcvt(3.141, 2, buf);
     
     char *filename;
     struct utimbuf *times;

@@ -1226,7 +1226,7 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
             if (_tokenizer->IsScopeNoReturn(tok)) {
                 if (noreturn)
                     *noreturn = true;
-                return true;
+                return false;
             }
 
             break;
@@ -1302,7 +1302,7 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
                     for (const Token *tok2 = tok; tok2 && tok2 != tok->link(); tok2 = tok2->next()) {
                         if (Token::Match(tok2, "[;{}.] %name% = - %name% ;"))
                             varValueIf[tok2->next()->varId()] = NOT_ZERO;
-                        if (Token::Match(tok2, "[;{}.] %name% = %num% ;"))
+                        else if (Token::Match(tok2, "[;{}.] %name% = %num% ;"))
                             varValueIf[tok2->next()->varId()] = (int)MathLib::toLongNumber(tok2->strAt(3));
                     }
                 }
