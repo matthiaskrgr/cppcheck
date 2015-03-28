@@ -1796,7 +1796,17 @@ private:
                                 "    char *a, *b;\n"
                                 "    delete a, b;\n"
                                 "}\n";
-            ASSERT_EQUALS("void foo ( ) { char * a ; char * b ; delete a ; delete b ; }", tok(code));
+            ASSERT_EQUALS("void foo ( ) { char * a ; char * b ; delete a ; b ; }", tok(code));
+        }
+
+        {
+            const char code[] = "void foo()\n"
+                                "{\n"
+                                "    char *a, *b;\n"
+                                "    if (x) \n"
+                                "        delete a, b;\n"
+                                "}\n";
+            ASSERT_EQUALS("void foo ( ) { char * a ; char * b ; if ( x ) { delete a ; b ; } }", tok(code));
         }
 
         {
@@ -1842,6 +1852,14 @@ private:
                                 "    delete a, a = 0;\n"
                                 "}\n";
             ASSERT_EQUALS("void foo ( ) { delete a ; a = 0 ; }", tok(code));
+        }
+
+        {
+            const char code[] = "void foo()\n"
+                                "{\n"
+                                "    if( x ) delete a, a = 0;\n"
+                                "}\n";
+            ASSERT_EQUALS("void foo ( ) { if ( x ) { delete a ; a = 0 ; } }", tok(code));
         }
 
         {
