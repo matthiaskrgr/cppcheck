@@ -2601,9 +2601,10 @@ void Tokenizer::setVarId()
         } else if (!executableScope.top() && tok->str() == "(" && isFunctionHead(tok, ";")) {
             scopeInfo.push(variableId);
         } else if (!executableScope.top() && tok->str() == ")" && isFunctionHead(tok, ";")) {
+            if (scopeInfo.empty())
+                cppcheckError(tok);
             variableId.swap(scopeInfo.top());
             scopeInfo.pop();
-
         } else if (tok->str() == "{") {
             // parse anonymous unions as part of the current scope
             if (!(tok->strAt(-1) == "union" && Token::simpleMatch(tok->link(), "} ;"))) {
@@ -3552,6 +3553,10 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // Simplify float casts (float)1 => 1.0
     simplifyFloatCasts();
 
+    // Collapse operator name tokens into single token
+    // operator = => operator=
+    simplifyOperatorName();
+
     // Remove redundant parentheses
     simplifyRedundantParentheses();
     for (Token *tok = list.front(); tok; tok = tok->next())
@@ -3571,10 +3576,6 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // syntax is corrected.
     if (!isC())
         TemplateSimplifier::cleanupAfterSimplify(list.front());
-
-    // Collapse operator name tokens into single token
-    // operator = => operator=
-    simplifyOperatorName();
 
     // Simplify pointer to standard types (C only)
     simplifyPointerToStandardType();
@@ -6585,12 +6586,12 @@ bool Tokenizer::simplifyKnownVariablesGetData(unsigned int varid, Token **_tok2,
             return false;
 
         // no break => the value of the counter value is known after the for loop..
-        const std::string& compareop = tok2->strAt(5);
-        if (compareop == "<") {
-            value = tok2->strAt(6);
-            valueVarId = tok2->tokAt(6)->varId();
+        const Token* compareTok = tok2->tokAt(5);
+        if (compareTok->str() == "<") {
+            value = compareTok->next()->str();
+            valueVarId = compareTok->next()->varId();
         } else
-            value = MathLib::toString(MathLib::toLongNumber(tok2->strAt(6)) + 1);
+            value = MathLib::toString(MathLib::toLongNumber(compareTok->next()->str()) + 1);
 
         // Skip for-body..
         tok3 = tok2->previous()->link()->next()->link()->next();
