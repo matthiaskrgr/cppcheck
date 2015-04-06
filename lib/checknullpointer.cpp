@@ -463,10 +463,6 @@ void CheckNullPointer::nullPointerError(const Token *tok, const std::string &var
 
 void CheckNullPointer::nullPointerError(const Token *tok, const std::string &varname, const Token* nullCheck, bool inconclusive)
 {
-
-    if (!_settings->isEnabled("warning"))
-        return;
-
     std::list<const Token*> callstack;
     callstack.push_back(tok);
     callstack.push_back(nullCheck);
