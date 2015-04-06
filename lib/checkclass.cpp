@@ -2099,8 +2099,12 @@ void CheckClass::selfInitializationError(const Token* tok, const std::string& va
 // Check for pure virtual function calls
 //---------------------------------------------------------------------------
 
-void CheckClass::checkPureVirtualFunctionCall()
+void CheckClass::checkPureVirtualFunctionCall() // here
 {
+
+    if (! _settings->isEnabled("warning"))
+        return;
+
     const std::size_t functions = symbolDatabase->functionScopes.size();
     std::map<const Function *, std::list<const Token *> > callsPureVirtualFunctionMap;
     for (std::size_t i = 0; i < functions; ++i) {
@@ -2201,11 +2205,14 @@ void CheckClass::getFirstPureVirtualFunctionCallStack(
     getFirstPureVirtualFunctionCallStack(callsPureVirtualFunctionMap, firstPureCall, pureFuncStack);
 }
 
-void CheckClass::callsPureVirtualFunctionError(
+void CheckClass::callsPureVirtualFunctionError( // here
     const Function & scopeFunction,
     const std::list<const Token *> & tokStack,
     const std::string &purefuncname)
 {
+    if (!_settings->isEnabled("warning"))
+        return;
+
     const char * scopeFunctionTypeName = getFunctionTypeName(scopeFunction.type);
     reportError(tokStack, Severity::warning, "pureVirtualCall", "Call of pure virtual function '" + purefuncname + "' in " + scopeFunctionTypeName + ".\n"
                 "Call of pure virtual function '" + purefuncname + "' in " + scopeFunctionTypeName + ". The call will fail during runtime.");
