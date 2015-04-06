@@ -1872,6 +1872,7 @@ void CheckOther::nanInArithmeticExpressionError(const Token *tok)
 void CheckOther::checkMathFunctions()
 {
     bool styleC99 = _settings->isEnabled("style") && _settings->standards.c != Standards::C89 && _settings->standards.cpp != Standards::CPP03;
+    bool printWarnings = _settings->isEnabled("warning");
 
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
     const std::size_t functions = symbolDatabase->functionScopes.size();
@@ -1880,7 +1881,7 @@ void CheckOther::checkMathFunctions()
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
             if (tok->varId())
                 continue;
-            if (_settings->isEnabled("warning")) {
+            if (printWarnings) {
                 if (tok->strAt(-1) != "."
                     && Token::Match(tok, "log|logf|logl|log10|log10f|log10l ( %num% )")) {
                     const std::string& number = tok->strAt(2);
