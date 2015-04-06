@@ -918,6 +918,9 @@ void CheckStl::sizeError(const Token *tok)
 
 void CheckStl::redundantCondition()
 {
+    if (!_settings->isEnabled("style"))
+        return;
+
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
 
     for (std::list<Scope>::const_iterator i = symbolDatabase->scopeList.begin(); i != symbolDatabase->scopeList.end(); ++i) {
@@ -1452,6 +1455,8 @@ void CheckStl::checkDereferenceInvalidIterator()
             const Token* startOfCondition = tok->next();
             if (i->type == Scope::eDo)
                 startOfCondition = startOfCondition->link()->tokAt(2);
+            if (!startOfCondition) // ticket #6626 invalid code
+                continue;
             const Token* endOfCondition = startOfCondition->link();
             if (!endOfCondition)
                 continue;

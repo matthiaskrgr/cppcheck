@@ -305,7 +305,7 @@ unsigned int TemplateSimplifier::templateParameters(const Token *tok)
         // ,/>
         while (Token::Match(tok, ">|>>")) {
             if (level == 0)
-                return numberOfParameters;
+                return ((tok->str() == ">") ? numberOfParameters : 0);
             --level;
             if (tok->str() == ">>") {
                 if (level == 0)
@@ -1271,9 +1271,9 @@ bool TemplateSimplifier::simplifyTemplateInstantiations(
 
         if (typeForNewName.empty() || typeParametersInDeclaration.size() != typesUsedInTemplateInstantiation.size()) {
             if (_settings->debugwarnings && errorlogger) {
-                std::list<const Token *> callstack(1, tok);
+                std::list<const Token *> callstack(1, tok2);
                 errorlogger->reportErr(ErrorLogger::ErrorMessage(callstack, &tokenlist, Severity::debug, "debug",
-                                       "Failed to instantiate template. The checking continues anyway.", false));
+                                       "Failed to instantiate template \"" + name + "\". The checking continues anyway.", false));
             }
             if (typeForNewName.empty())
                 continue;

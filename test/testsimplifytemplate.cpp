@@ -1150,6 +1150,7 @@ private:
         ASSERT_EQUALS(1U, templateParameters("<const int> x;"));
         ASSERT_EQUALS(1U, templateParameters("<int const *> x;"));
         ASSERT_EQUALS(1U, templateParameters("<const struct C> x;"));
+        ASSERT_EQUALS(0U, templateParameters("<len>>x;"));
     }
 
     void templateParameters1() {
@@ -1167,10 +1168,10 @@ private:
         std::istringstream istr(code);
         tokenizer.tokenize(istr, "test.cpp", "", true);
 
-        const Token *tok = tokenizer.tokens();
+        const Token *_tok = tokenizer.tokens();
         for (unsigned i = 0 ; i < offset ; ++i)
-            tok = tok->next();
-        return TemplateSimplifier::getTemplateNamePosition(tok);
+            _tok = _tok->next();
+        return TemplateSimplifier::getTemplateNamePosition(_tok);
     }
 
     void templateNamePosition() {
