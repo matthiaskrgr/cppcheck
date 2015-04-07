@@ -1044,6 +1044,7 @@ static bool isLocal(const Token *tok)
 
 void CheckStl::string_c_str()
 {
+    const bool printInconclusive = _settings->inconclusive;
     const bool performance = _settings->isEnabled("performance");
     // THIS ARRAY MUST BE ORDERED ALPHABETICALLY
     static const char* const stl_string[] = {
@@ -1157,7 +1158,7 @@ void CheckStl::string_c_str()
                 } else if (Token::simpleMatch(tok, "return (") &&
                            Token::Match(tok->next()->link(), ") . c_str|data ( ) ;")) {
                     // Check for "+ localvar" or "+ std::string(" inside the bracket
-                    bool is_implicit_std_string = _settings->inconclusive;
+                    bool is_implicit_std_string = printInconclusive;
                     const Token *search_end = tok->next()->link();
                     for (const Token *search_tok = tok->tokAt(2); search_tok != search_end; search_tok = search_tok->next()) {
                         if (Token::Match(search_tok, "+ %var%") && isLocal(search_tok->next()) &&

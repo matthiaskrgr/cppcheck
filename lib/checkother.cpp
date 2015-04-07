@@ -433,6 +433,7 @@ void CheckOther::invalidPointerCast()
     if (!_settings->isEnabled("portability"))
         return;
 
+    const bool printInconclusive = _settings->inconclusive;
     const SymbolDatabase* const symbolDatabase = _tokenizer->getSymbolDatabase();
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
@@ -491,7 +492,7 @@ void CheckOther::invalidPointerCast()
 
             std::string fromType = analyzeType(fromTok);
             std::string toType = analyzeType(toTok);
-            if (fromType != toType && !fromType.empty() && !toType.empty() && (toTok->str() != "char" || _settings->inconclusive))
+            if (fromType != toType && !fromType.empty() && !toType.empty() && (toTok->str() != "char" || printInconclusive))
                 invalidPointerCastError(tok, fromType, toType, toTok->str() == "char");
         }
     }
@@ -587,6 +588,7 @@ void CheckOther::checkRedundantAssignment()
 {
     const bool performance = _settings->isEnabled("performance");
     const bool warning = _settings->isEnabled("warning");
+    const bool printInconclusive = _settings->inconclusive;
     if (!warning && !performance)
         return;
 
@@ -664,7 +666,7 @@ void CheckOther::checkRedundantAssignment()
                                 redundantAssignmentInSwitchError(it->second, tok, tok->str());
                             else if (performance) {
                                 const bool nonlocal = nonLocal(it->second->variable());
-                                if (_settings->inconclusive || !nonlocal) // see #5089 - report inconclusive only when requested
+                                if (printInconclusive || !nonlocal) // see #5089 - report inconclusive only when requested
                                     redundantAssignmentError(it->second, tok, tok->str(), nonlocal); // Inconclusive for non-local variables
                             }
                         }
@@ -1135,7 +1137,7 @@ void CheckOther::checkUnreachableCode()
 {
     if (!_settings->isEnabled("style"))
         return;
-
+    const bool printInconclusive = _settings->inconclusive;
     const SymbolDatabase* symbolDatabase = _tokenizer->getSymbolDatabase();
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
@@ -1170,7 +1172,7 @@ void CheckOther::checkUnreachableCode()
             // TODO: Try to find a better way to avoid false positives due to preprocessor configurations.
             bool inconclusive = secondBreak && (secondBreak->linenr() - 1 > secondBreak->previous()->linenr());
 
-            if (secondBreak && (_settings->inconclusive || !inconclusive)) {
+            if (secondBreak && (printInconclusive || !inconclusive)) {
                 if (Token::Match(secondBreak, "continue|goto|throw") ||
                     (secondBreak->str() == "return" && (tok->str() == "return" || secondBreak->strAt(1) == ";"))) { // return with value after statements like throw can be necessary to make a function compile
                     duplicateBreakError(secondBreak, inconclusive);
@@ -1786,6 +1788,7 @@ void CheckOther::constStatementError(const Token *tok, const std::string &type)
 void CheckOther::checkZeroDivision()
 {
     const bool printWarnings = _settings->isEnabled("warning");
+	const bool printInconclusive = _settings->inconclusive;
 
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
         if (Token::Match(tok, "div|ldiv|lldiv|imaxdiv ( %num% , %num% )") &&
@@ -1802,7 +1805,7 @@ void CheckOther::checkZeroDivision()
             // Value flow..
             const ValueFlow::Value *value = tok->astOperand2()->getValue(0LL);
             if (value) {
-                if (!_settings->inconclusive && value->inconclusive)
+                if (!printInconclusive && value->inconclusive)
                     continue;
                 if (value->condition == nullptr)
                     zerodivError(tok, value->inconclusive);
@@ -2071,6 +2074,7 @@ void CheckOther::checkInvalidFree()
 {
     std::map<unsigned int, bool> allocatedVariables;
 
+    const bool printInconclusive = _settings->inconclusive;
     const SymbolDatabase* symbolDatabase = _tokenizer->getSymbolDatabase();
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
@@ -2088,7 +2092,7 @@ void CheckOther::checkInvalidFree()
             else if (Token::Match(tok, "%var% = %name% +|-") &&
                      tok->varId() == tok->tokAt(2)->varId() &&
                      allocatedVariables.find(tok->varId()) != allocatedVariables.end()) {
-                if (_settings->inconclusive)
+                if (printInconclusive)
                     allocatedVariables[tok->varId()] = true;
                 else
                     allocatedVariables.erase(tok->varId());

@@ -507,6 +507,7 @@ void CheckBufferOverrun::checkFunctionCall(const Token *tok, const ArrayInfo &ar
 
 void CheckBufferOverrun::checkScope(const Token *tok, const std::vector<std::string> &varname, const ArrayInfo &arrayInfo)
 {
+    const bool printInconclusive = _settings->inconclusive;
     const MathLib::bigint size = arrayInfo.num(0);
     if (size == 0)  // unknown size
         return;
@@ -632,7 +633,7 @@ void CheckBufferOverrun::checkScope(const Token *tok, const std::vector<std::str
 
                             // The access is still within the memory range for the array
                             // so it may be intentional.
-                            else if (_settings->inconclusive) {
+                            else if (printInconclusive) {
                                 arrayIndexOutOfBoundsError(tok->tokAt(1 + varcount), arrayInfo, indexes);
                                 break; // only warn about the first one
                             }
@@ -669,7 +670,7 @@ void CheckBufferOverrun::checkScope(const Token *tok, const std::vector<std::str
                 if (var && var->isArray() && var->dimensions().size() == 1) {
                     const MathLib::bigint len = var->dimension(0);
                     if (len > total_size) {
-                        if (_settings->inconclusive)
+                        if (printInconclusive)
                             possibleBufferOverrunError(tok, tok->strAt(4), tok->strAt(2), tok->str() == "strcat");
                         continue;
                     }
@@ -721,6 +722,8 @@ void CheckBufferOverrun::checkScope(const Token *tok, const std::vector<std::str
 
 void CheckBufferOverrun::valueFlowCheckArrayIndex(const Token * const tok, const ArrayInfo &arrayInfo)
 {
+	const bool printInconclusive = _settings->inconclusive;
+
     // Declaration in global scope or namespace?
     if (tok->scope()->type == Scope::eGlobal || tok->scope()->type == Scope::eNamespace)
         return;
@@ -819,7 +822,7 @@ void CheckBufferOverrun::valueFlowCheckArrayIndex(const Token * const tok, const
                     if (indexes[i].intvalue >= arrayInfo.num(i)) {
                         // The access is still within the memory range for the array
                         // so it may be intentional.
-                        if (_settings->inconclusive) {
+                        if (printInconclusive) {
                             arrayIndexOutOfBoundsError(tok, arrayInfo, indexes);
                             break; // only warn about the first one
                         }
@@ -841,6 +844,7 @@ void CheckBufferOverrun::checkScope(const Token *tok, const ArrayInfo &arrayInfo
 
     const bool isPortabilityEnabled = _settings->isEnabled("portability");
     const bool isWarningEnabled = _settings->isEnabled("warning");
+    const bool printInconclusive = _settings->inconclusive;
 
     bool reassigned = false;
 
@@ -893,7 +897,7 @@ void CheckBufferOverrun::checkScope(const Token *tok, const ArrayInfo &arrayInfo
             // Check function call..
             checkFunctionCall(tok, arrayInfo, std::list<const Token*>());
 
-            if (isWarningEnabled && _settings->inconclusive && Token::Match(tok, "strncpy|memcpy|memmove ( %varid% , %str% , %num% )", declarationId)) {
+            if (isWarningEnabled && printInconclusive && Token::Match(tok, "strncpy|memcpy|memmove ( %varid% , %str% , %num% )", declarationId)) {
                 if (Token::getStrLength(tok->tokAt(4)) >= (unsigned int)total_size) {
                     const MathLib::bigint num = MathLib::toLongNumber(tok->strAt(6));
                     if (total_size == num)
@@ -910,7 +914,7 @@ void CheckBufferOverrun::checkScope(const Token *tok, const ArrayInfo &arrayInfo
                     const MathLib::bigint num = MathLib::toLongNumber(param3->str());
 
                     // this is currently 'inconclusive'. See TestBufferOverrun::terminateStrncpy3
-                    if (num >= total_size && _settings->inconclusive) {
+                    if (num >= total_size && printInconclusive) {
                         const Token *tok2 = tok->next()->link()->next();
                         for (; tok2; tok2 = tok2->next()) {
                             const Token* tok3 = tok->tokAt(2);
