@@ -6615,6 +6615,7 @@ bool Tokenizer::simplifyKnownVariablesGetData(unsigned int varid, Token **_tok2,
 bool Tokenizer::simplifyKnownVariablesSimplify(Token **tok2, Token *tok3, unsigned int varid, const std::string &structname, std::string &value, unsigned int valueVarId, bool valueIsPointer, const Token * const valueToken, int indentlevel) const
 {
     const bool pointeralias(valueToken->isName() || Token::Match(valueToken, "& %name% ["));
+	const bool printDebug = _settings->debugwarnings;
 
     if (_errorLogger && !list.getFiles().empty())
         _errorLogger->reportProgress(list.getFiles()[0], "Tokenize (simplifyKnownVariables)", tok3->progressValue());
@@ -6774,7 +6775,7 @@ bool Tokenizer::simplifyKnownVariablesSimplify(Token **tok2, Token *tok3, unsign
         if (tok3->varId() == varid) {
             // This is a really generic bailout so let's try to avoid this.
             // There might be lots of false negatives.
-            if (_settings->debugwarnings) {
+            if (printDebug) {
                 // FIXME: Fix all the debug warnings for values and then
                 // remove this bailout
                 if (pointeralias)

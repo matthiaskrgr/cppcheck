@@ -1177,6 +1177,7 @@ bool TemplateSimplifier::simplifyTemplateInstantiations(
     std::list<Token *> &templateInstantiations,
     std::set<std::string> &expandedtemplates)
 {
+    const bool printDebug = _settings->debugwarnings;
     // this variable is not used at the moment. The intention was to
     // allow continuous instantiations until all templates has been expanded
     //bool done = false;
@@ -1193,7 +1194,7 @@ bool TemplateSimplifier::simplifyTemplateInstantiations(
     int namepos = TemplateSimplifier::getTemplateNamePosition(tok);
     if (namepos == -1) {
         // debug message that we bail out..
-        if (_settings->debugwarnings && errorlogger) {
+        if (printDebug && errorlogger) {
             std::list<const Token *> callstack(1, tok);
             errorlogger->reportErr(ErrorLogger::ErrorMessage(callstack, &tokenlist, Severity::debug, "debug", "simplifyTemplates: bailing out", false));
         }
@@ -1270,7 +1271,7 @@ bool TemplateSimplifier::simplifyTemplateInstantiations(
         templateMatchPattern += ">";
 
         if (typeForNewName.empty() || typeParametersInDeclaration.size() != typesUsedInTemplateInstantiation.size()) {
-            if (_settings->debugwarnings && errorlogger) {
+            if (printDebug && errorlogger) {
                 std::list<const Token *> callstack(1, tok2);
                 errorlogger->reportErr(ErrorLogger::ErrorMessage(callstack, &tokenlist, Severity::debug, "debug",
                                        "Failed to instantiate template \"" + name + "\". The checking continues anyway.", false));
