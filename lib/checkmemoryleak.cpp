@@ -1382,23 +1382,23 @@ Token *CheckMemoryLeakInFunction::getcode(const Token *tok, std::list<const Toke
 
 void CheckMemoryLeakInFunction::simplifycode(Token *tok) const
 {
-    {
-        // Replace "throw" that is not in a try block with "return"
-        int indentlevel = 0;
-        int trylevel = -1;
-        for (Token *tok2 = tok; tok2; tok2 = tok2->next()) {
-            if (tok2->str() == "{")
-                ++indentlevel;
-            else if (tok2->str() == "}") {
-                --indentlevel;
-                if (indentlevel <= trylevel)
-                    trylevel = -1;
-            } else if (trylevel == -1 && tok2->str() == "try")
-                trylevel = indentlevel;
-            else if (trylevel == -1 && tok2->str() == "throw")
-                tok2->str("return");
-        }
+    const bool printExperimental = _settings->experimental;
+    // Replace "throw" that is not in a try block with "return"
+    int indentlevel = 0;
+    int trylevel = -1;
+    for (Token *tok2 = tok; tok2; tok2 = tok2->next()) {
+        if (tok2->str() == "{")
+            ++indentlevel;
+        else if (tok2->str() == "}") {
+            --indentlevel;
+            if (indentlevel <= trylevel)
+                trylevel = -1;
+        } else if (trylevel == -1 && tok2->str() == "try")
+            trylevel = indentlevel;
+        else if (trylevel == -1 && tok2->str() == "throw")
+            tok2->str("return");
     }
+    
 
     // Insert extra ";"
     for (Token *tok2 = tok; tok2; tok2 = tok2->next()) {
@@ -1712,7 +1712,7 @@ void CheckMemoryLeakInFunction::simplifycode(Token *tok) const
             }
 
             // Remove the "if break|continue ;" that follows "dealloc ; alloc ;"
-            if (! _settings->experimental && Token::Match(tok2, "dealloc ; alloc ; if break|continue ;")) {
+            if (! printExperimental && Token::Match(tok2, "dealloc ; alloc ; if break|continue ;")) {
                 tok2->tokAt(3)->deleteNext(2);
                 done = false;
             }
@@ -1964,7 +1964,7 @@ void CheckMemoryLeakInFunction::simplifycode(Token *tok) const
         }
 
         // If "--all" is given, remove all "callfunc"..
-        if (done && _settings->experimental) {
+        if (done &&  printExperimental) {
             for (Token *tok2 = tok; tok2; tok2 = tok2->next()) {
                 if (tok2->str() == "callfunc") {
                     tok2->deleteThis();
