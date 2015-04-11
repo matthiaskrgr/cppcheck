@@ -308,6 +308,9 @@ void CheckNullPointer::nullPointerLinkedList()
 
 void CheckNullPointer::nullPointerByDeRefAndChec()
 {
+    const bool printWarnings = _settings->isEnabled("warning");
+    const bool printInconclusive = (_settings->inconclusive);
+
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
         const Variable *var = tok->variable();
         if (!var || !var->isPointer() || tok == var->nameToken())
@@ -318,7 +321,7 @@ void CheckNullPointer::nullPointerByDeRefAndChec()
         if (!value)
             continue;
 
-        if (!_settings->inconclusive && value->inconclusive)
+        if (!printInconclusive && value->inconclusive)
             continue;
 
         // Is pointer used as function parameter?
@@ -336,7 +339,7 @@ void CheckNullPointer::nullPointerByDeRefAndChec()
             if (std::find(varlist.begin(), varlist.end(), tok) != varlist.end()) {
                 if (value->condition == nullptr)
                     nullPointerError(tok, tok->str(), false, value->defaultArg);
-                else if (_settings->isEnabled("warning"))
+                else if (printWarnings)
                     nullPointerError(tok, tok->str(), value->condition, value->inconclusive);
             }
             continue;
@@ -345,7 +348,7 @@ void CheckNullPointer::nullPointerByDeRefAndChec()
         // Pointer dereference.
         bool unknown = false;
         if (!isPointerDeRef(tok,unknown)) {
-            if (_settings->inconclusive && unknown) {
+            if (printInconclusive && unknown) {
                 if (value->condition == nullptr)
                     nullPointerError(tok, tok->str(), true, value->defaultArg);
                 else
@@ -356,7 +359,7 @@ void CheckNullPointer::nullPointerByDeRefAndChec()
 
         if (value->condition == nullptr)
             nullPointerError(tok, tok->str(), value->inconclusive, value->defaultArg);
-        else if (_settings->isEnabled("warning"))
+        else if (printWarnings)
             nullPointerError(tok, tok->str(), value->condition, value->inconclusive);
     }
 }

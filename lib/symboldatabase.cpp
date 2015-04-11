@@ -44,6 +44,8 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
     // Store current access in each scope (depends on evaluation progress)
     std::map<const Scope*, AccessControl> access;
 
+    const bool printDebug =_settings->debugwarnings;
+
     // find all scopes
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok ? tok->next() : nullptr) {
         // #5593 suggested to add here:
@@ -572,8 +574,21 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                             }
 
                             // find start of function '{'
-                            while (end && end->str() != "{" && end->str() != ";")
-                                end = end->next();
+                            bool foundInitList = false;
+                            while (end && end->str() != "{" && end->str() != ";") {
+                                if (end->link() && Token::Match(end, "(|<")) {
+                                    end = end->link();
+                                } else if (foundInitList &&
+                                           Token::Match(end, "%name%|> {") &&
+                                           Token::Match(end->linkAt(1), "} ,|{")) {
+                                    end = end->linkAt(1);
+                                } else {
+                                    if (end->str() == ":")
+                                        foundInitList = true;
+                                    end = end->next();
+                                }
+                            }
+
                             if (!end || end->str() == ";")
                                 continue;
 
@@ -983,7 +998,7 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
         } while (unknowns && retry < 100);
 
         // this shouldn't happen so output a debug warning
-        if (retry == 100 && _settings->debugwarnings) {
+        if (retry == 100 && printDebug) {
             for (std::list<Scope>::iterator it = scopeList.begin(); it != scopeList.end(); ++it) {
                 scope = &(*it);
 
@@ -1288,7 +1303,6 @@ bool SymbolDatabase::isFunction(const Token *tok, const Scope* outerScope, const
              (tok->previous()->isName() || tok->strAt(-1) == ">" || tok->strAt(-1) == "&" || tok->strAt(-1) == "*" || // Either a return type in front of tok
               tok->strAt(-1) == "::" || tok->strAt(-1) == "~" || // or a scope qualifier in front of tok
               outerScope->isClassOrStruct())) { // or a ctor/dtor
-
         const Token* tok1 = tok->previous();
 
         // skip over destructor "~"
@@ -1299,6 +1313,8 @@ bool SymbolDatabase::isFunction(const Token *tok, const Scope* outerScope, const
         while (Token::simpleMatch(tok1, "::")) {
             if (Token::Match(tok1->tokAt(-1), "%name%"))
                 tok1 = tok1->tokAt(-2);
+            else if (tok1->strAt(-1) == ">" && tok1->linkAt(-1) && Token::Match(tok1->linkAt(-1)->previous(), "%name%"))
+                tok1 = tok1->linkAt(-1)->tokAt(-2);
             else
                 tok1 = tok1->tokAt(-1);
         }
@@ -1704,6 +1720,8 @@ void SymbolDatabase::addClassFunction(Scope **scope, const Token **tok, const To
     // skip class/struct name
     if (destructor)
         tok1 = (*tok)->tokAt(-3);
+    else if ((*tok)->strAt(-2) == ">" && (*tok)->linkAt(-2))
+        tok1 = (*tok)->linkAt(-2)->previous();
     else
         tok1 = (*tok)->tokAt(-2);
 
@@ -1717,11 +1735,25 @@ void SymbolDatabase::addClassFunction(Scope **scope, const Token **tok, const To
 
     // back up to head of path
     while (tok1 && tok1->previous() && tok1->previous()->str() == "::" &&
-           tok1->tokAt(-2) && tok1->tokAt(-2)->isName()) {
-        path = tok1->str() + " :: " + path;
-        tok1 = tok1->tokAt(-2);
-        count++;
-        path_length++;
+           tok1->tokAt(-2) && (tok1->tokAt(-2)->isName() || (tok1->strAt(-2) == ">" && tok1->linkAt(-2)))) {
+        if (tok1->strAt(-2) == ">") {
+            tok1 = tok1->tokAt(-2);
+            const Token * tok2 = tok1->previous();
+            path = ":: " + path;
+            if (tok2) {
+                do {
+                    path = tok1->str() + " " + path;
+                    tok1 = tok1->previous();
+                    count++;
+                    path_length++;
+                } while (tok1 != tok2);
+            }
+        } else {
+            path = tok1->str() + " :: " + path;
+            tok1 = tok1->tokAt(-2);
+            count++;
+            path_length++;
+        }
     }
 
     if (tok1 && count) {
@@ -1843,17 +1875,23 @@ void SymbolDatabase::addNewFunction(Scope **scope, const Token **tok)
     scopeList.push_back(Scope(this, tok1, *scope));
     Scope *new_scope = &scopeList.back();
 
-    // skip to start of function
-    bool foundInitLit = false;
-    while (tok1 && (tok1->str() != "{" || (foundInitLit && tok1->previous()->isName()))) {
-        if (Token::Match(tok1, "(|{"))
+    // find start of function '{'
+    bool foundInitList = false;
+    while (tok1 && tok1->str() != "{" && tok1->str() != ";") {
+        if (tok1->link() && Token::Match(tok1, "(|<")) {
             tok1 = tok1->link();
-        if (tok1->str() == ":")
-            foundInitLit = true;
-        tok1 = tok1->next();
+        } else if (foundInitList &&
+                   Token::Match(tok1, "%name%|> {") &&
+                   Token::Match(tok1->linkAt(1), "} ,|{")) {
+            tok1 = tok1->linkAt(1);
+        } else {
+            if (tok1->str() == ":")
+                foundInitList = true;
+            tok1 = tok1->next();
+        }
     }
 
-    if (tok1) {
+    if (tok1 && tok1->str() == "{") {
         new_scope->classStart = tok1;
         new_scope->classEnd = tok1->link();
 
@@ -3377,19 +3415,6 @@ const Function *Scope::getDestructor() const
             return &(*it);
     }
     return 0;
-}
-
-//---------------------------------------------------------------------------
-
-unsigned int Scope::getNestedNonFunctions() const
-{
-    unsigned int nested = 0;
-    std::list<Scope *>::const_iterator ni;
-    for (ni = nestedList.begin(); ni != nestedList.end(); ++ni) {
-        if ((*ni)->type != Scope::eFunction)
-            nested++;
-    }
-    return nested;
 }
 
 //---------------------------------------------------------------------------

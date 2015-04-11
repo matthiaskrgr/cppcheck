@@ -85,6 +85,8 @@ private:
         TEST_CASE(varid54); // hang
         TEST_CASE(varid55); // #5868: Function::addArgument with varid 0 for argument named the same as a typedef
         TEST_CASE(varid56); // function with a throw()
+        TEST_CASE(varid57); // #6636: new scope by {}
+        TEST_CASE(varid58); // #6638: for loop in for condition
         TEST_CASE(varid_cpp_keywords_in_c_code);
         TEST_CASE(varid_cpp_keywords_in_c_code2); // #5373: varid=0 for argument called "delete"
         TEST_CASE(varidFunctionCall1);
@@ -115,6 +117,7 @@ private:
         TEST_CASE(varid_in_class16);
         TEST_CASE(varid_in_class17);    // #6056 - no varid for member functions
         TEST_CASE(varid_initList);
+        TEST_CASE(varid_initListWithBaseTemplate);
         TEST_CASE(varid_operator);
         TEST_CASE(varid_throw);
         TEST_CASE(varid_unknown_macro);     // #2638 - unknown macro is not type
@@ -990,6 +993,56 @@ private:
         ASSERT_EQUALS(expected3, tokenize(code3, false, "test.cpp"));
     }
 
+    void varid57() { // #6636: new scope by {}
+        const char code1[] = "void SmoothPath() {\n"
+                             "    {\n" // new scope
+                             "        float dfx = (p2p0.x > 0.0f)?\n"
+                             "                    ((n0->xmax() * SQUARE_SIZE) - p0.x):\n"
+                             "                    ((n0->xmin() * SQUARE_SIZE) - p0.x);\n"
+                             "        float tx = dfx / dx;\n"
+                             "        if (hEdge) {\n"
+                             "        }\n"
+                             "        if (vEdge) {\n"
+                             "            pi.z = tx;\n"
+                             "        }\n"
+                             "    }\n"
+                             "}\n";
+        const char expected1[] = "\n\n##file 0\n"
+                                 "1: void SmoothPath ( ) {\n"
+                                 "2:\n"
+                                 "3: float dfx@1 ; dfx@1 = ( p2p0 . x > 0.0f ) ?\n"
+                                 "4: ( ( n0 . xmax ( ) * SQUARE_SIZE ) - p0 . x ) :\n"
+                                 "5: ( ( n0 . xmin ( ) * SQUARE_SIZE ) - p0 . x ) ;\n"
+                                 "6: float tx@2 ; tx@2 = dfx@1 / dx ;\n"
+                                 "7: if ( hEdge ) {\n"
+                                 "8: }\n"
+                                 "9: if ( vEdge ) {\n"
+                                 "10: pi . z = tx@2 ;\n"
+                                 "11: }\n"
+                                 "12:\n"
+                                 "13: }\n";
+        ASSERT_EQUALS(expected1, tokenize(code1, false, "test.cpp"));
+    }
+
+    void varid58() { // #6638: for loop in for condition
+        const char code1[] = "void f() {\n"
+                             "    for (int i;\n"
+                             "         ({for(int i;i;++i){i++;}i++;}),i;\n"
+                             "         ({for(int i;i;++i){i++;}i++;}),i++) {\n"
+                             "         i++;\n"
+                             "    }\n"
+                             "}\n";
+        const char expected1[] = "\n\n##file 0\n"
+                                 "1: void f ( ) {\n"
+                                 "2: for ( int i@1 ;\n"
+                                 "3: { for ( int i@2 ; i@2 ; ++ i@2 ) { i@2 ++ ; } i@1 ++ ; } , i@1 ;\n"
+                                 "4: { for ( int i@3 ; i@3 ; ++ i@3 ) { i@3 ++ ; } i@1 ++ ; } , i@1 ++ ) {\n"
+                                 "5: i@1 ++ ;\n"
+                                 "6: }\n"
+                                 "7: }\n";
+        ASSERT_EQUALS(expected1, tokenize(code1, false, "test.cpp"));
+    }
+
     void varid_cpp_keywords_in_c_code() {
         const char code[] = "void f() {\n"
                             "    delete d;\n"
@@ -1688,6 +1741,53 @@ private:
                       tokenize(code7));
     }
 
+    void varid_initListWithBaseTemplate() {
+        const char code1[] = "class A : B<C,D> {\n"
+                             "  A() : B<C,D>(), x(0) {}\n"
+                             "  int x;\n"
+                             "};";
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class A : B < C , D > {\n"
+                      "2: A ( ) : B < C , D > ( ) , x@1 ( 0 ) { }\n"
+                      "3: int x@1 ;\n"
+                      "4: } ;\n",
+                      tokenize(code1));
+
+        const char code2[] = "class A : B<C,D> {\n"
+                             "  A(int x) : x(x) {}\n"
+                             "  int x;\n"
+                             "};";
+        ASSERT_EQUALS("\n\n##file 0\n1: class A : B < C , D > {\n"
+                      "2: A ( int x@1 ) : x@2 ( x@1 ) { }\n"
+                      "3: int x@2 ;\n"
+                      "4: } ;\n",
+                      tokenize(code2));
+
+        const char code3[] = "class A : B<C,D> {\n"
+                             "  A(int x);\n"
+                             "  int x;\n"
+                             "};\n"
+                             "A::A(int x) : x(x) {}";
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class A : B < C , D > {\n"
+                      "2: A ( int x@1 ) ;\n"
+                      "3: int x@2 ;\n"
+                      "4: } ;\n"
+                      "5: A :: A ( int x@3 ) : x@2 ( x@3 ) { }\n",
+                      tokenize(code3));
+
+        const char code4[] = "struct A : B<C,D> {\n"
+                             "  int x;\n"
+                             "  A(int x) : x(x) {}\n"
+                             "};\n";
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: struct A : B < C , D > {\n"
+                      "2: int x@1 ;\n"
+                      "3: A ( int x@2 ) : x@1 ( x@2 ) { }\n"
+                      "4: } ;\n",
+                      tokenize(code4));
+    }
+
     void varid_operator() {
         {
             const std::string actual = tokenize(
@@ -1923,17 +2023,17 @@ private:
                       "1: class Scope { } ;\n",
                       tokenize("class CPPCHECKLIB Scope { };"));
 
-        // #6073
+        // #6073 #6253
         ASSERT_EQUALS("\n\n##file 0\n"
-                      "1: class A : public B , public C :: D {\n"
+                      "1: class A : public B , public C :: D , public E < F > :: G < H > {\n"
                       "2: int i@1 ;\n"
-                      "3: A ( int i@2 ) : B { i@2 } , C :: D { i@2 } , i@1 { i@2 } {\n"
+                      "3: A ( int i@2 ) : B { i@2 } , C :: D { i@2 } , E < F > :: G < H > { i@2 } , i@1 { i@2 } {\n"
                       "4: int j@3 { i@2 } ;\n"
                       "5: }\n"
                       "6: } ;\n",
-                      tokenize("class A: public B, public C::D {\n"
+                      tokenize("class A: public B, public C::D, public E<F>::G<H> {\n"
                                "    int i;\n"
-                               "    A(int i): B{i}, C::D{i}, i{i} {\n"
+                               "    A(int i): B{i}, C::D{i}, E<F>::G<H>{i} ,i{i} {\n"
                                "        int j{i};\n"
                                "    }\n"
                                "};"));

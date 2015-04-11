@@ -1203,6 +1203,7 @@ static void conditionAlwaysTrueOrFalse(const Token *tok, const std::map<unsigned
 bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var, bool * const possibleInit, bool * const noreturn, Alloc* const alloc, const std::string &membervar)
 {
     const bool suppressErrors(possibleInit && *possibleInit);
+    const bool printDebug = _settings->debugwarnings;
 
     if (possibleInit)
         *possibleInit = false;
@@ -1282,7 +1283,7 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
                 //    if (b) return; // cppcheck doesn't know if b can be false when a is false.
                 //    x++;           // it's possible x is always initialized
                 if (!alwaysTrue && noreturnIf && number_of_if > 0) {
-                    if (_settings->debugwarnings) {
+                    if (printDebug) {
                         std::string condition;
                         for (const Token *tok2 = tok->linkAt(-1); tok2 != tok; tok2 = tok2->next()) {
                             condition += tok2->str();
@@ -1325,7 +1326,7 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
 
                     bool possibleInitElse(number_of_if > 0 || suppressErrors);
                     bool noreturnElse = false;
-                    const bool initelse = !alwaysTrue && checkScopeForVariable(tok->next(), var, &possibleInitElse, nullptr, alloc, membervar);
+                    const bool initelse = !alwaysTrue && checkScopeForVariable(tok->next(), var, &possibleInitElse, &noreturnElse, alloc, membervar);
 
                     std::map<unsigned int, int> varValueElse;
                     if (!alwaysTrue && !initelse && !noreturnElse) {
@@ -1347,11 +1348,12 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
                         (alwaysTrue || initelse || noreturnElse))
                         return true;
 
-                    if ((initif || initelse || possibleInitElse) && !noreturnIf && !noreturnElse) {
+                    if (initif || initelse || possibleInitElse)
                         ++number_of_if;
+                    if (!initif && !noreturnIf)
                         variableValue.insert(varValueIf.begin(), varValueIf.end());
+                    if (!initelse && !noreturnElse)
                         variableValue.insert(varValueElse.begin(), varValueElse.end());
-                    }
                 }
             }
         }
@@ -1406,7 +1408,7 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
                 if (!forwhile) {
                     // Assert that the tokens are '} while ('
                     if (!Token::simpleMatch(tok, "} while (")) {
-                        if (_settings->debugwarnings)
+                        if (printDebug)
                             reportError(tok,Severity::debug,"","assertion failed '} while ('");
                         break;
                     }

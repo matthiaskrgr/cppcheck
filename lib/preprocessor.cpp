@@ -1217,6 +1217,7 @@ std::list<std::string> Preprocessor::getcfgs(const std::string &filedata, const 
     unsigned int linenr = 0;
     std::istringstream istr(filedata);
     std::string line;
+    const bool printDebug = (_settings && _settings->debugwarnings);
     while (std::getline(istr, line)) {
         ++linenr;
 
@@ -1414,7 +1415,7 @@ std::list<std::string> Preprocessor::getcfgs(const std::string &filedata, const 
                 if (!includeStack.top().second) {
                     ret.push_back(def);
                 } else {
-                    if (_errorLogger && _settings && _settings->debugwarnings) {
+                    if (_errorLogger && printDebug) {
                         std::list<ErrorLogger::ErrorMessage::FileLocation> locationList;
                         const ErrorLogger::ErrorMessage errmsg(locationList, Severity::debug,
                                                                "Configuration not considered: " + def +" for file:"+includeStack.top().first, "debug", false);
@@ -1578,7 +1579,7 @@ std::list<std::string> Preprocessor::getcfgs(const std::string &filedata, const 
 
         if (unhandled) {
             // unhandled ifdef configuration..
-            if (_errorLogger && _settings && _settings->debugwarnings) {
+            if (_errorLogger && printDebug) {
                 std::list<ErrorLogger::ErrorMessage::FileLocation> locationList;
                 const ErrorLogger::ErrorMessage errmsg(locationList, Severity::debug, "unhandled configuration: " + *it, "debug", false);
                 _errorLogger->reportErr(errmsg);
@@ -2870,6 +2871,8 @@ static bool getlines(std::istream &istr, std::string &line)
 
 bool Preprocessor::validateCfg(const std::string &code, const std::string &cfg)
 {
+    const bool printInformation = (_settings && _settings->isEnabled("information"));
+
     // fill up "macros" with empty configuration macros
     std::set<std::string> macros;
     for (std::string::size_type pos = 0; pos < cfg.size();) {
@@ -2917,7 +2920,7 @@ bool Preprocessor::validateCfg(const std::string &code, const std::string &cfg)
                 if (pos2 < code.size() && (std::isalnum((unsigned char)code[pos2]) || code[pos2] == '_'))
                     continue;
                 // macro is used in code, return false
-                if (_settings && _settings->isEnabled("information"))
+                if (printInformation)
                     validateCfgError(cfg, macro);
                 return false;
             }
