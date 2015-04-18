@@ -9858,9 +9858,9 @@ void Tokenizer::simplifyQtSignalsSlots()
                 else
                     tok2 = tok2->link();
             } else if (tok2->str() == "}") {
-                --indentlevel;
-                if (indentlevel == 0)
+                if (indentlevel <= 1)
                     break;
+                --indentlevel;
             }
 
             if (tok2->strAt(1) == "Q_OBJECT") {
