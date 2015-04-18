@@ -567,9 +567,10 @@ void TemplateSimplifier::useDefaultArgumentValues(const std::list<Token *> &temp
             if (tok->str() == ">") {
                 if (Token::Match(tok, "> class|struct %name%"))
                     classname = tok->strAt(2);
-                --templateParmDepth;
-                if (0 == templateParmDepth)
+                if (templateParmDepth <= 1)
                     break;
+                --templateParmDepth;
+
             }
 
             // next template parameter
