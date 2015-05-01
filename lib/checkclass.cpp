@@ -784,12 +784,12 @@ void CheckClass::noExplicitCopyMoveConstructorError(const Token *tok, const std:
 
 void CheckClass::uninitVarError(const Token *tok, const std::string &classname, const std::string &varname, bool inconclusive)
 {
-    reportError(tok, Severity::warning, "uninitMemberVar", "Member variable '" + classname + "::" + varname + "' is not initialized in the constructor.", inconclusive);
+    reportError(tok, Severity::warning, "uninitMemberVar", "Member variable '" + classname + "::" + varname + "' is not initialized in the constructor.", 0U, inconclusive);
 }
 
 void CheckClass::operatorEqVarError(const Token *tok, const std::string &classname, const std::string &varname, bool inconclusive)
 {
-    reportError(tok, Severity::warning, "operatorEqVarError", "Member variable '" + classname + "::" + varname + "' is not assigned a value in '" + classname + "::operator='.", inconclusive);
+    reportError(tok, Severity::warning, "operatorEqVarError", "Member variable '" + classname + "::" + varname + "' is not assigned a value in '" + classname + "::operator='.", 0U, inconclusive);
 }
 
 //---------------------------------------------------------------------------
@@ -1129,7 +1129,7 @@ void CheckClass::mallocOnClassWarning(const Token* tok, const std::string &memfu
     reportError(toks, Severity::warning, "mallocOnClassWarning",
                 "Memory for class instance allocated with " + memfunc + "(), but class provides constructors.\n"
                 "Memory for class instance allocated with " + memfunc + "(), but class provides constructors. This is unsafe, "
-                "since no constructor is called and class members remain uninitialized. Consider using 'new' instead.");
+                "since no constructor is called and class members remain uninitialized. Consider using 'new' instead.", 0U, false);
 }
 
 void CheckClass::mallocOnClassError(const Token* tok, const std::string &memfunc, const Token* classTok, const std::string &classname)
@@ -1140,7 +1140,7 @@ void CheckClass::mallocOnClassError(const Token* tok, const std::string &memfunc
     reportError(toks, Severity::error, "mallocOnClassError",
                 "Memory for class instance allocated with " + memfunc + "(), but class contains a " + classname + ".\n"
                 "Memory for class instance allocated with " + memfunc + "(), but class a " + classname + ". This is unsafe, "
-                "since no constructor is called and class members remain uninitialized. Consider using 'new' instead.");
+                "since no constructor is called and class members remain uninitialized. Consider using 'new' instead.", 0U, false);
 }
 
 void CheckClass::memsetError(const Token *tok, const std::string &memfunc, const std::string &classname, const std::string &type)
@@ -1604,7 +1604,7 @@ void CheckClass::virtualDestructor()
 void CheckClass::virtualDestructorError(const Token *tok, const std::string &Base, const std::string &Derived, bool inconclusive)
 {
     if (inconclusive)
-        reportError(tok, Severity::warning, "virtualDestructor", "Class '" + Base + "' which has virtual members does not have a virtual destructor.", true);
+        reportError(tok, Severity::warning, "virtualDestructor", "Class '" + Base + "' which has virtual members does not have a virtual destructor.", 0U, true);
     else
         reportError(tok, Severity::error, "virtualDestructor", "Class '" + Base + "' which is inherited by class '" + Derived + "' does not have a virtual destructor.\n"
                     "Class '" + Base + "' which is inherited by class '" + Derived + "' does not have a virtual destructor. "
@@ -1973,7 +1973,7 @@ void CheckClass::checkConstError2(const Token *tok1, const Token *tok2, const st
                     "function. Making this function 'const' should not cause compiler errors. "
                     "Even though the function can be made const function technically it may not make "
                     "sense conceptually. Think about your design and the task of the function first - is "
-                    "it a function that must not change object internal state?", true);
+                    "it a function that must not change object internal state?", 0U, true);
     else
         reportError(toks, Severity::performance, "functionStatic",
                     "Technically the member function '" + classname + "::" + funcname + "' can be static.\n"
@@ -1981,7 +1981,7 @@ void CheckClass::checkConstError2(const Token *tok1, const Token *tok2, const st
                     "function. Making a function static can bring a performance benefit since no 'this' instance is "
                     "passed to the function. This change should not cause compiler errors but it does not "
                     "necessarily make sense conceptually. Think about your design and the task of the function first - "
-                    "is it a function that must not access members of class instances?", true);
+                    "is it a function that must not access members of class instances?", 0U, true);
 }
 
 //---------------------------------------------------------------------------
@@ -2066,7 +2066,7 @@ void CheckClass::initializerListError(const Token *tok1, const Token *tok2, cons
                 "Members are initialized in the order they are declared, not in the "
                 "order they are in the initializer list.  Keeping the initializer list "
                 "in the same order that the members were declared prevents order dependent "
-                "initialization errors.", true);
+                "initialization errors.", 0U, true);
 }
 
 
@@ -2097,187 +2097,6 @@ void CheckClass::checkSelfInitialization()
 void CheckClass::selfInitializationError(const Token* tok, const std::string& varname)
 {
     reportError(tok, Severity::error, "selfInitialization", "Member variable '" + varname + "' is initialized by itself.");
-}
-
-
-//---------------------------------------------------------------------------
-// Check for member usage before initialization in constructor
-//---------------------------------------------------------------------------
-
-struct VarDependency {
-    VarDependency(const Variable *_var, const Token *_tok)
-        : var(_var), tok(_tok), initOrder(_var->index()) { }
-
-    VarDependency(const Variable *_var, const Token *_tok, std::size_t _initOrder)
-        : var(_var), tok(_tok), initOrder(_initOrder) { }
-
-    bool operator==(const Variable* _rhs) const {
-        return var == _rhs;
-    }
-
-    std::vector< VarInfo > dependencies;
-    const Variable *var;
-    const Token *tok;
-    std::size_t initOrder;
-};
-
-void CheckClass::checkUsageBeforeInitialization()
-{
-    const std::size_t classes = symbolDatabase->classAndStructScopes.size();
-    std::vector< VarDependency > vars;
-
-    for (std::size_t i = 0; i < classes; ++i) {
-        const Scope * info = symbolDatabase->classAndStructScopes[i];
-
-        // lets do some preallocation for the vector
-        vars.reserve(info->varlist.size());
-
-        // iterate through all member functions looking for constructors
-        for (std::list<Function>::const_iterator funcIter = info->functionList.cbegin(); funcIter != info->functionList.cend(); ++funcIter) {
-            if (!(*funcIter).isConstructor() || !(*funcIter).hasBody())
-                continue;
-
-            vars.clear();
-            // check for initializer list
-            const Token *tok = (*funcIter).arg->link()->next();
-            if (tok->str() == ":") {
-                tok = tok->next();
-
-                // find all variable initializations in list
-                while (tok && tok != (*funcIter).functionScope->classStart) {
-                    if (Token::Match(tok, "%name% (|{")) {
-                        const Variable *var = tok->variable();
-
-                        bool lhsIsReference = false;
-
-                        if (var && (var->scope() == info)) {
-                            vars.push_back(VarDependency(var, tok));
-                            lhsIsReference = var->isReference();
-                        } else { //Sanity check: Seems lhs is not a member of this class
-                            tok = tok->next();
-                            continue;
-                        }
-
-                        tok = tok->next();
-
-                        const Token* tokEnd = tok->link();
-
-                        if (tokEnd) {
-                            tok = tok->next();
-
-                            while (tok && tok != tokEnd) {
-                                if (tok->str() == "&") { // treat adresses as always correct value (correct?)
-                                    tok = tok->next();
-                                } else {
-                                    const Variable *dep = tok->variable();
-
-                                    if (dep && (dep->scope() == info) && !dep->isStatic() && (!lhsIsReference || dep->isReference())) {
-                                        if (tok->varId() == dep->nameToken()->varId()) {
-                                            vars.back().dependencies.push_back(VarInfo(dep, tok));
-                                        }
-                                    }
-                                }
-                                tok = tok->next();
-                            }
-                        }
-                    } else {
-                        tok = tok->next();
-                    }
-                }
-            }
-
-            // report initialization list errors
-            for (std::size_t j = 0, j_max = vars.size(); j < j_max; ++j) {
-                const std::vector< VarInfo >& deps = vars[j].dependencies;
-                const std::size_t init = vars[j].initOrder;
-                for (std::size_t k = 0, k_max = deps.size(); k < k_max; ++k) {
-                    const VarInfo& varInfo = deps[k];
-
-                    if (init <= varInfo.var->index()) {
-                        usageBeforeInitializationError(varInfo.tok, info->className, varInfo.var->name(), false);
-                    }
-                }
-            }
-
-            // check constructor compound statement for initializations
-            if (tok == (*funcIter).functionScope->classStart) {
-                tok = tok->next();
-
-                while (tok && tok != (*funcIter).functionScope->classEnd) {
-                    if (Token::Match(tok, "%name% =")) {
-                        const Variable *var = tok->variable();
-                        const std::vector< VarDependency >::const_iterator currentEnd = vars.cend();
-
-                        if (var && (var->scope() == info)) {
-                            const std::vector< VarDependency >::const_iterator depIter = std::find(vars.cbegin(), currentEnd, var);
-                            if (depIter == vars.cend()) {
-                                vars.push_back(VarDependency(var, tok, vars.size()));
-                            }
-                        }
-
-                        tok = tok->next()->next();
-                        while (tok && tok->str() != ";") {  // parse variables until end of assignment
-                            if (Token::Match(tok, "%name% =")) { // cascading assignments
-                                const Variable *varRhs = tok->variable();
-
-                                if (varRhs && (varRhs->scope() == info)) {
-                                    if (tok->varId() == varRhs->nameToken()->varId()) {
-                                        const std::vector< VarDependency >::const_iterator depIter = std::find(vars.cbegin(), vars.cend(), varRhs);
-                                        if (depIter == vars.cend()) {
-                                            if (vars.size() > 0) {
-                                                vars.push_back(VarDependency(varRhs, tok, vars.back().initOrder));
-                                            } else {
-                                                vars.push_back(VarDependency(varRhs, tok));
-                                            }
-                                        }
-                                    }
-                                }
-
-                                tok = tok->next()->next();
-                            } else {
-                                bool isAddress = false;
-                                if (tok->str() == "&") {
-                                    isAddress = true;
-                                    tok = tok->next();
-                                }
-
-                                const Variable *dep = tok->variable();
-
-
-                                if (dep && (dep->scope() == info) && !(dep->isClass() || dep->isStatic() || dep->isReference() || isAddress)) {
-                                    if (tok->varId() == dep->nameToken()->varId()) {
-                                        const std::vector< VarDependency >::const_iterator depIter = std::find(vars.cbegin(), currentEnd, dep);
-                                        if (depIter == currentEnd)
-                                            usageBeforeInitializationError(tok, info->className, dep->name(), false);
-                                    }
-                                }
-
-                                tok = tok->next();
-                            }
-                        }
-                    } else if (Token::Match(tok, "%name% ++|--")) { // check for post increment/decrement of unitialized members
-                        const Variable *var = tok->variable();
-
-                        if (var && (var->scope() == info) && !(var->isClass() || var->isStatic())) {
-                            if (tok->varId() == var->nameToken()->varId()) {
-                                const std::vector< VarDependency >::const_iterator depIter = std::find(vars.cbegin(), vars.cend(), var);
-                                if (depIter == vars.cend())
-                                    usageBeforeInitializationError(tok, info->className, var->name(), false);
-                            }
-                        }
-
-                        tok = tok->next()->next();
-                    } else
-                        tok = tok->next();
-                }
-            }
-        }
-    }
-}
-
-void CheckClass::usageBeforeInitializationError(const Token *tok, const std::string &classname, const std::string &varname, bool inconclusive)
-{
-    reportError(tok, Severity::error, "usageBeforeInitialization", "Member variable '" + classname + "::" + varname + "' is used before it is initialized.", inconclusive);
 }
 
 
@@ -2396,7 +2215,7 @@ void CheckClass::callsPureVirtualFunctionError(
 {
     const char * scopeFunctionTypeName = getFunctionTypeName(scopeFunction.type);
     reportError(tokStack, Severity::warning, "pureVirtualCall", "Call of pure virtual function '" + purefuncname + "' in " + scopeFunctionTypeName + ".\n"
-                "Call of pure virtual function '" + purefuncname + "' in " + scopeFunctionTypeName + ". The call will fail during runtime.");
+                "Call of pure virtual function '" + purefuncname + "' in " + scopeFunctionTypeName + ". The call will fail during runtime.", 0U, false);
 }
 
 
@@ -2450,5 +2269,5 @@ void CheckClass::duplInheritedMembersError(const Token *tok1, const Token* tok2,
     const std::string message = "The " + std::string(derivedIsStruct ? "struct" : "class") + " '" + derivedname +
                                 "' defines member variable with name '" + variablename + "' also defined in its parent " +
                                 std::string(baseIsStruct ? "struct" : "class") + " '" + basename + "'.";
-    reportError(toks, Severity::warning, "duplInheritedMember", message);
+    reportError(toks, Severity::warning, "duplInheritedMember", message, 0U, false);
 }
