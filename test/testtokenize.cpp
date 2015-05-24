@@ -1270,7 +1270,7 @@ private:
 
     void ifAddBraces15() {
         // ticket #2616 - unknown macro before if
-        ASSERT_EQUALS("{ A if ( x ) { y ( ) ; } }", tokenizeAndStringify("{A if(x)y();}", false));
+        ASSERT_THROW(tokenizeAndStringify("{A if(x)y();}", false), InternalError);
     }
 
     void ifAddBraces16() { // ticket # 2739 (segmentation fault)
@@ -4485,6 +4485,24 @@ private:
             const char in4 [] = "struct B final : A { void foo(); };";
             const char out4 [] = "struct B : A { void foo ( ) ; } ;";
             ASSERT_EQUALS(out4, tokenizeAndStringify(in4));
+
+            const char in5 [] = "struct ArrayItemsValidator final {\n"
+                                "    SchemaError validate() const override {\n"
+                                "        for (; pos < value.size(); ++pos) {\n"
+                                "        }\n"
+                                "        return none;\n"
+                                "    }\n"
+                                "};\n";
+            const char out5 [] =
+                "struct ArrayItemsValidator {\n"
+                "SchemaError validate ( ) const {\n"
+                "for ( ; pos < value . size ( ) ; ++ pos ) {\n"
+                "}\n"
+                "return none ;\n"
+                "}\n"
+                "} ;";
+
+            ASSERT_EQUALS(out5, tokenizeAndStringify(in5));
         }
     }
 
@@ -6145,7 +6163,7 @@ private:
                                "operator ( ) ; "
                                "}";
 
-        ASSERT_EQUALS(result, tokenizeAndStringify(code,false));
+        ASSERT_EQUALS(result, tokenizeAndStringify(code, /*simplify=*/false, /*expand=*/true, /*platform=*/Settings::Unspecified, "test.c"));
     }
 
     void simplifyOperatorName2() {

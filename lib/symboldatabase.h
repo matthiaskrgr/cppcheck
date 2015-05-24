@@ -842,9 +842,10 @@ public:
     /**
      * @brief find a function
      * @param tok token of function call
+     * @param requireConst if const refers to a const variable only const methods should be matched
      * @return pointer to function if found or NULL if not found
      */
-    const Function *findFunction(const Token *tok) const;
+    const Function *findFunction(const Token *tok, bool requireConst=false) const;
 
     /**
      * @brief find if name is in nested list
@@ -1004,6 +1005,9 @@ private:
     const Type *findTypeInNested(const Token *tok, const Scope *startScope) const;
     const Scope *findNamespace(const Token * tok, const Scope * scope) const;
     Function *findFunctionInScope(const Token *func, const Scope *ns);
+
+    /** Whether iName is a keyword as defined in http://en.cppreference.com/w/c/keyword and http://en.cppreference.com/w/cpp/keyword*/
+    bool isReservedName(const std::string& iName) const;
 
 
     const Tokenizer *_tokenizer;

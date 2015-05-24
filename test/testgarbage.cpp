@@ -78,6 +78,12 @@ private:
         TEST_CASE(garbageCode37); // #5166
         TEST_CASE(garbageCode38); // #6666
         TEST_CASE(garbageCode39); // #6686
+        TEST_CASE(garbageCode40); // #6620
+        TEST_CASE(garbageCode41); // #6685
+        TEST_CASE(garbageCode42); // #5760
+        TEST_CASE(garbageCode43); // #6703
+        TEST_CASE(garbageCode44); // #6704
+        TEST_CASE(garbageCode45); // #6608
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -453,6 +459,30 @@ private:
 
     void garbageCode39() { // #6686
         checkCode("({ (); strcat(strcat(() ()) ()) })");
+    }
+
+    void garbageCode40() { // #6620
+        ASSERT_THROW(checkCode("{ ( ) () { virtual } ; { } E } A { : { } ( ) } * const ( ) const { }"), InternalError);
+    }
+
+    void garbageCode41() { // #6685
+        ASSERT_THROW(checkCode(" { } { return } *malloc(__SIZE_TYPE__ size); *memcpy(void n); static * const () { memcpy (*slot, 3); } { (); } { }"), InternalError);
+    }
+
+    void garbageCode42() { // #5760
+        ASSERT_THROW(checkCode("{  } * const ( ) { }"), InternalError);
+    }
+
+    void garbageCode43() { // #6703
+        checkCode("int { }; struct A<void> a = { }");
+    }
+
+    void garbageCode44() { // #6704
+        ASSERT_THROW(checkCode("{ { }; }; { class A : }; public typedef b;"), InternalError);
+    }
+
+    void garbageCode45() { // #6608
+        checkCode("struct true template < > { = } > struct Types \"s\" ; static_assert < int > ;");
     }
 
     void garbageValueFlow() {
