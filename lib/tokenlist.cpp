@@ -156,7 +156,7 @@ void TokenList::addtoken(const std::string & str, const unsigned int lineno, con
 
 void TokenList::addtoken(const Token * tok, const unsigned int lineno, const unsigned int fileno)
 {
-    if (tok == 0)
+    if (tok == nullptr)
         return;
 
     if (_back) {
@@ -400,7 +400,7 @@ unsigned long long TokenList::calculateChecksum() const
 {
     unsigned long long checksum = 0;
     for (const Token* tok = front(); tok; tok = tok->next()) {
-        unsigned int subchecksum1 = tok->flags() + tok->varId() + static_cast<unsigned int>(tok->type());
+        const unsigned int subchecksum1 = tok->flags() + tok->varId() + static_cast<unsigned int>(tok->type());
         unsigned int subchecksum2 = 0;
         for (std::size_t i = 0; i < tok->str().size(); i++)
             subchecksum2 += (unsigned int)tok->str()[i];
@@ -411,7 +411,7 @@ unsigned long long TokenList::calculateChecksum() const
 
         checksum ^= ((static_cast<unsigned long long>(subchecksum1) << 32) | subchecksum2);
 
-        bool bit1 = (checksum & 1) != 0;
+        const bool bit1 = (checksum & 1) != 0;
         checksum >>= 1;
         if (bit1)
             checksum |= (1ULL << 63);
@@ -618,8 +618,8 @@ static void compilePrecedence2(Token *&tok, AST_state& state)
         } else if (tok->str() == "(" && (!iscast(tok) || Token::Match(tok->previous(), "if|while|for|switch|catch"))) {
             Token* tok2 = tok;
             tok = tok->next();
-            bool opPrevTopSquare = !state.op.empty() && state.op.top() && state.op.top()->str() == "[";
-            std::size_t oldOpSize = state.op.size();
+            const bool opPrevTopSquare = !state.op.empty() && state.op.top() && state.op.top()->str() == "[";
+            const std::size_t oldOpSize = state.op.size();
             compileExpression(tok, state);
             tok = tok2;
             if ((tok->previous() && tok->previous()->isName() && (tok->strAt(-1) != "return" && (!state.cpp || !Token::Match(tok->previous(), "throw|delete"))))
@@ -689,7 +689,7 @@ static void compilePrecedence3(Token *&tok, AST_state& state)
                 state.op.push(tok->next());
                 tok = tok->link()->next();
                 compileBinOp(tok, state, compilePrecedence2);
-            } else if (tok->str() == "[" || tok->str() == "(")
+            } else if (tok && (tok->str() == "[" || tok->str() == "("))
                 compilePrecedence2(tok, state);
             else if (innertype && Token::simpleMatch(tok, ") [")) {
                 tok = tok->next();
@@ -701,7 +701,7 @@ static void compilePrecedence3(Token *&tok, AST_state& state)
         } else if (state.cpp && Token::Match(tok, "delete %name%|*|&|::|(|[")) {
             Token* tok2 = tok;
             tok = tok->next();
-            if (tok->str() == "[")
+            if (tok && tok->str() == "[")
                 tok = tok->link()->next();
             compilePrecedence3(tok, state);
             compileUnaryOp(tok2, state, nullptr);

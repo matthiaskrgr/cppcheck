@@ -164,6 +164,7 @@ private:
         TEST_CASE(checkIgnoredReturnValue);
 
         TEST_CASE(redundantPointerOp);
+        TEST_CASE(test_isSameExpression);
     }
 
     void check(const char raw_code[], const char *filename = nullptr, bool experimental = false, bool inconclusive = true, bool runSimpleChecks=true, Settings* settings = 0, bool verify = true) {
@@ -554,7 +555,7 @@ private:
 
     }
 
-    void invalidFunctionUsage(const char code[]) {
+    void invalidFunctionUsage(const char code[], bool isCPP = true) {
         // Clear the error buffer..
         errout.str("");
 
@@ -572,7 +573,7 @@ private:
         // Tokenize..
         Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
-        tokenizer.tokenize(istr, "test.cpp");
+        tokenizer.tokenize(istr, isCPP ? "test.cpp" : "test.c");
 
         // Check for redundant code..
         CheckOther checkOther(&tokenizer, &settings, this);
@@ -585,6 +586,20 @@ private:
 
         invalidFunctionUsage("int f() { memset(a,b,sizeof(a)!=0); }");
         ASSERT_EQUALS("[test.cpp:1]: (error) Invalid memset() argument nr 3. A non-boolean value is required.\n", errout.str());
+
+        // Ticket #6588 (c mode)
+        invalidFunctionUsage("void record(char* buf, int n) {\n"
+                             "  memset(buf, 0, n < 255);\n"           /* KO */
+                             "  memset(buf, 0, n < 255 ? n : 255);\n" /* OK */
+                             "}", /*isCPP=*/false);
+        ASSERT_EQUALS("[test.c:2]: (error) Invalid memset() argument nr 3. A non-boolean value is required.\n", errout.str());
+
+        // Ticket #6588 (c++ mode)
+        invalidFunctionUsage("void record(char* buf, int n) {\n"
+                             "  memset(buf, 0, n < 255);\n"           /* KO */
+                             "  memset(buf, 0, n < 255 ? n : 255);\n" /* OK */
+                             "}");
+        ASSERT_EQUALS("[test.cpp:2]: (error) Invalid memset() argument nr 3. A non-boolean value is required.\n", errout.str());
 
         invalidFunctionUsage("int f() { strtol(a,b,sizeof(a)!=12); }");
         ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strtol() argument nr 3. The value is 0 or 1 (comparison result) but the valid values are '0,2:36'.\n", errout.str());
@@ -6150,6 +6165,14 @@ private:
               "    MUTEX_LOCK(*mut);\n"
               "}\n", nullptr, false, true);
         ASSERT_EQUALS("", errout.str());
+
+    }
+
+    void test_isSameExpression() { // see #5738
+        check("bool isInUnoIncludeFile(StringRef name) {"
+              "   return  name.startswith(SRCDIR \"/com/\") || name.startswith(SRCDIR \"/uno/\");\n"
+              "};", "test.cpp", false, false);
+        TODO_ASSERT_EQUALS("", "[test.cpp:1] -> [test.cpp:1]: (style) Same expression on both sides of '||'.\n", errout.str());
     }
 };
 

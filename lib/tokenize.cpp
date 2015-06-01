@@ -903,6 +903,10 @@ void Tokenizer::simplifyTypedef()
             typeName = tokOffset->previous();
             argStart = tokOffset->next();
             argEnd = tokOffset->next()->link();
+            if (!argEnd) {
+                syntaxError(argStart);
+                return;
+            }
             tok = argEnd->next();
             Token *spec = tok;
             if (Token::Match(spec, "const|volatile")) {
@@ -1760,9 +1764,9 @@ bool Tokenizer::tokenizeCondition(const std::string &code)
 
 void Tokenizer::findComplicatedSyntaxErrorsInTemplates()
 {
-    const Token *tok = TemplateSimplifier::hasComplicatedSyntaxErrorsInTemplates(list.front());
-    if (tok)
-        syntaxError(tok);
+    const Token *errorTok = nullptr;
+    if (TemplateSimplifier::hasComplicatedSyntaxErrorsInTemplates(list.front(), errorTok))
+        syntaxError(errorTok);
 }
 
 bool Tokenizer::hasEnumsWithTypedef()
@@ -3620,43 +3624,8 @@ bool Tokenizer::simplifyTokenList2()
     // e.g. const static int value = sizeof(X)/sizeof(Y);
     simplifyCalculations();
 
-    // Replace constants..
-    for (Token *tok = list.front(); tok; tok = tok->next()) {
-        if (Token::Match(tok, "const static| %type% %name% = %num% ;") ||
-            Token::Match(tok, "const static| %type% %name% ( %num% ) ;")) {
-            int offset = 0;
-            if (tok->strAt(1) == "static")
-                offset = 1;
-            const unsigned int varId(tok->tokAt(2 + offset)->varId());
-            if (varId == 0) {
-                tok = tok->tokAt(5 + offset);
-                continue;
-            }
-
-            const std::string& num = tok->strAt(4 + offset);
-            int indent = 1;
-            for (Token *tok2 = tok->tokAt(6); tok2; tok2 = tok2->next()) {
-                if (tok2->str() == "{") {
-                    ++indent;
-                } else if (tok2->str() == "}") {
-                    --indent;
-                    if (indent == 0)
-                        break;
-                }
-
-                // Compare constants, but don't touch members of other structures
-                else if (tok2->varId() == varId) {
-                    tok2->str(num);
-                }
-            }
-        }
-    }
-
     if (_settings->terminated())
         return false;
-
-    // Simplify simple calculations..
-    simplifyCalculations();
 
     // Replace "*(ptr + num)" => "ptr[num]"
     simplifyOffsetPointerDereference();
@@ -4534,7 +4503,10 @@ Token *Tokenizer::simplifyAddBracesPair(Token *tok, bool commandWithCondition)
         tokAfterCondition->previous()->insertToken("{");
         Token * tokOpenBrace = tokAfterCondition->previous();
         Token * tokEnd = tokAfterCondition->linkAt(1)->linkAt(2)->linkAt(1);
-
+		if (!tokEnd) {
+			syntaxError(tokAfterCondition);
+			return nullptr;
+		}
         tokEnd->insertToken("}");
         Token * tokCloseBrace = tokEnd->next();
 
@@ -4854,9 +4826,9 @@ bool Tokenizer::simplifyConstTernaryOp()
         const int offset = (tok->previous()->str() == ")") ? 2 : 1;
 
         bool inTemplateParameter = false;
-        if (!isC() && tok->strAt(-2*offset) == "<") {
-            if (!TemplateSimplifier::templateParameters(tok->tokAt(-2*offset)))
-                continue;
+        if (tok->strAt(-2*offset) == "<") {
+            if (isC() || !TemplateSimplifier::templateParameters(tok->tokAt(-2*offset)))
+                continue; // '<' is less than; the condition is not a constant
             inTemplateParameter = true;
         }
 
@@ -5237,7 +5209,7 @@ void Tokenizer::simplifyPointerToStandardType()
     }
 }
 
-void Tokenizer:: simplifyFunctionPointers()
+void Tokenizer::simplifyFunctionPointers()
 {
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         // #2873 - do not simplify function pointer usage here:
@@ -6386,6 +6358,7 @@ bool Tokenizer::simplifyKnownVariables()
                     tok1->deleteThis();
                     tok = tok1;
                     goback = true;
+                    ret = true;
                 }
             }
 
@@ -6728,9 +6701,9 @@ bool Tokenizer::simplifyKnownVariablesSimplify(Token **tok2, Token *tok3, unsign
             ret = true;
         }
 
-        // condition "(|&&|%OROR% %varid% )|&&|%OROR%
+        // condition "(|&&|%OROR% %varid% )|&&|%OROR%|;
         if (!Token::Match(tok3->previous(), "( %name% )") &&
-            Token::Match(tok3->previous(), "&&|(|%oror% %varid% &&|%oror%|)", varid)) {
+            Token::Match(tok3->previous(), "&&|(|%oror% %varid% &&|%oror%|)|;", varid)) {
             tok3->str(value);
             tok3->varId(valueVarId);
             ret = true;
@@ -6820,10 +6793,10 @@ bool Tokenizer::simplifyKnownVariablesSimplify(Token **tok2, Token *tok3, unsign
         }
 
         // Delete pointer alias
-        if (pointeralias && tok3->str() == "delete" &&
-            (Token::Match(tok3, "delete %varid% ;", varid) ||
-             Token::Match(tok3, "delete [ ] %varid%", varid))) {
-            tok3 = (tok3->next() && tok3->next()->str() == "[") ? tok3->tokAt(3) : tok3->next();
+        if (pointeralias && (tok3->str() == "delete") && tok3->next() &&
+            (Token::Match(tok3->next(), "%varid% ;", varid) ||
+             Token::Match(tok3->next(), "[ ] %varid%", varid))) {
+            tok3 = (tok3->next()->str() == "[") ? tok3->tokAt(3) : tok3->next();
             tok3->str(value);
             tok3->varId(valueVarId);
             ret = true;
@@ -7520,6 +7493,8 @@ void Tokenizer::simplifyEnum()
                 break;
             if (Token::Match(temp, "class|struct"))
                 temp = temp->next();
+            if (!temp)
+                break;
             if (!Token::Match(temp, "[{:]") &&
                 (!temp->isName() || !Token::Match(temp->next(), "[{:;]")))
                 continue;
@@ -7529,7 +7504,7 @@ void Tokenizer::simplifyEnum()
             Token *typeTokenEnd = nullptr;
 
             // check for C++11 enum class
-            bool enumClass = isCPP() && Token::Match(tok->next(), "class|struct");
+            const bool enumClass = isCPP() && Token::Match(tok->next(), "class|struct");
             if (enumClass)
                 tok->deleteNext();
 
@@ -9171,7 +9146,7 @@ void Tokenizer::simplifyAttribute()
                 // prototype for constructor is: void func(void);
                 if (tok->next()->link()->next()->str() == "void") // __attribute__((constructor)) void func() {}
                     tok->next()->link()->next()->next()->isAttributeConstructor(true);
-                else if (tok->next()->link()->next()->str() == ";" && tok->linkAt(-1)) // void func() __attribute__((constructor));
+                else if (tok->next()->link()->next()->str() == ";" && tok->linkAt(-1) && tok->previous()->link()->previous()) // void func() __attribute__((constructor));
                     tok->previous()->link()->previous()->isAttributeConstructor(true);
                 else // void __attribute__((constructor)) func() {}
                     tok->next()->link()->next()->isAttributeConstructor(true);
@@ -9181,7 +9156,7 @@ void Tokenizer::simplifyAttribute()
                 // prototype for destructor is: void func(void);
                 if (tok->next()->link()->next()->str() == "void") // __attribute__((destructor)) void func() {}
                     tok->next()->link()->next()->next()->isAttributeDestructor(true);
-                else if (tok->next()->link()->next()->str() == ";" && tok->linkAt(-1)) // void func() __attribute__((destructor));
+                else if (tok->next()->link()->next()->str() == ";" && tok->linkAt(-1) && tok->previous()->link()->previous()) // void func() __attribute__((destructor));
                     tok->previous()->link()->previous()->isAttributeDestructor(true);
                 else // void __attribute__((destructor)) func() {}
                     tok->next()->link()->next()->isAttributeDestructor(true);
