@@ -95,7 +95,24 @@ private:
         TEST_CASE(garbageCode54); // #6722
         TEST_CASE(garbageCode55); // #6724
         TEST_CASE(garbageCode56); // #6713
-		TEST_CASE(garbageCode57); // #6733
+        TEST_CASE(garbageCode57); // #6733
+        TEST_CASE(garbageCode58); // #6732
+        TEST_CASE(garbageCode59); // #6735
+        TEST_CASE(garbageCode60); // #6736
+        TEST_CASE(garbageCode61);
+        TEST_CASE(garbageCode62);
+        TEST_CASE(garbageCode63);
+        TEST_CASE(garbageCode64);
+        TEST_CASE(garbageCode65);
+        TEST_CASE(garbageCode66);
+        TEST_CASE(garbageCode67);
+        TEST_CASE(garbageCode68);
+        TEST_CASE(garbageCode69);
+        TEST_CASE(garbageCode70);
+        TEST_CASE(garbageCode71);
+        TEST_CASE(garbageCode72);
+        TEST_CASE(garbageCode73);
+        TEST_CASE(garbageCode74);
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -543,6 +560,74 @@ private:
 
     void garbageCode57() { // #6731
         ASSERT_THROW(checkCode("{ } if () try { } catch (...) B::~B { }"), InternalError);
+    }
+
+    void garbageCode58() { // #6732
+        //ASSERT_THROW(checkCode("{ }> {= ~A()^{} }P { }"), InternalError);
+    }
+
+    void garbageCode59() { // #6735
+        ASSERT_THROW(checkCode("{ { } }; char font8x8[256][8]"), InternalError);
+    }
+
+    void garbageCode60() { // #6736
+        ASSERT_THROW(checkCode("{ } { } typedef int int_array[]; int_array &right ="), InternalError);
+    }
+
+    void garbageCode61() { // #6737
+        ASSERT_THROW(checkCode("{ (const U&) }; { }; { }; struct U : virtual public"), InternalError);
+    }
+
+    void garbageCode62() { // #6738
+        checkCode("(int arg2) { } { } typedef void (func_type) (int, int); typedef func_type&");
+    }
+
+    void garbageCode63() { // #6739
+        ASSERT_THROW(checkCode("{ } { } typedef int u_array[]; typedef u_array &u_array_ref; (u_array_ref arg) { } u_array_ref u_array_ref_gbl_obj0"), InternalError);
+    }
+
+    void garbageCode64() { // #6740
+        ASSERT_THROW(checkCode("{ } foo(void (*bar)(void))"), InternalError);
+    }
+
+    void garbageCode65() { // #6741
+        ASSERT_THROW(checkCode("{ } { } typedef int u_array[]; typedef u_array &u_array_ref; (u_array_ref arg) { } u_array_ref"), InternalError);
+    }
+
+    void garbageCode66() { // #6742
+        ASSERT_THROW(checkCode("{ { } }; { { } }; { }; class bar : public virtual"), InternalError);
+    }
+
+    void garbageCode67() { // #6744
+        checkCode("&g[0]; { (g[0] 0) } =", "test.c");
+    }
+
+    void garbageCode68() { // #6745
+        checkCode("(int a[3]); typedef void (*fp) (void); fp");
+    }
+
+    void garbageCode69() { // #6746
+        ASSERT_THROW(checkCode("{ (make_mess, aux); } typedef void F(void); aux(void (*x)()) { } (void (*y)()) { } F*"), InternalError);
+    }
+
+    void garbageCode70() { // #6747
+        ASSERT_THROW(checkCode("{ } __attribute__((constructor)) void"), InternalError);
+    }
+
+    void garbageCode71() { // #6748
+        ASSERT_THROW(checkCode("( ) { } typedef void noattr_t ( ) ; noattr_t __attribute__ ( )"), InternalError);
+    }
+
+    void garbageCode72() { // #6749
+        ASSERT_THROW(checkCode("{ } { } typedef void voidfn(void); <voidfn&"), InternalError);
+    }
+
+    void garbageCode73() { // #6750
+        ASSERT_THROW(checkCode("typedef int IRT[2]; IRT&"), InternalError);
+    }
+
+    void garbageCode74() { // #6751
+        checkCode("_lenraw(const char* digits) { } typedef decltype(sizeof(0)) { } operator");
     }
 
     void garbageValueFlow() {

@@ -1954,14 +1954,16 @@ const Token *Type::initBaseInfo(const Token *tok, const Token *tok1)
                 else if (tok->str() == "struct")
                     base.access = Public;
             }
-
+            if (!tok2)
+                return nullptr;
             if (tok2->str() == "virtual") {
                 base.isVirtual = true;
                 tok2 = tok2->next();
             }
 
             base.nameTok = tok2;
-
+            if (!tok2)
+                return nullptr;
             // handle global namespace
             if (tok2->str() == "::") {
                 tok2 = tok2->next();
@@ -1971,6 +1973,8 @@ const Token *Type::initBaseInfo(const Token *tok, const Token *tok1)
             while (Token::Match(tok2, "%name% ::")) {
                 tok2 = tok2->tokAt(2);
             }
+            if (!tok2)
+                return nullptr;
 
             base.name = tok2->str();
 

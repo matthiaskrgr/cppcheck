@@ -504,7 +504,7 @@ static Token *splitDefinitionFromTypedef(Token *tok)
  * code that generated it deals in some way with functions, then this
  * function will probably need to be extended to handle a new function
  * related pattern */
-static Token *processFunc(Token *tok2, bool inOperator)
+Token *Tokenizer::processFunc(Token *tok2, bool inOperator) const
 {
     if (tok2->next() && tok2->next()->str() != ")" &&
         tok2->next()->str() != ",") {
@@ -551,7 +551,11 @@ static Token *processFunc(Token *tok2, bool inOperator)
                 // skip over typedef parameter
                 if (tok2->next() && tok2->next()->str() == "(") {
                     tok2 = tok2->next()->link();
-
+                    if (!tok2->next())
+                    {
+                        syntaxError(tok2);
+                        return nullptr;
+                    }
                     if (tok2->next()->str() == "(")
                         tok2 = tok2->next()->link();
                 }
@@ -878,13 +882,13 @@ void Tokenizer::simplifyTypedef()
         //           typedef ... (( ... type )( ... ));
         //           typedef ... ( * ( ... type )( ... ));
         else if (tokOffset->str() == "(" && (
-                     (Token::Match(tokOffset->link()->previous(), "%type% ) (") &&
+                     (tokOffset->link() && Token::Match(tokOffset->link()->previous(), "%type% ) (") &&
                       Token::Match(tokOffset->link()->next()->link(), ") const|volatile|;")) ||
                      (Token::simpleMatch(tokOffset, "( (") &&
-                      Token::Match(tokOffset->next()->link()->previous(), "%type% ) (") &&
+                      tokOffset->next() && Token::Match(tokOffset->next()->link()->previous(), "%type% ) (") &&
                       Token::Match(tokOffset->next()->link()->next()->link(), ") const|volatile| ) ;|,")) ||
                      (Token::simpleMatch(tokOffset, "( * (") &&
-                      Token::Match(tokOffset->linkAt(2)->previous(), "%type% ) (") &&
+                      tokOffset->linkAt(2) && Token::Match(tokOffset->linkAt(2)->previous(), "%type% ) (") &&
                       Token::Match(tokOffset->linkAt(2)->next()->link(), ") const|volatile| ) ;|,")))) {
             if (tokOffset->next()->str() == "(")
                 tokOffset = tokOffset->next();
@@ -1057,7 +1061,9 @@ void Tokenizer::simplifyTypedef()
                 // check for operator typedef
                 /** @todo add support for multi-token operators */
                 else if (tok2->str() == "operator" &&
+                         tok2->next() &&
                          tok2->next()->str() == typeName->str() &&
+                         tok2->linkAt(2) &&
                          tok2->strAt(2) == "(" &&
                          Token::Match(tok2->linkAt(2), ") const| {")) {
                     // check for qualifier
@@ -1194,7 +1200,7 @@ void Tokenizer::simplifyTypedef()
                 if (simplifyType) {
                     // can't simplify 'operator functionPtr ()' and 'functionPtr operator ... ()'
                     if (functionPtr && (tok2->previous()->str() == "operator" ||
-                                        tok2->next()->str() == "operator")) {
+                                        (tok2->next() && tok2->next()->str() == "operator"))) {
                         simplifyType = false;
                         tok2 = tok2->next();
                         continue;
@@ -1337,15 +1343,26 @@ void Tokenizer::simplifyTypedef()
                             tok2 = processFunc(tok2, inOperator);
 
                         if (needParen) {
+                            if (!tok2) {
+                                syntaxError(nullptr);
+                                return;
+                            }
                             tok2->insertToken(")");
                             tok2 = tok2->next();
                             Token::createMutualLinks(tok2, tok3);
                         }
-
+                        if (!tok2) {
+                            syntaxError(nullptr);
+                            return;
+                        }
                         tok2 = copyTokens(tok2, argStart, argEnd);
-
-                        if (inTemplate)
+                        if (inTemplate) {
+                            if (!tok2) {
+                                syntaxError(nullptr);
+                                return;
+                            }
                             tok2 = tok2->next();
+                        }
 
                         if (specStart) {
                             Token *spec = specStart;
@@ -1364,7 +1381,7 @@ void Tokenizer::simplifyTypedef()
                         tok2->insertToken("*");
                         tok2 = tok2->next();
 
-                        Token * tok4 = 0;
+                        Token * tok4 = nullptr;
                         if (functionPtrRetFuncPtr) {
                             tok2->insertToken("(");
                             tok2 = tok2->next();
@@ -1404,16 +1421,16 @@ void Tokenizer::simplifyTypedef()
                         tok2 = tok2->next();
 
                         // skip over name
-                        if (tok2->next()->str() != ")") {
+                        if (tok2 && tok2->next() && tok2->next()->str() != ")") {
                             if (tok2->next()->str() != "(")
                                 tok2 = tok2->next();
 
                             // check for function and skip over args
-                            if (tok2->next()->str() == "(")
+                            if (tok2 && tok2->next() && tok2->next()->str() == "(")
                                 tok2 = tok2->next()->link();
 
                             // check for array
-                            if (tok2->next()->str() == "[")
+                            if (tok2 && tok2->next() && tok2->next()->str() == "[")
                                 tok2 = tok2->next()->link();
                         } else {
                             // syntax error
@@ -1478,7 +1495,10 @@ void Tokenizer::simplifyTypedef()
                                     tok2 = tok2->tokAt(2);
                                 else
                                     tok2 = tok2->tokAt(3);
-
+                                if (!tok2) {
+                                    syntaxError(nullptr);
+                                    return;
+                                }
                                 tok2->insertToken(")");
                                 tok2 = tok2->next();
                                 Token::createMutualLinks(tok2, tok3);
@@ -1490,9 +1510,15 @@ void Tokenizer::simplifyTypedef()
                             }
 
                             tok2 = copyTokens(tok2, arrayStart, arrayEnd);
+                            if (!tok2->next()) {
+                                syntaxError(tok2);
+                                return;
+                            }
                             tok2 = tok2->next();
 
                             if (tok2->str() == "=") {
+                                if (!tok2->next())
+                                    syntaxError(tok2);
                                 if (tok2->next()->str() == "{")
                                     tok2 = tok2->next()->link()->next();
                                 else if (tok2->next()->str().at(0) == '\"')
@@ -1508,8 +1534,8 @@ void Tokenizer::simplifyTypedef()
             if (tok->str() == ";")
                 done = true;
             else if (tok->str() == ",") {
-                arrayStart = 0;
-                arrayEnd = 0;
+                arrayStart = nullptr;
+                arrayEnd = nullptr;
                 tokOffset = tok->next();
                 pointers.clear();
 
@@ -3032,6 +3058,10 @@ bool Tokenizer::simplifySizeof()
                     sizeOfVar[varId] = size;
                     declTokOfVar[varId] = tok;
                 }
+                if (!tok2) {
+                    syntaxError(tok);
+                    return false;
+                }
                 tok = tok2;
             }
 
@@ -4005,7 +4035,7 @@ void Tokenizer::removeMacroInClassDef()
 void Tokenizer::removeMacroInVarDecl()
 {
     for (Token *tok = list.front(); tok; tok = tok->next()) {
-        if (Token::Match(tok, "[;{}] %name% (") && tok->next()->isUpperCaseName()) {
+        if (Token::Match(tok, "[;{}] %name% (") && tok->next() && tok->next()->isUpperCaseName()) {
             // goto ')' parentheses
             const Token *tok2 = tok;
             int parlevel = 0;
@@ -4503,10 +4533,10 @@ Token *Tokenizer::simplifyAddBracesPair(Token *tok, bool commandWithCondition)
         tokAfterCondition->previous()->insertToken("{");
         Token * tokOpenBrace = tokAfterCondition->previous();
         Token * tokEnd = tokAfterCondition->linkAt(1)->linkAt(2)->linkAt(1);
-		if (!tokEnd) {
-			syntaxError(tokAfterCondition);
-			return nullptr;
-		}
+        if (!tokEnd) {
+            syntaxError(tokAfterCondition);
+            return nullptr;
+        }
         tokEnd->insertToken("}");
         Token * tokCloseBrace = tokEnd->next();
 
@@ -5205,6 +5235,8 @@ void Tokenizer::simplifyPointerToStandardType()
         tok->next()->eraseTokens(tok->next(), tok->tokAt(5));
         // Remove '&' prefix
         tok = tok->previous();
+        if (!tok)
+            break;
         tok->deleteNext();
     }
 }
@@ -5275,6 +5307,10 @@ void Tokenizer::simplifyFunctionPointers()
             tok = tok->next();
 
         // check that the declaration ends
+        if (!tok || !tok->link() || !tok->link()->next()) {
+            syntaxError(nullptr);
+            return;
+        }
         Token *endTok = tok->link()->next()->link();
         if (!Token::Match(endTok, ") const| ;|,|)|=|[|{"))
             continue;
@@ -9144,9 +9180,17 @@ void Tokenizer::simplifyAttribute()
         while (Token::Match(tok, "__attribute__|__attribute (") && tok->next()->link() && tok->next()->link()->next()) {
             if (Token::Match(tok->tokAt(2), "( constructor|__constructor__")) {
                 // prototype for constructor is: void func(void);
-                if (tok->next()->link()->next()->str() == "void") // __attribute__((constructor)) void func() {}
+                if (!tok->next()->link()->next()) {
+                    syntaxError(tok);
+                    return;
+                }
+                if (tok->next()->link()->next()->str() == "void") { // __attribute__((constructor)) void func() {}
+                    if (!tok->next()->link()->next()->next()) {
+                        syntaxError(tok);
+                        return;
+                    }
                     tok->next()->link()->next()->next()->isAttributeConstructor(true);
-                else if (tok->next()->link()->next()->str() == ";" && tok->linkAt(-1) && tok->previous()->link()->previous()) // void func() __attribute__((constructor));
+                } else if (tok->next()->link()->next()->str() == ";" && tok->linkAt(-1) && tok->previous()->link()->previous()) // void func() __attribute__((constructor));
                     tok->previous()->link()->previous()->isAttributeConstructor(true);
                 else // void __attribute__((constructor)) func() {}
                     tok->next()->link()->next()->isAttributeConstructor(true);
@@ -9154,6 +9198,10 @@ void Tokenizer::simplifyAttribute()
 
             else if (Token::Match(tok->tokAt(2), "( destructor|__destructor__")) {
                 // prototype for destructor is: void func(void);
+                if (!tok->next()->link()->next()) {
+                    syntaxError(tok);
+                    return;
+                }
                 if (tok->next()->link()->next()->str() == "void") // __attribute__((destructor)) void func() {}
                     tok->next()->link()->next()->next()->isAttributeDestructor(true);
                 else if (tok->next()->link()->next()->str() == ";" && tok->linkAt(-1) && tok->previous()->link()->previous()) // void func() __attribute__((destructor));
