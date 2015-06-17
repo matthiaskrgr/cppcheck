@@ -162,7 +162,7 @@ void Variables::alias(unsigned int varid1, unsigned int varid2, bool replace)
 
     if (replace) {
         // remove var1 from all aliases
-        for (std::set<unsigned int>::iterator i = var1->_aliases.begin(); i != var1->_aliases.end(); ++i) {
+        for (std::set<unsigned int>::const_iterator i = var1->_aliases.begin(); i != var1->_aliases.end(); ++i) {
             VariableUsage *temp = find(*i);
 
             if (temp)
@@ -174,7 +174,7 @@ void Variables::alias(unsigned int varid1, unsigned int varid2, bool replace)
     }
 
     // var1 gets all var2s aliases
-    for (std::set<unsigned int>::iterator i = var2->_aliases.begin(); i != var2->_aliases.end(); ++i) {
+    for (std::set<unsigned int>::const_iterator i = var2->_aliases.begin(); i != var2->_aliases.end(); ++i) {
         if (*i != varid1)
             var1->_aliases.insert(*i);
     }
@@ -195,7 +195,7 @@ void Variables::clearAliases(unsigned int varid)
 
     if (usage) {
         // remove usage from all aliases
-        std::set<unsigned int>::iterator i;
+        std::set<unsigned int>::const_iterator i;
 
         for (i = usage->_aliases.begin(); i != usage->_aliases.end(); ++i) {
             VariableUsage *temp = find(*i);
@@ -214,7 +214,7 @@ void Variables::eraseAliases(unsigned int varid)
     VariableUsage *usage = find(varid);
 
     if (usage) {
-        std::set<unsigned int>::iterator aliases;
+        std::set<unsigned int>::const_iterator aliases;
 
         for (aliases = usage->_aliases.begin(); aliases != usage->_aliases.end(); ++aliases)
             erase(*aliases);
@@ -301,7 +301,7 @@ void Variables::writeAliases(unsigned int varid, const Token* tok)
     VariableUsage *usage = find(varid);
 
     if (usage) {
-        std::set<unsigned int>::iterator aliases;
+        std::set<unsigned int>::const_iterator aliases;
 
         for (aliases = usage->_aliases.begin(); aliases != usage->_aliases.end(); ++aliases) {
             VariableUsage *aliased = find(*aliases);
@@ -328,7 +328,7 @@ void Variables::use(unsigned int varid, const Token* tok)
         usage->use(_varReadInScope);
         usage->_lastAccess = tok;
 
-        std::set<unsigned int>::iterator aliases;
+        std::set<unsigned int>::const_iterator aliases;
 
         for (aliases = usage->_aliases.begin(); aliases != usage->_aliases.end(); ++aliases) {
             VariableUsage *aliased = find(*aliases);
@@ -349,7 +349,7 @@ void Variables::modified(unsigned int varid, const Token* tok)
         usage->_modified = true;
         usage->_lastAccess = tok;
 
-        std::set<unsigned int>::iterator aliases;
+        std::set<unsigned int>::const_iterator aliases;
 
         for (aliases = usage->_aliases.begin(); aliases != usage->_aliases.end(); ++aliases) {
             VariableUsage *aliased = find(*aliases);
@@ -440,7 +440,7 @@ static const Token* doAssignment(Variables &variables, const Token *tok, bool de
             tok = tok->next();
 
         if (Token::Match(tok, "(| &| %name%") ||
-            Token::Match(tok->next(), "< const| struct|union| %type% *| > ( &| %name%")) {
+            (tok && Token::Match(tok->next(), "< const| struct|union| %type% *| > ( &| %name%"))) {
             bool addressOf = false;
 
             if (Token::Match(tok, "%var% ."))
@@ -504,7 +504,7 @@ static const Token* doAssignment(Variables &variables, const Token *tok, bool de
 
             // check if variable is local
             unsigned int varid2 = tok->varId();
-            Variables::VariableUsage* var2 = variables.find(varid2);
+            const Variables::VariableUsage* var2 = variables.find(varid2);
 
             if (var2) { // local variable (alias or read it)
                 if (var1->_type == Variables::pointer || var1->_type == Variables::pointerArray) {
@@ -599,9 +599,9 @@ static const Token* doAssignment(Variables &variables, const Token *tok, bool de
     // check for alias to struct member
     // char c[10]; a.b = c;
     else if (Token::Match(tok->tokAt(-2), "%name% .")) {
-        if (tok->tokAt(2)->varId()) {
-            unsigned int varid2 = tok->tokAt(2)->varId();
-            Variables::VariableUsage *var2 = variables.find(varid2);
+        if (tok->tokAt(2) && tok->tokAt(2)->varId()) {
+            const unsigned int varid2 = tok->tokAt(2)->varId();
+            const Variables::VariableUsage *var2 = variables.find(varid2);
 
             // struct member aliased to local variable
             if (var2 && (var2->_type == Variables::array ||
@@ -616,7 +616,7 @@ static const Token* doAssignment(Variables &variables, const Token *tok, bool de
     // Possible pointer alias
     else if (Token::Match(tok, "%name% = %name% ;")) {
         const unsigned int varid2 = tok->tokAt(2)->varId();
-        Variables::VariableUsage *var2 = variables.find(varid2);
+        const Variables::VariableUsage *var2 = variables.find(varid2);
         if (var2 && (var2->_type == Variables::array ||
                      var2->_type == Variables::pointer)) {
             variables.use(varid2,tok);
@@ -957,7 +957,7 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
 
             // checked for chained assignments
             if (tok != start && equal && equal->str() == "=") {
-                unsigned int varId = tok->varId();
+                const unsigned int varId = tok->varId();
                 Variables::VariableUsage *var = variables.find(varId);
 
                 if (var && var->_type != Variables::reference) {
@@ -977,7 +977,7 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
                     tok = tok->link()->next();
             }
 
-            unsigned int varid = tok->varId();
+            const unsigned int varid = tok->varId();
             const Variables::VariableUsage *var = variables.find(varid);
 
             if (var) {
@@ -1061,7 +1061,7 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
                 if (tok2->varId()) {
                     if (tok2->strAt(1) == "=")
                         variables.write(tok2->varId(), tok);
-                    else if (tok2->next()->isAssignmentOp())
+                    else if (tok2->next() && tok2->next()->isAssignmentOp())
                         variables.use(tok2->varId(), tok);
                     else
                         variables.read(tok2->varId(), tok);

@@ -413,7 +413,7 @@ void CheckCondition::oppositeInnerCondition()
 
         bool nonlocal = false; // nonlocal variable used in condition
         std::set<unsigned int> vars; // variables used in condition
-        for (const Token *cond = scope->classDef; cond != scope->classDef->linkAt(1); cond = cond->next()) {
+        for (const Token *cond = scope->classDef->linkAt(1); cond != scope->classDef; cond = cond->previous()) {
             if (cond->varId()) {
                 vars.insert(cond->varId());
                 const Variable *var = cond->variable();
@@ -422,7 +422,7 @@ void CheckCondition::oppositeInnerCondition()
                 nonlocal |= (var && (var->isPointer() || var->isReference()));
             } else if (cond->isName()) {
                 // varid is 0. this is possibly a nonlocal variable..
-                nonlocal |= (cond->astParent() && cond->astParent()->isConstOp());
+                nonlocal |= Token::Match(cond->astParent(), "%cop%|(");
             }
         }
 
@@ -525,7 +525,8 @@ static std::string invertOperatorForOperandSwap(std::string s)
     return s;
 }
 
-static bool checkIntRelation(const std::string &op, const MathLib::bigint value1, const MathLib::bigint value2)
+template <typename T>
+static bool checkIntRelation(const std::string &op, const T value1, const T value2)
 {
     return (op == "==" && value1 == value2) ||
            (op == "!=" && value1 != value2) ||
@@ -543,7 +544,28 @@ static bool checkFloatRelation(const std::string &op, const double value1, const
            (op == "<=" && value1 <= value2);
 }
 
-template<class T> static T getvalue(const int test, const T value1, const T value2)
+template<class T>
+T getvalue3(const T value1, const T value2)
+{
+    if (std::numeric_limits<T>::is_integer) {
+        const T min = std::min(value1, value2);
+        if (min== std::numeric_limits<T>::max())
+            return min;
+        else
+            return min+1; // see #5895
+    }
+    return (value1 + value2) / (T)2;
+}
+
+template<>
+double getvalue3(const double value1, const double value2)
+{
+    return (value1 + value2) / 2.0f;
+}
+
+
+template<class T>
+static inline T getvalue(const int test, const T value1, const T value2)
 {
     // test:
     // 1 => return value that is less than both value1 and value2
@@ -553,7 +575,7 @@ template<class T> static T getvalue(const int test, const T value1, const T valu
     // 5 => return value that is larger than both value1 and value2
     switch (test) {
     case 1: {
-        T ret = std::min(value1, value2);
+        const T ret = std::min(value1, value2);
         if ((ret - (T)1) < ret)
             return ret - (T)1;
         else if ((ret / (T)2) < ret)
@@ -565,11 +587,11 @@ template<class T> static T getvalue(const int test, const T value1, const T valu
     case 2:
         return value1;
     case 3:
-        return (value1 + value2) / (T)2;
+        return getvalue3<T>(value1, value2);
     case 4:
         return value2;
     case 5: {
-        T ret = std::max(value1, value2);
+        const T ret = std::max(value1, value2);
         if ((ret + (T)1) > ret)
             return ret + (T)1;
         else if ((ret / (T)2) > ret)
@@ -607,6 +629,12 @@ void CheckCondition::checkIncorrectLogicOperator()
             }
 
             else if (Token::Match(tok, "&&|%oror%")) {
+                if (tok->str() == "||" && tok->astOperand1() && tok->astOperand2() && tok->astOperand2()->str() == "&&") {
+                    const Token* tok2 = tok->astOperand2()->astOperand1();
+                    if (isOppositeCond(tok->astOperand1(), tok2, _settings->library.functionpure)) {
+                        redundantConditionError(tok, tok2->expressionString() + ". 'A && (!A || B)' is equivalent to 'A || B'");
+                    }
+                }
                 // Comparison #1 (LHS)
                 const Token *comp1 = tok->astOperand1();
                 if (comp1 && comp1->str() == tok->str())
@@ -666,6 +694,13 @@ void CheckCondition::checkIncorrectLogicOperator()
                 if (isfloat && (op1 == "==" || op1 == "!=" || op2 == "==" || op2 == "!="))
                     continue;
 
+                const double d1 = (isfloat) ? MathLib::toDoubleNumber(value1) : 0;
+                const double d2 = (isfloat) ? MathLib::toDoubleNumber(value2) : 0;
+                const MathLib::bigint i1 = (isfloat) ? 0 : MathLib::toLongNumber(value1);
+                const MathLib::bigint i2 = (isfloat) ? 0 : MathLib::toLongNumber(value2);
+                const bool useUnsignedInt = (std::numeric_limits<MathLib::bigint>::max()==i1)||(std::numeric_limits<MathLib::bigint>::max()==i2);
+                const MathLib::biguint u1 = (useUnsignedInt) ? MathLib::toLongNumber(value1) : 0;
+                const MathLib::biguint u2 = (useUnsignedInt) ? MathLib::toLongNumber(value2) : 0;
                 // evaluate if expression is always true/false
                 bool alwaysTrue = true, alwaysFalse = true;
                 bool firstTrue = true, secondTrue = true;
@@ -678,14 +713,14 @@ void CheckCondition::checkIncorrectLogicOperator()
                     // 5 => testvalue is larger than both value1 and value2
                     bool result1, result2;
                     if (isfloat) {
-                        const double d1 = MathLib::toDoubleNumber(value1);
-                        const double d2 = MathLib::toDoubleNumber(value2);
                         const double testvalue = getvalue<double>(test, d1, d2);
                         result1 = checkFloatRelation(op1, testvalue, d1);
                         result2 = checkFloatRelation(op2, testvalue, d2);
+                    } else if (useUnsignedInt) {
+                        const MathLib::biguint testvalue = getvalue<MathLib::biguint>(test, u1, u2);
+                        result1 = checkIntRelation(op1, testvalue, u1);
+                        result2 = checkIntRelation(op2, testvalue, u2);
                     } else {
-                        const MathLib::bigint i1 = MathLib::toLongNumber(value1);
-                        const MathLib::bigint i2 = MathLib::toLongNumber(value2);
                         const MathLib::bigint testvalue = getvalue<MathLib::bigint>(test, i1, i2);
                         result1 = checkIntRelation(op1, testvalue, i1);
                         result2 = checkIntRelation(op2, testvalue, i2);

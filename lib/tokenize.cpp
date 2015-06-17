@@ -541,6 +541,7 @@ Token *Tokenizer::processFunc(Token *tok2, bool inOperator) const
                     return nullptr;
 
                 if (tok2->str() == "(" &&
+                    tok2->link()->next() &&
                     tok2->link()->next()->str() == "(") {
                     tok2 = tok2->link();
 
@@ -551,8 +552,7 @@ Token *Tokenizer::processFunc(Token *tok2, bool inOperator) const
                 // skip over typedef parameter
                 if (tok2->next() && tok2->next()->str() == "(") {
                     tok2 = tok2->next()->link();
-                    if (!tok2->next())
-                    {
+                    if (!tok2->next()) {
                         syntaxError(tok2);
                         return nullptr;
                     }
@@ -602,7 +602,7 @@ void Tokenizer::simplifyTypedef()
                 // Skip typedefs inside parentheses (#2453 and #4002)
                 tok = tok->next();
             } else if (Token::Match(tok, "class|struct|namespace %any%") &&
-                       (!tok->previous() || (tok->previous() && tok->previous()->str() != "enum"))) {
+                       (!tok->previous() || tok->previous()->str() != "enum")) {
                 isNamespace = (tok->str() == "namespace");
                 hasClass = true;
                 className = tok->next()->str();
@@ -922,6 +922,10 @@ void Tokenizer::simplifyTypedef()
                 }
                 tok = specEnd->next();
             }
+            if (!tok)   {
+                syntaxError(specEnd);
+                return;
+            }
             if (tok->str() == ")")
                 tok = tok->next();
         }
@@ -1219,7 +1223,7 @@ void Tokenizer::simplifyTypedef()
                     bool inSizeof = false;
 
                     // check for derived class: class A : some_typedef {
-                    bool isDerived = Token::Match(tok2->previous(), "public|protected|private %type% {|,");
+                    const bool isDerived = Token::Match(tok2->previous(), "public|protected|private %type% {|,");
 
                     // check for cast: (some_typedef) A or static_cast<some_typedef>(A)
                     // todo: check for more complicated casts like: (const some_typedef *)A
@@ -1529,8 +1533,14 @@ void Tokenizer::simplifyTypedef()
 
                     simplifyType = false;
                 }
+                if (!tok2)
+                    break;
             }
 
+            if (!tok) {
+                syntaxError(nullptr);
+                return;
+            }
             if (tok->str() == ";")
                 done = true;
             else if (tok->str() == ",") {
@@ -1965,6 +1975,8 @@ void Tokenizer::concatenateNegativeNumberAndAnyPositive()
 
 void Tokenizer::simplifyExternC()
 {
+    if (isC())
+        return;
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         if (Token::Match(tok, "extern \"C\" {|")) {
             if (tok->strAt(2) == "{") {
@@ -2026,6 +2038,8 @@ void Tokenizer::simplifySQL()
 
 void Tokenizer::simplifyDebugNew()
 {
+    if (isC())
+        return;
     if (!_settings->isWindowsPlatform())
         return;
 
@@ -3451,39 +3465,7 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
         return false;
 
     // Put ^{} statements in asm()
-    for (Token *tok = list.front(); tok; tok = tok->next()) {
-        if (Token::simpleMatch(tok, "^ {")) {
-            Token * start = tok;
-            while (start && !Token::Match(start, "[;{}]"))
-                start = start->previous();
-            if (start)
-                start = start->next();
-            const Token *last = tok->next()->link();
-            if (start != tok) {
-                last = last->next();
-                while (last && !Token::Match(last->next(), "[;{}()]"))
-                    last = last->next();
-            }
-            if (start && last) {
-                std::string asmcode(start->str());
-                while (start->next() != last) {
-                    asmcode += start->next()->str();
-                    start->deleteNext();
-                }
-                asmcode += last->str();
-                start->deleteNext();
-                start->insertToken(";");
-                start->insertToken(")");
-                start->insertToken("\"" + asmcode + "\"");
-                start->insertToken("(");
-                start->str("asm");
-                start->link(nullptr);
-                start->next()->link(start->tokAt(3));
-                start->tokAt(3)->link(start->next());
-                tok = start->tokAt(4);
-            }
-        }
-    }
+    simplifyAsm2();
 
     // When the assembly code has been cleaned up, no @ is allowed
     for (const Token *tok = list.front(); tok; tok = tok->next()) {
@@ -3685,6 +3667,10 @@ bool Tokenizer::simplifyTokenList2()
             if (tok->next()->varId()) {
                 if (pod.find(tok->next()->varId()) == pod.end()) {
                     tok = tok->tokAt(5);
+                    if (!tok) {
+                        syntaxError(tok);
+                        return false;
+                    }
                     continue;
                 }
             }
@@ -6162,14 +6148,18 @@ void Tokenizer::simplifyIfSameInnerCondition()
 }
 
 // Binary operators simplification map
-static const std::pair<std::string, std::string> cAlternativeTokens_[] = {
-    std::make_pair("and", "&&"), std::make_pair("and_eq", "&="), std::make_pair("bitand", "&"),
-    std::make_pair("bitor", "|"), std::make_pair("not_eq", "!="), std::make_pair("or", "||"),
-    std::make_pair("or_eq", "|="), std::make_pair("xor", "^"), std::make_pair("xor_eq", "^=")
-};
-
-static const std::map<std::string, std::string> cAlternativeTokens(cAlternativeTokens_,
-        cAlternativeTokens_ + sizeof(cAlternativeTokens_)/sizeof(*cAlternativeTokens_));
+namespace {
+    static const std::map<std::string, std::string> cAlternativeTokens = make_container< std::map<std::string, std::string> >()
+            << std::make_pair("and", "&&")
+            << std::make_pair("and_eq", "&=")
+            << std::make_pair("bitand", "&")
+            << std::make_pair("bitor", "|")
+            << std::make_pair("not_eq", "!=")
+            << std::make_pair("or", "||")
+            << std::make_pair("or_eq", "|=")
+            << std::make_pair("xor", "^")
+            << std::make_pair("xor_eq", "^=") ;
+}
 
 // Simplify the C alternative tokens:
 //  and      =>     &&
@@ -7981,12 +7971,8 @@ void Tokenizer::simplifyEnum()
     }
 }
 
-void Tokenizer::simplifyStd()
-{
-    if (isC())
-        return;
-
-    const static std::set<std::string> f = make_container< std::set<std::string> > () <<
+namespace {
+    static const std::set<std::string> f = make_container< std::set<std::string> > () <<
                                            "strcat" <<
                                            "strcpy" <<
                                            "strncat" <<
@@ -7994,6 +7980,13 @@ void Tokenizer::simplifyStd()
                                            "free" <<
                                            "malloc" <<
                                            "strdup";
+}
+
+void Tokenizer::simplifyStd()
+{
+    if (isC())
+        return;
+
 
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         if (tok->str() != "std")
@@ -9267,21 +9260,23 @@ void Tokenizer::simplifyAttribute()
     }
 }
 
+namespace {
+    static const std::set<std::string> keywords = make_container< std::set<std::string> >()
+            << "volatile"
+            << "inline"
+            << "_inline"
+            << "__inline"
+            << "__forceinline"
+            << "register"
+            << "__restrict"
+            << "__restrict__" ;
+}
 // Remove "volatile", "inline", "register", "restrict", "override", "final", "static" and "constexpr"
 // "restrict" keyword
 //   - New to 1999 ANSI/ISO C standard
 //   - Not in C++ standard yet
 void Tokenizer::simplifyKeyword()
 {
-    std::set<std::string> keywords;
-    keywords.insert("volatile");
-    keywords.insert("inline");
-    keywords.insert("_inline");
-    keywords.insert("__inline");
-    keywords.insert("__forceinline");
-    keywords.insert("register");
-    keywords.insert("__restrict");
-    keywords.insert("__restrict__");
 
     // FIXME: There is a risk that "keywords" are removed by mistake. This
     // code should be fixed so it doesn't remove variables etc. Nonstandard
@@ -9497,6 +9492,44 @@ void Tokenizer::simplifyAsm()
     }
 }
 
+void Tokenizer::simplifyAsm2()
+{
+    // Put ^{} statements in asm()
+    for (Token *tok = list.front(); tok; tok = tok->next()) {
+        if (Token::simpleMatch(tok, "^ {")) {
+            Token * start = tok;
+            while (start && !Token::Match(start, "[;{}]"))
+                start = start->previous();
+            if (start)
+                start = start->next();
+            const Token *last = tok->next()->link();
+            if (start != tok) {
+                last = last->next();
+                while (last && !Token::Match(last->next(), "[;{}()]"))
+                    last = last->next();
+            }
+            if (start && last) {
+                std::string asmcode(start->str());
+                while (start->next() != last) {
+                    asmcode += start->next()->str();
+                    start->deleteNext();
+                }
+                asmcode += last->str();
+                start->deleteNext();
+                start->insertToken(";");
+                start->insertToken(")");
+                start->insertToken("\"" + asmcode + "\"");
+                start->insertToken("(");
+                start->str("asm");
+                start->link(nullptr);
+                start->next()->link(start->tokAt(3));
+                start->tokAt(3)->link(start->next());
+                tok = start->tokAt(4);
+            }
+        }
+    }
+}
+
 // Simplify bitfields
 void Tokenizer::simplifyBitfields()
 {
@@ -9578,13 +9611,7 @@ void Tokenizer::simplifyBuiltinExpect()
     }
 }
 
-
-// Add std:: in front of std classes, when using namespace std; was given
-void Tokenizer::simplifyNamespaceStd()
-{
-    if (!isCPP())
-        return;
-
+namespace {
     // Types and objects in std namespace that are neither functions nor templates
     static const std::set<std::string> stdTypes = make_container<std::set<std::string> >() <<
             "string"<< "wstring"<< "u16string"<< "u32string" <<
@@ -9629,6 +9656,15 @@ void Tokenizer::simplifyNamespaceStd()
             "min"<< "max"<< "min_element"<< "max_element"<< "lexicographical_compare"<< "next_permutation"<< "prev_permutation" <<
             "advance"<< "back_inserter"<< "distance"<< "front_inserter"<< "inserter" <<
             "make_pair"<< "make_shared"<< "make_tuple";
+}
+
+
+// Add std:: in front of std classes, when using namespace std; was given
+void Tokenizer::simplifyNamespaceStd()
+{
+    if (!isCPP())
+        return;
+
     const bool isCPP11  = _settings->standards.cpp == Standards::CPP11;
 
     for (const Token* tok = Token::findsimplematch(list.front(), "using namespace std ;"); tok; tok = tok->next()) {
@@ -9666,6 +9702,8 @@ void Tokenizer::simplifyNamespaceStd()
 // Remove Microsoft MFC 'DECLARE_MESSAGE_MAP()'
 void Tokenizer::simplifyMicrosoftMFC()
 {
+    if (isC())
+        return;
     // skip if not Windows
     if (!_settings->isWindowsPlatform())
         return;
@@ -9729,14 +9767,7 @@ void Tokenizer::simplifyMicrosoftMemoryFunctions()
     }
 }
 
-void Tokenizer::simplifyMicrosoftStringFunctions()
-{
-    // skip if not Windows
-    if (_settings->platformType != Settings::Win32A &&
-        _settings->platformType != Settings::Win32W &&
-        _settings->platformType != Settings::Win64)
-        return;
-
+namespace {
     struct triplet {
         triplet(const char* t, const char* m="", const char* u="") : tchar(t), mbcs(m), unicode(u) {}
         bool operator <(const triplet& rhs) const {
@@ -9744,7 +9775,8 @@ void Tokenizer::simplifyMicrosoftStringFunctions()
         }
         std::string tchar, mbcs, unicode;
     };
-    const static std::set<triplet> apis = make_container< std::set<triplet> >() <<
+
+    static const std::set<triplet> apis = make_container< std::set<triplet> >() <<
                                           triplet("_topen", "open", "_wopen") <<
                                           triplet("_tsopen_s", "_sopen_s", "_wsopen_s") <<
                                           triplet("_tfopen", "fopen", "_wfopen") <<
@@ -9778,6 +9810,15 @@ void Tokenizer::simplifyMicrosoftStringFunctions()
                                           triplet("_tscanf_s", "scanf_s", "wscanf_s") <<
                                           triplet("_stscanf_s", "sscanf_s", "swscanf_s")
                                           ;
+}
+
+void Tokenizer::simplifyMicrosoftStringFunctions()
+{
+    // skip if not Windows
+    if (_settings->platformType != Settings::Win32A &&
+        _settings->platformType != Settings::Win32W &&
+        _settings->platformType != Settings::Win64)
+        return;
 
     const bool ansi = _settings->platformType == Settings::Win32A;
     for (Token *tok = list.front(); tok; tok = tok->next()) {
@@ -9808,6 +9849,13 @@ void Tokenizer::simplifyMicrosoftStringFunctions()
 // Remove Borland code
 void Tokenizer::simplifyBorland()
 {
+    // skip if not Windows
+    if (_settings->platformType != Settings::Win32A &&
+        _settings->platformType != Settings::Win32W &&
+        _settings->platformType != Settings::Win64)
+        return;
+    if (isC())
+        return;
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         if (Token::Match(tok, "( __closure * %name% )")) {
             tok->deleteNext();
@@ -9857,6 +9905,8 @@ void Tokenizer::simplifyBorland()
 // Remove Qt signals and slots
 void Tokenizer::simplifyQtSignalsSlots()
 {
+    if (isC())
+        return;
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         // check for emit which can be outside of class
         if (Token::Match(tok, "emit|Q_EMIT %name% (") &&

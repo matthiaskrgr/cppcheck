@@ -48,6 +48,7 @@ private:
         TEST_CASE(incorrectLogicOperator7); // opposite expressions: (expr || !expr)
         TEST_CASE(secondAlwaysTrueFalseWhenFirstTrueError);
         TEST_CASE(incorrectLogicOp_condSwapping);
+        TEST_CASE(testBug5895);
 
         TEST_CASE(modulo);
 
@@ -656,7 +657,6 @@ private:
               "    if (x == 1.0 && x == 3.0)\n"
               "        a++;\n"
               "}");
-        //ASSERT_EQUALS("[test.cpp:2]: (warning) Logical conjunction always evaluates to false: x == 1.0 && x == 3.0.\n", errout.str());
         ASSERT_EQUALS("", errout.str()); // float comparisons with == and != are not checked right now - such comparison is a bad idea
 
         check("void f(float x) {\n"
@@ -1118,7 +1118,6 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
-
         check("void foo(int& i) {\n"
               "    i=6;\n"
               "}\n"
@@ -1249,6 +1248,15 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
+        // #6574 - another fp when undeclared variable is used
+        check("void foo() {\n"
+              "   if(i) {\n"
+              "       i++;\n"
+              "       if(!i) {}\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
         // #5874 - array
         check("void testOppositeConditions2() {\n"
               "  int array[2] = { 0, 0 };\n"
@@ -1281,6 +1289,60 @@ private:
               "    if (x = b < 0 ? 1 : 2) {}\n" // don't simplify and verify this code
               "}", false);
         ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    int y = rand(), z = rand();\n"
+              "    if (y || (!y && z));\n"
+              "}", false);
+        ASSERT_EQUALS("[test.cpp:3]: (style) Redundant condition: !y. 'A && (!A || B)' is equivalent to 'A || B'\n", errout.str());
+
+        check("void f() {\n"
+              "    int y = rand(), z = rand();\n"
+              "    if (y || !y && z);\n"
+              "}", false);
+        ASSERT_EQUALS("[test.cpp:3]: (style) Redundant condition: !y. 'A && (!A || B)' is equivalent to 'A || B'\n", errout.str());
+
+        check("void f() {\n"
+              "    if (!a || a && b) {}\n"
+              "}", false);
+        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant condition: a. 'A && (!A || B)' is equivalent to 'A || B'\n", errout.str());
+
+
+        check("void f() {\n"
+              "    if (!tok->next()->function() || \n"
+              "        (tok->next()->function() && tok->next()->function()->isConstructor()));\n"
+              "}", false);
+        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant condition: tok.next().function(). 'A && (!A || B)' is equivalent to 'A || B'\n", errout.str());
+
+        check("void f() {\n"
+              "    if (!tok->next()->function() || \n"
+              "        (!tok->next()->function() && tok->next()->function()->isConstructor()));\n"
+              "}", false);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    if (!tok->next()->function() || \n"
+              "        (!tok2->next()->function() && tok->next()->function()->isConstructor()));\n"
+              "}", false);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    if (!tok->next(1)->function(1) || \n"
+              "        (tok->next(1)->function(1) && tok->next(1)->function(1)->isConstructor()));\n"
+              "}", false);
+        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant condition: tok.next(1).function(1). 'A && (!A || B)' is equivalent to 'A || B'\n", errout.str());
+
+        check("void f() {\n"
+              "    if (!tok->next()->function(1) || \n"
+              "        (tok->next()->function(2) && tok->next()->function()->isConstructor()));\n"
+              "}", false);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "   int y = rand(), z = rand();\n"
+              "   if (y==0 || y!=0 && z);\n"
+              "}", false);
+        ASSERT_EQUALS("[test.cpp:3]: (style) Redundant condition: y. 'A && (!A || B)' is equivalent to 'A || B'\n", errout.str());
     }
 
 // clarify conditions with bitwise operator and comparison
@@ -1353,6 +1415,14 @@ private:
               "    return *this;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+    }
+
+    void testBug5895() {
+        check("void png_parse(uint64_t init, int buf_size) {\n"
+              "    if (init == 0x89504e470d0a1a0a || init == 0x8a4d4e470d0a1a0a)\n"
+              "        ;\n"
+              "}");
+        TODO_ASSERT_EQUALS("", "[test.cpp:2]: (style) Redundant condition: If init == 9894494448401390090, the comparison init == 9965707617509186058 is always true.\n", errout.str());
     }
 };
 

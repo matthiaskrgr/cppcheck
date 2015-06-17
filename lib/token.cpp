@@ -111,15 +111,17 @@ void Token::update_property_info()
     update_property_isStandardType();
 }
 
+namespace {
+    static const std::set<std::string> stdTypes = make_container<std::set<std::string> >() <<
+            "bool" << "char" << "char16_t" << "char32_t" << "double" << "float" << "int" << "long" << "short" << "size_t" << "void" << "wchar_t";
+}
+
 void Token::update_property_isStandardType()
 {
     isStandardType(false);
 
     if (_str.size() < 3)
         return;
-
-    static const std::set<std::string> stdTypes = make_container<std::set<std::string> >() <<
-            "bool" << "char" << "char16_t" << "char32_t" << "double" << "float" << "int" << "long" << "short" << "size_t" << "void" << "wchar_t";
 
     if (stdTypes.find(_str)!=stdTypes.end()) {
         isStandardType(true);
@@ -150,7 +152,23 @@ void Token::concatStr(std::string const& b)
 std::string Token::strValue() const
 {
     assert(_type == eString);
-    return _str.substr(1, _str.length() - 2);
+    std::string ret(_str.substr(1, _str.length() - 2));
+    std::string::size_type pos = 0U;
+    while ((pos = ret.find("\\",pos)) != std::string::npos) {
+        ret.erase(pos,1U);
+        if (ret[pos] >= 'a') {
+            if (ret[pos] == 'n')
+                ret[pos] = '\n';
+            else if (ret[pos] == 'r')
+                ret[pos] = '\r';
+            else if (ret[pos] == 't')
+                ret[pos] = '\t';
+        }
+        if (ret[pos] == '0')
+            return ret.substr(0,pos);
+        pos++;
+    }
+    return ret;
 }
 
 void Token::deleteNext(unsigned long index)
@@ -665,21 +683,25 @@ bool Token::Match(const Token *tok, const char pattern[], unsigned int varid)
 std::size_t Token::getStrLength(const Token *tok)
 {
     assert(tok != nullptr);
+    assert(tok->_type == eString);
 
     std::size_t len = 0;
-    const std::string strValue(tok->strValue());
-    const char *str = strValue.c_str();
+    std::string::const_iterator it = tok->str().begin() + 1U;
+    const std::string::const_iterator end = tok->str().end() - 1U;
 
-    while (*str) {
-        if (*str == '\\') {
-            ++str;
+    while (it != end) {
+        if (*it == '\\') {
+            ++it;
 
             // string ends at '\0'
-            if (*str == '0')
-                break;
+            if (*it == '0')
+                return len;
         }
 
-        ++str;
+        if (*it == '\0')
+            return len;
+
+        ++it;
         ++len;
     }
 
@@ -1158,7 +1180,7 @@ std::string Token::expressionString() const
 {
     const Token * const top = this;
     const Token *start = top;
-    while (start->astOperand1() && start->astOperand2())
+    while (start->astOperand1() && (start->astOperand2() || Token::simpleMatch(start, "( )")))
         start = start->astOperand1();
     const Token *end = top;
     while (end->astOperand1() && (end->astOperand2() || end->isUnaryPreOp())) {
