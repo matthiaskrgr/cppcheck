@@ -2508,7 +2508,7 @@ private:
                             "int x";
 
         Preprocessor preprocessor(nullptr, this);
-        const std::list<std::string> includePaths;
+        const std::list<std::string> includePaths{};
         std::map<std::string,std::string> defs;
         std::set<std::string> pragmaOnce;
         preprocessor.handleIncludes(code, "123.h", includePaths, defs, pragmaOnce, std::list<std::string>());
@@ -3385,7 +3385,7 @@ private:
 
     void def_handleIncludes() {
         const std::string filePath("test.c");
-        const std::list<std::string> includePaths;
+        const std::list<std::string> includePaths{};
         std::map<std::string,std::string> defs;
         Preprocessor preprocessor(nullptr, this);
 
@@ -3524,7 +3524,7 @@ private:
     }
 
     void def_missingInclude() {
-        const std::list<std::string> includePaths;
+        const std::list<std::string> includePaths{};
         std::map<std::string,std::string> defs;
         defs["AA"] = "";
         Settings settings;
@@ -3604,7 +3604,7 @@ private:
 
     void def_handleIncludes_ifelse1() {
         const std::string filePath("test.c");
-        const std::list<std::string> includePaths;
+        const std::list<std::string> includePaths{};
         std::map<std::string,std::string> defs;
         Preprocessor preprocessor(nullptr, this);
 
@@ -3675,7 +3675,7 @@ private:
 
         Preprocessor preprocessor(nullptr, this);
 
-        const std::list<std::string> includePaths;
+        const std::list<std::string> includePaths{};
         std::map<std::string,std::string> defs;
         defs["A"] = "1";
         std::set<std::string> pragmaOnce;
@@ -3695,7 +3695,7 @@ private:
         settings.userUndefs.insert("A");
         Preprocessor preprocessor(&settings, this);
 
-        const std::list<std::string> includePaths;
+        const std::list<std::string> includePaths{};
         std::map<std::string,std::string> defs;
         defs["B"] = "1";
         defs["C"] = "1";
@@ -3712,7 +3712,7 @@ private:
                             "\t#\tdefine\tD\t(Rubble)\t\t\t\n";
 
         const std::string filePath("test.c");
-        const std::list<std::string> includePaths;
+        const std::list<std::string> includePaths{};
         std::map<std::string,std::string> defs;
         std::set<std::string> pragmaOnce;
         Preprocessor preprocessor(nullptr, this);
@@ -3942,7 +3942,7 @@ private:
 
         std::string processedFile;
         std::list<std::string> resultConfigurations;
-        const std::list<std::string> includePaths;
+        const std::list<std::string> includePaths{};
         preprocessor.preprocess(istr, processedFile, resultConfigurations, "file.c", includePaths);
 
 

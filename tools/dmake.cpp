@@ -90,7 +90,7 @@ static void compilefiles(std::ostream &fout, const std::vector<std::string> &fil
 static void getCppFiles(std::vector<std::string> &files, const std::string &path, bool recursive)
 {
     std::map<std::string,size_t> filemap;
-    const std::set<std::string> extra;
+    const std::set<std::string> extra{};
     FileLister::addFiles(filemap, path, extra, recursive);
 
     // add *.cpp files to the "files" vector..

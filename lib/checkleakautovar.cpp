@@ -110,7 +110,7 @@ void CheckLeakAutoVar::check()
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
 
     // Local variables that are known to be non-zero.
-    const std::set<unsigned int> notzero;
+    const std::set<unsigned int> notzero{};
 
     // Check function scopes
     const std::size_t functions = symbolDatabase->functionScopes.size();

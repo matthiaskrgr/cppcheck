@@ -763,7 +763,7 @@ int CppCheckExecutor::check_internal(CppCheck& cppcheck, int /*argc*/, const cha
         windows = tryLoadLibrary(settings.library, argv[0], "windows.cfg");
 
     if (!std || !posix || !windows) {
-        const std::list<ErrorLogger::ErrorMessage::FileLocation> callstack;
+        const std::list<ErrorLogger::ErrorMessage::FileLocation> callstack{};
         const std::string msg("Failed to load " + std::string(!std ? "std.cfg" : !posix ? "posix.cfg" : "windows.cfg") + ". Your Cppcheck installation is broken, please re-install.");
 #ifdef CFGDIR
         const std::string details("The Cppcheck binary was compiled with CFGDIR set to \"" +
@@ -846,7 +846,7 @@ int CppCheckExecutor::check_internal(CppCheck& cppcheck, int /*argc*/, const cha
         cppcheck.tooManyConfigsError("",0U);
 
         if (settings.isEnabled("missingInclude") && (Preprocessor::missingIncludeFlag || Preprocessor::missingSystemIncludeFlag)) {
-            const std::list<ErrorLogger::ErrorMessage::FileLocation> callStack;
+            const std::list<ErrorLogger::ErrorMessage::FileLocation> callStack{};
             ErrorLogger::ErrorMessage msg(callStack,
                                           Severity::information,
                                           "Cppcheck cannot find all the include files (use --check-config for details)\n"

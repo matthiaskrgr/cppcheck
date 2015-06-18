@@ -704,7 +704,7 @@ void CheckBufferOverrun::checkScope(const Token *tok, const std::vector<std::str
                     continue;
 
                 const ArrayInfo arrayInfo1(declarationId, varnames, total_size / size, size);
-                const std::list<const Token *> callstack;
+                const std::list<const Token *> callstack{};
                 checkFunctionCall(tok, arrayInfo1, callstack);
             }
         }

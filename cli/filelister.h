@@ -38,7 +38,7 @@ public:
      * @param path root path
      */
     static void recursiveAddFiles(std::map<std::string, std::size_t> &files, const std::string &path) {
-        const std::set<std::string> extra;
+        const std::set<std::string> extra{};
         recursiveAddFiles(files, path, extra);
     }
 

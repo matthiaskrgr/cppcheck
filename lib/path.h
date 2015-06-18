@@ -118,7 +118,7 @@ public:
      * @return true if the file extension indicates it should be checked
      */
     static bool acceptFile(const std::string &filename) {
-        const std::set<std::string> extra;
+        const std::set<std::string> extra{};
         return acceptFile(filename, extra);
     }
 
