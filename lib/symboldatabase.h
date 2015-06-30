@@ -31,6 +31,7 @@
 #include "config.h"
 #include "token.h"
 #include "mathlib.h"
+#include "utils.h"
 
 class Tokenizer;
 class Settings;
@@ -121,7 +122,14 @@ public:
     * @param anchestors list of anchestors. For internal usage only, clients should not supply this argument.
     * @return true if there is a circular dependency
     */
-    bool hasCircularDependencies(std::set<BaseInfo>* anchestors = 0) const;
+    bool hasCircularDependencies(std::set<BaseInfo>* anchestors = nullptr) const;
+
+	/**
+    * Check for dependency
+    * @param anchestor potential anchestor
+    * @return true if there is a dependency
+    */
+	bool findDependency(const Type* anchestor) const;
 };
 
 /** @brief Information about a member variable. */
@@ -1020,23 +1028,6 @@ private:
     /** list for missing types */
     std::list<Type> _blankTypes;
 };
-
-template < typename Cont >
-class make_container {
-public:
-    typedef make_container< Cont > my_type;
-    typedef typename Cont::value_type T;
-    my_type& operator<< (const T& val) {
-        data_.insert(data_.end(), val);
-        return *this;
-    }
-    operator Cont() const {
-        return data_;
-    }
-private:
-    Cont data_;
-};
-
 
 //---------------------------------------------------------------------------
 #endif // symboldatabaseH

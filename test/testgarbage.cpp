@@ -1,3 +1,4 @@
+
 /*
  * Cppcheck - A tool for static C/C++ code analysis
  * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
@@ -122,6 +123,18 @@ private:
         TEST_CASE(garbageCode81);
         TEST_CASE(garbageCode82);
         TEST_CASE(garbageCode83);
+        TEST_CASE(garbageCode84);
+        TEST_CASE(garbageCode85);
+        TEST_CASE(garbageCode86);
+        TEST_CASE(garbageCode87);
+        TEST_CASE(garbageCode88);
+        TEST_CASE(garbageCode89);
+        TEST_CASE(garbageCode90);
+        TEST_CASE(garbageCode91);
+        TEST_CASE(garbageCode92);
+        TEST_CASE(garbageCode93);
+        TEST_CASE(garbageCode94);
+		TEST_CASE(garbageCode95);
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -129,7 +142,20 @@ private:
         TEST_CASE(templateSimplifierCrashes);
     }
 
-    std::string checkCode(const char code[], const char filename[] = "test.cpp") {
+	std::string checkCode(const char code[], const std::string& filename = "test.cpp") {
+		// double the tests - run each example as C as well as C++
+		const std::string alternatefilename = (filename=="test.c") ? "test.cpp" : "test.c";
+		// run alternate check first. It should only ensure stability
+		try {
+			checkCodeInternal(code, alternatefilename);
+		}
+		catch(InternalError& ) {
+		}
+
+		return checkCodeInternal(code, filename);
+	}
+
+    std::string checkCodeInternal(const char code[], const std::string& filename) {
         errout.str("");
 
         Settings settings;
@@ -144,7 +170,7 @@ private:
         // tokenize..
         Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
-        tokenizer.tokenize(istr, filename);
+		tokenizer.tokenize(istr, filename.c_str());
 
         // call all "runChecks" in all registered Check classes
         for (std::list<Check *>::const_iterator it = Check::instances().begin(); it != Check::instances().end(); ++it) {
@@ -501,6 +527,7 @@ private:
 
     void garbageCode40() { // #6620
         checkCode("{ ( ) () { virtual } ; { } E } A { : { } ( ) } * const ( ) const { }");
+        // test doesn't seem to work on any platform: ASSERT_THROW(checkCode("{ ( ) () { virtual } ; { } E } A { : { } ( ) } * const ( ) const { }", "test.c"), InternalError);
     }
 
     void garbageCode41() { // #6685
@@ -572,8 +599,8 @@ private:
     }
 
     void garbageCode58() { // #6732, #6762
-        //ASSERT_THROW(checkCode("{ }> {= ~A()^{} }P { }"), InternalError);
-        //ASSERT_THROW(checkCode("{= ~A()^{} }P { } { }> is"), InternalError);
+        ASSERT_THROW(checkCode("{ }> {= ~A()^{} }P { }"), InternalError);
+        ASSERT_THROW(checkCode("{= ~A()^{} }P { } { }> is"), InternalError);
     }
 
     void garbageCode59() { // #6735
@@ -674,6 +701,55 @@ private:
 
     void garbageCode83() { // #6771
         ASSERT_THROW(checkCode("namespace A { class } class A { friend C ; } { } ;"), InternalError);
+    }
+
+    void garbageCode84() { // #6780
+        checkCode("int main ( [ ] ) { " " [ ] ; int i = 0 ; do { } ; } ( [ ] ) { }"); // do not crash
+    }
+
+    void garbageCode85() { // #6784
+        ASSERT_THROW(checkCode("{ } { } typedef void ( *VoidFunc() ) ( ) ; VoidFunc"), InternalError); // do not crash
+    }
+
+    void garbageCode86() { // #6785
+        ASSERT_THROW(checkCode("{ } typedef char ( *( X ) ( void) , char ) ;"), InternalError); // do not crash
+    }
+
+    void garbageCode87() { // #6788
+        ASSERT_THROW(checkCode("((X (128))) (int a) { v[ = {} (x 42) a] += }"), InternalError); // do not crash
+    }
+
+    void garbageCode88() { // #6786
+        ASSERT_THROW(checkCode("( ) { ( 0 ) { ( ) } } g ( ) { i( ( false ?) ( ) : 1 ) ; } ;"), InternalError); // do not crash
+    }
+
+    void garbageCode89() { // #6772
+        ASSERT_THROW(checkCode("{ { ( ) } P ( ) ^ { } { } { } ( ) } 0"), InternalError); // do not crash
+    }
+
+    void garbageCode90() { // #6790
+        ASSERT_THROW(checkCode("{ } { } typedef int u_array [[ ] ; typedef u_array & u_array_ref] ( ) { } u_array_ref_gbl_obj0"), InternalError); // do not crash
+    }
+
+    void garbageCode91() { // #6791
+        checkCode("typedef __attribute__((vector_size (16))) { return[ (v2df){ } ;] }"); // do not crash
+    }
+
+    void garbageCode92() { // #6792
+        ASSERT_THROW(checkCode("template < typename _Tp ( ( ) ; _Tp ) , decltype > { } { ( ) ( ) }"), InternalError); // do not crash
+    }
+
+    void garbageCode93() { // #6800
+        checkCode(" namespace A { } class A{ { }} class A : T ;", "test.c"); // do not crash
+    }
+
+    void garbageCode94() { // #6803
+        //checkCode("typedef long __m256i __attribute__ ( ( ( ) ) )[ ; ( ) { } typedef __m256i __attribute__ ( ( ( ) ) ) < ] ( ) { ; }");
+        ASSERT_THROW(checkCode("typedef long __m256i __attribute__ ( ( ( ) ) )[ ; ( ) { } typedef __m256i __attribute__ ( ( ( ) ) ) < ] ( ) { ; }"), InternalError);
+    }
+
+    void garbageCode95() { // #6804
+        checkCode("{ } x x ; { } h h [ ] ( ) ( ) { struct x ( x ) ; int __attribute__ ( ) f ( ) { h - > first = & x ; struct x * n = h - > first ; ( ) n > } }");	 // do not crash
     }
 
     void garbageValueFlow() {

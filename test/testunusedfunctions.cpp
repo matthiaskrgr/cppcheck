@@ -57,13 +57,13 @@ private:
         TEST_CASE(ignore_declaration); // ignore declaration
     }
 
-    void check(const char code[]) {
+    void check(const char code[], Settings::PlatformType platform = Settings::Unspecified) {
         // Clear the error buffer..
         errout.str("");
 
         Settings settings;
         settings.addEnabled("style");
-
+        settings.platform(platform);
         // Tokenize..
         Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
@@ -72,7 +72,7 @@ private:
         // Check for unused functions..
         CheckUnusedFunctions checkUnusedFunctions(&tokenizer, &settings, this);
         checkUnusedFunctions.parseTokens(tokenizer,  "someFile.c", &settings);
-        checkUnusedFunctions.check(this);
+        checkUnusedFunctions.check(this, settings);
     }
 
     void incondition() {
@@ -228,10 +228,10 @@ private:
         check("int main() { }");
         ASSERT_EQUALS("", errout.str());
 
-        check("int _tmain() { }");
+        check("int _tmain() { }", Settings::Win32A);
         ASSERT_EQUALS("", errout.str());
 
-        check("int WinMain() { }");
+        check("int WinMain() { }", Settings::Win32A);
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -333,7 +333,9 @@ private:
     }
 
     void multipleFiles() {
-        CheckUnusedFunctions c;
+        Settings settings;
+        Tokenizer tokenizer(&settings, this);
+        CheckUnusedFunctions c(&tokenizer, &settings, nullptr);
 
         // Clear the error buffer..
         errout.str("");
@@ -347,17 +349,15 @@ private:
             // Clear the error buffer..
             errout.str("");
 
-            Settings settings;
-
-            Tokenizer tokenizer(&settings, this);
+            Tokenizer tokenizer2(&settings, this);
             std::istringstream istr(code);
-            tokenizer.tokenize(istr, fname.str().c_str());
+            tokenizer2.tokenize(istr, fname.str().c_str());
 
-            c.parseTokens(tokenizer, "someFile.c", &settings);
+            c.parseTokens(tokenizer2, "someFile.c", &settings);
         }
 
         // Check for unused functions..
-        c.check(this);
+        c.check(this, settings);
 
         ASSERT_EQUALS("[test1.cpp:1]: (style) The function 'f' is never used.\n", errout.str());
     }

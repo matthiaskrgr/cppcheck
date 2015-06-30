@@ -3,42 +3,72 @@
 
 from lxml import etree
 
-
+## Token class. Contains information about each token in the source code.
 class Token:
     Id = None
+    ## Token string
     str = None
+    ## Next token in tokenlist. For last token, next is None.
     next = None
+    ## Previous token in tokenlist. For first token, previous is None,
     previous = None
-    scopeId = None
-    scope = None
-    isName = None
-    isNumber = None
-    isInt = None
-    isFloat = None
-    isString = None
-    strlen = None
-    isChar = None
-    isOp = None
-    isArithmeticalOp = None
-    isAssignmentOp = None
-    isComparisonOp = None
-    isLogicalOp = None
     linkId = None
+    ## Linked token in tokenlist. Each '(', '[' and '{' are linked to the
+    # corresponding '}', ']' and ')'. For templates, the '<' is linked to
+    # the corresponding '>'.
     link = None
+    scopeId = None
+    ## Scope information for this token. See the Scope class.
+    scope = None
+    ## Is this token a symbol name
+    isName = False
+    ## Is this token a number, for example 123, 12.34
+    isNumber = False
+    ## Is this token a int value such as 1234
+    isInt = False
+    ## Is this token a int value such as 12.34
+    isFloat = False
+    ## Is this token a string literal such as "hello"
+    isString = False
+    ## string length for string literal
+    strlen = None
+    ## Is this token a char literal such as 'x'
+    isChar = False
+    ## Is this token a operator
+    isOp = False
+    ## Is this token a arithmetic operator
+    isArithmeticalOp = False
+    ## Is this token a assignment operator
+    isAssignmentOp = False
+    ## Is this token a comparison operator
+    isComparisonOp = False
+    ## Is this token a logical operator: && ||
+    isLogicalOp = False
+    ## varId for token, each variable has a unique non-zero id
     varId = None
     variableId = None
+    ## Variable information for this token. See the Variable class.
     variable = None
     functionId = None
+    ## If this token points at a function call, this attribute has the Function information. See the Function class.
     function = None
     valuesId = None
+    ## Possible values of token
     values = None
+    
     astParentId = None
+    ## syntax tree parent
     astParent = None
     astOperand1Id = None
+    ## syntax tree operand1
     astOperand1 = None
     astOperand2Id = None
+    ## syntax tree operand2
     astOperand2 = None
+
+    ## file name
     file = None
+    ## line number
     linenr = None
 
     def __init__(self, element):
@@ -162,13 +192,13 @@ class Variable:
     typeStartToken = None
     typeEndTokenId = None
     typeEndToken = None
-    isArgument = None
-    isArray = None
-    isClass = None
-    isLocal = None
-    isPointer = None
-    isReference = None
-    isStatic = None
+    isArgument = False
+    isArray = False
+    isClass = False
+    isLocal = False
+    isPointer = False
+    isReference = False
+    isStatic = False
 
     def __init__(self, element):
         self.Id = element.get('id')
@@ -178,13 +208,13 @@ class Variable:
         self.typeStartToken = None
         self.typeEndTokenId = element.get('typeEndToken')
         self.typeEndToken = None
-        self.isArgument = element.get('isArgument')
-        self.isArray = element.get('isArray')
-        self.isClass = element.get('isClass')
-        self.isLocal = element.get('isLocal')
-        self.isPointer = element.get('isPointer')
-        self.isReference = element.get('isReference')
-        self.isStatic = element.get('isStatic')
+        self.isArgument = element.get('isArgument') == 'true'
+        self.isArray = element.get('isArray') == 'true'
+        self.isClass = element.get('isClass') == 'true'
+        self.isLocal = element.get('isLocal') == 'true'
+        self.isPointer = element.get('isPointer') == 'true'
+        self.isReference = element.get('isReference') == 'true'
+        self.isStatic = element.get('isStatic') == 'true'
 
     def setId(self, IdMap):
         self.nameToken = IdMap[self.nameTokenId]
@@ -196,10 +226,14 @@ class ValueFlow:
 
     class Value:
         intvalue = None
+        tokvalue = None
         condition = None
 
         def __init__(self, element):
-            self.intvalue = int(element.get('intvalue'))
+            self.intvalue = element.get('intvalue')
+            if self.intvalue:
+                self.intvalue = int(self.intvalue)
+            self.tokvalue = element.get('tokvalue')
             self.condition = element.get('condition-line')
             if self.condition:
                 self.condition = int(self.condition)

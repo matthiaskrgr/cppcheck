@@ -49,6 +49,7 @@ private:
         TEST_CASE(secondAlwaysTrueFalseWhenFirstTrueError);
         TEST_CASE(incorrectLogicOp_condSwapping);
         TEST_CASE(testBug5895);
+        TEST_CASE(testBug5309);
 
         TEST_CASE(modulo);
 
@@ -251,6 +252,22 @@ private:
               "    c++;\n"
               "    if (c == 4)\n"
               "      c  = 0;\n"
+              "  }\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f(int a) {\n" // #6662
+              "  int x = a & 1;\n"
+              "  while (x <= 4) {\n"
+              "    if (x != 5) {}\n"
+              "  }\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:4]: (style) Mismatching assignment and comparison, comparison 'x!=5' is always true.\n", errout.str());
+
+        check("void f(int a) {\n" // #6662
+              "  int x = a & 1;\n"
+              "  while ((x += 4) < 10) {\n"
+              "    if (x != 5) {}\n"
               "  }\n"
               "}\n");
         ASSERT_EQUALS("", errout.str());
@@ -897,6 +914,16 @@ private:
               "  if (i || !i) {}\n"
               "}");
         ASSERT_EQUALS("[test.cpp:2]: (warning) Logical disjunction always evaluates to true: i||!i.\n", errout.str());
+
+        check("void f(int a, int b) {\n"
+              "  if (a>b || a<=b) {}\n"
+              "}");
+        TODO_ASSERT_EQUALS("[test.cpp:2]: (warning) Logical disjunction always evaluates to true: a>b||a<=b.\n", "", errout.str());
+
+        check("void f(int a, int b) {\n"
+              "  if (a>b || a<b) {}\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void secondAlwaysTrueFalseWhenFirstTrueError() {
@@ -1343,6 +1370,11 @@ private:
               "   if (y==0 || y!=0 && z);\n"
               "}", false);
         ASSERT_EQUALS("[test.cpp:3]: (style) Redundant condition: y. 'A && (!A || B)' is equivalent to 'A || B'\n", errout.str());
+
+        check("void f() {\n"
+              "  if (x>0 || (x<0 && y)) {}\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
 // clarify conditions with bitwise operator and comparison
@@ -1422,7 +1454,20 @@ private:
               "    if (init == 0x89504e470d0a1a0a || init == 0x8a4d4e470d0a1a0a)\n"
               "        ;\n"
               "}");
+#ifdef _MSC_VER
+		ASSERT_EQUALS("", errout.str());
+#else
         TODO_ASSERT_EQUALS("", "[test.cpp:2]: (style) Redundant condition: If init == 9894494448401390090, the comparison init == 9965707617509186058 is always true.\n", errout.str());
+#endif
+    }
+
+    void testBug5309() {
+        check("extern uint64_t value;\n"
+              "void foo() {\n"
+              "    if( ( value >= 0x7ff0000000000001ULL )\n"
+              "            && ( value <= 0x7fffffffffffffffULL ) );\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 };
 

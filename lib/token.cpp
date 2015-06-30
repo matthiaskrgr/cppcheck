@@ -820,8 +820,11 @@ const Token * Token::findClosingBracket() const
     if (_str == "<") {
         unsigned int depth = 0;
         for (closing = this; closing != nullptr; closing = closing->next()) {
-            if (Token::Match(closing, "{|[|("))
+            if (Token::Match(closing, "{|[|(")) {
                 closing = closing->link();
+                if (!closing)
+                    return nullptr; // #6803
+            }
             else if (Token::Match(closing, "}|]|)|;"))
                 break;
             else if (closing->str() == "<")
@@ -1433,6 +1436,8 @@ const Token *Token::getValueTokenDeadPointer() const
         const Variable * const var = vartok->variable();
         if (var->isStatic() || var->isReference())
             continue;
+		if (!var->scope())
+			return nullptr; // #6804
         if (var->scope()->type == Scope::eUnion && var->scope()->nestedIn == this->scope())
             continue;
         // variable must be in same function (not in subfunction)

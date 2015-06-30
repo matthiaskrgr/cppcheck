@@ -93,12 +93,13 @@ struct Filepointer {
     }
 };
 
+namespace {
+    static const std::set<std::string> whitelist = make_container< std::set<std::string> > ()
+            << "clearerr" << "feof" << "ferror" << "fgetpos" << "ftell" << "setbuf" << "setvbuf" << "ungetc" << "ungetwc";
+}
+
 void CheckIO::checkFileUsage()
 {
-    static const char* _whitelist[] = {
-        "clearerr", "feof", "ferror", "fgetpos", "ftell", "setbuf", "setvbuf", "ungetc", "ungetwc"
-    };
-    static const std::set<std::string> whitelist(_whitelist, _whitelist + sizeof(_whitelist)/sizeof(*_whitelist));
     const bool windows = _settings->isWindowsPlatform();
     const bool printPortability = _settings->isEnabled("portability");
     const bool printWarnings = _settings->isEnabled("warning");
@@ -1375,15 +1376,15 @@ void CheckIO::checkWrongPrintfScanfArguments()
 // We currently only support string literals, variables, and functions.
 /// @todo add non-string literals, and generic expressions
 
-CheckIO::ArgumentInfo::ArgumentInfo(const Token * tok, const Settings *settings, bool isCPP)
-    : variableInfo(0)
-    , typeToken(0)
-    , functionInfo(0)
+CheckIO::ArgumentInfo::ArgumentInfo(const Token * tok, const Settings *settings, bool _isCPP)
+    : variableInfo(nullptr)
+    , typeToken(nullptr)
+    , functionInfo(nullptr)
     , element(false)
     , _template(false)
     , address(false)
-    , tempToken(0)
-    , isCPP(isCPP)
+    , isCPP(_isCPP)
+    , tempToken(nullptr)
 {
     if (tok) {
         if (tok->type() == Token::eString) {

@@ -1090,7 +1090,7 @@ void CheckBufferOverrun::checkGlobalAndLocalVariable()
                                          "Check (BufferOverrun::checkGlobalAndLocalVariable)",
                                          tok->progressValue());
 
-            if (Token::Match(tok, "[*;{}] %var% = new %type% [ %num% ]")) {
+            if (_tokenizer->isCPP() && Token::Match(tok, "[*;{}] %var% = new %type% [ %num% ]")) {
                 size = MathLib::toLongNumber(tok->strAt(6));
                 type = tok->strAt(4);
                 var = tok->next()->variable();
@@ -1098,7 +1098,7 @@ void CheckBufferOverrun::checkGlobalAndLocalVariable()
                 if (size < 0) {
                     negativeMemoryAllocationSizeError(tok->next()->next());
                 }
-            } else if (Token::Match(tok, "[*;{}] %var% = new %type% ( %num%|%name% )")) {
+            } else if (_tokenizer->isCPP() && Token::Match(tok, "[*;{}] %var% = new %type% ( %num%|%name% )")) {
                 size = 1;
                 type = tok->strAt(4);
                 var = tok->next()->variable();
@@ -1417,6 +1417,8 @@ MathLib::biguint CheckBufferOverrun::countSprintfLength(const std::string &input
             case 'X':
             case 'i':
                 i_d_x_f_found = true;
+                handleNextParameter = true;
+                break;
             case 'c':
             case 'e':
             case 'E':
@@ -1518,7 +1520,7 @@ void CheckBufferOverrun::checkBufferAllocatedWithStrlen()
                 dstVarId = tok->varId();
                 srcVarId = tok->tokAt(6)->varId();
                 tok      = tok->tokAt(8);
-            } else if (Token::Match(tok, "%var% = new char [ strlen ( %name% ) ]")) {
+            } else if (_tokenizer->isCPP() && Token::Match(tok, "%var% = new char [ strlen ( %name% ) ]")) {
                 dstVarId = tok->varId();
                 srcVarId = tok->tokAt(7)->varId();
                 tok      = tok->tokAt(9);
@@ -1797,7 +1799,7 @@ Check::FileInfo* CheckBufferOverrun::getFileInfo(const Tokenizer *tokenizer, con
     return fileInfo;
 }
 
-void CheckBufferOverrun::analyseWholeProgram(const std::list<Check::FileInfo*> &fileInfo, ErrorLogger &errorLogger)
+void CheckBufferOverrun::analyseWholeProgram(const std::list<Check::FileInfo*> &fileInfo, const Settings&, ErrorLogger &errorLogger)
 {
     // Merge all fileInfo
     MyFileInfo all;

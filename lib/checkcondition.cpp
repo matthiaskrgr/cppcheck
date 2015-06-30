@@ -24,6 +24,8 @@
 #include "checkother.h"
 #include "symboldatabase.h"
 
+#include <limits>
+
 //---------------------------------------------------------------------------
 
 // Register this check class (by creating a static instance of it)
@@ -140,6 +142,9 @@ bool CheckCondition::assignIfParseScope(const Token * const assignTok,
                         assignIfError(assignTok, tok2, condition, false);
                     else if (op == "!=" && (num & num2) != ((bitop=='&') ? num2 : num))
                         assignIfError(assignTok, tok2, condition, true);
+                }
+                if (Token::Match(tok2, "%varid% %op%", varid) && tok2->next()->isAssignmentOp()) {
+                    return true;
                 }
             }
 
@@ -274,13 +279,13 @@ void CheckCondition::comparisonError(const Token *tok, const std::string &bitop,
     reportError(tok, Severity::style, "comparisonError", errmsg);
 }
 
-static bool isOverlappingCond(const Token * const cond1, const Token * const cond2, const std::set<std::string> &constFunctions)
+bool CheckCondition::isOverlappingCond(const Token * const cond1, const Token * const cond2, const std::set<std::string> &constFunctions) const
 {
     if (!cond1 || !cond2)
         return false;
 
     // same expressions
-    if (isSameExpression(cond1,cond2,constFunctions))
+    if (isSameExpression(_tokenizer, cond1,cond2,constFunctions))
         return true;
 
     // bitwise overlap for example 'x&7' and 'x==1'
@@ -303,7 +308,7 @@ static bool isOverlappingCond(const Token * const cond1, const Token * const con
         if (!num2->isNumber() || MathLib::isNegative(num2->str()))
             return false;
 
-        if (!isSameExpression(expr1,expr2,constFunctions))
+        if (!isSameExpression(_tokenizer, expr1,expr2,constFunctions))
             return false;
 
         const MathLib::bigint value1 = MathLib::toLongNumber(num1->str());
@@ -356,16 +361,16 @@ void CheckCondition::multiConditionError(const Token *tok, unsigned int line1)
 // Detect oppositing inner and outer conditions
 //---------------------------------------------------------------------------
 
-static bool isOppositeCond(const Token * const cond1, const Token * const cond2, const std::set<std::string> &constFunctions)
+bool CheckCondition::isOppositeCond(bool isNot, const Token * const cond1, const Token * const cond2, const std::set<std::string> &constFunctions) const
 {
     if (!cond1 || !cond2)
         return false;
 
     if (cond1->str() == "!")
-        return isSameExpression(cond1->astOperand1(), cond2, constFunctions);
+        return isSameExpression(_tokenizer, cond1->astOperand1(), cond2, constFunctions);
 
     if (cond2->str() == "!")
-        return isSameExpression(cond1, cond2->astOperand1(), constFunctions);
+        return isSameExpression(_tokenizer, cond1, cond2->astOperand1(), constFunctions);
 
     if (!cond1->isComparisonOp() || !cond2->isComparisonOp())
         return false;
@@ -374,11 +379,11 @@ static bool isOppositeCond(const Token * const cond1, const Token * const cond2,
 
     // condition found .. get comparator
     std::string comp2;
-    if (isSameExpression(cond1->astOperand1(), cond2->astOperand1(), constFunctions) &&
-        isSameExpression(cond1->astOperand2(), cond2->astOperand2(), constFunctions)) {
+    if (isSameExpression(_tokenizer, cond1->astOperand1(), cond2->astOperand1(), constFunctions) &&
+        isSameExpression(_tokenizer, cond1->astOperand2(), cond2->astOperand2(), constFunctions)) {
         comp2 = cond2->str();
-    } else if (isSameExpression(cond1->astOperand1(), cond2->astOperand2(), constFunctions) &&
-               isSameExpression(cond1->astOperand2(), cond2->astOperand1(), constFunctions)) {
+    } else if (isSameExpression(_tokenizer, cond1->astOperand1(), cond2->astOperand2(), constFunctions) &&
+               isSameExpression(_tokenizer, cond1->astOperand2(), cond2->astOperand1(), constFunctions)) {
         comp2 = cond2->str();
         if (comp2[0] == '>')
             comp2[0] = '<';
@@ -390,11 +395,11 @@ static bool isOppositeCond(const Token * const cond1, const Token * const cond2,
     return ((comp1 == "==" && comp2 == "!=") ||
             (comp1 == "!=" && comp2 == "==") ||
             (comp1 == "<"  && comp2 == ">=") ||
-            (comp1 == "<"  && comp2 == ">") ||
             (comp1 == "<=" && comp2 == ">") ||
             (comp1 == ">"  && comp2 == "<=") ||
-            (comp1 == ">"  && comp2 == "<") ||
-            (comp1 == ">=" && comp2 == "<"));
+            (comp1 == ">=" && comp2 == "<") ||
+            (!isNot && ((comp1 == "<" && comp2 == ">") ||
+                        (comp1 == ">" && comp2 == "<"))));
 }
 
 void CheckCondition::oppositeInnerCondition()
@@ -486,7 +491,7 @@ void CheckCondition::oppositeInnerCondition()
         const Token *cond1 = scope->classDef->next()->astOperand2();
         const Token *cond2 = ifToken->next()->astOperand2();
 
-        if (isOppositeCond(cond1, cond2, _settings->library.functionpure))
+        if (isOppositeCond(false, cond1, cond2, _settings->library.functionpure))
             oppositeInnerConditionError(scope->classDef, cond2);
     }
 }
@@ -547,14 +552,11 @@ static bool checkFloatRelation(const std::string &op, const double value1, const
 template<class T>
 T getvalue3(const T value1, const T value2)
 {
-    if (std::numeric_limits<T>::is_integer) {
-        const T min = std::min(value1, value2);
-        if (min== std::numeric_limits<T>::max())
-            return min;
-        else
-            return min+1; // see #5895
-    }
-    return (value1 + value2) / (T)2;
+    const T min = std::min(value1, value2);
+    if (min== std::numeric_limits<T>::max())
+        return min;
+    else
+        return min+1; // see #5895
 }
 
 template<>
@@ -622,16 +624,16 @@ void CheckCondition::checkIncorrectLogicOperator()
                 tok->astOperand1() &&
                 tok->astOperand2() &&
                 (tok->astOperand1()->isName() || tok->astOperand2()->isName()) &&
-                isOppositeCond(tok->astOperand1(), tok->astOperand2(), _settings->library.functionpure)) {
+                isOppositeCond(true, tok->astOperand1(), tok->astOperand2(), _settings->library.functionpure)) {
 
                 const bool alwaysTrue(tok->str() == "||");
                 incorrectLogicOperatorError(tok, tok->expressionString(), alwaysTrue);
             }
 
             else if (Token::Match(tok, "&&|%oror%")) {
-                if (tok->str() == "||" && tok->astOperand1() && tok->astOperand2() && tok->astOperand2()->str() == "&&") {
+                if (printStyle && (tok->str() == "||") && tok->astOperand1() && tok->astOperand2() && tok->astOperand2()->str() == "&&") {
                     const Token* tok2 = tok->astOperand2()->astOperand1();
-                    if (isOppositeCond(tok->astOperand1(), tok2, _settings->library.functionpure)) {
+                    if (isOppositeCond(true, tok->astOperand1(), tok2, _settings->library.functionpure)) {
                         redundantConditionError(tok, tok2->expressionString() + ". 'A && (!A || B)' is equivalent to 'A || B'");
                     }
                 }
@@ -682,9 +684,9 @@ void CheckCondition::checkIncorrectLogicOperator()
                 if (!MathLib::isInt(value2) && !MathLib::isFloat(value2))
                     continue;
 
-                if (isSameExpression(comp1, comp2, _settings->library.functionpure))
+                if (isSameExpression(_tokenizer, comp1, comp2, _settings->library.functionpure))
                     continue; // same expressions => only report that there are same expressions
-                if (!isSameExpression(expr1, expr2, _settings->library.functionpure))
+                if (!isSameExpression(_tokenizer, expr1, expr2, _settings->library.functionpure))
                     continue;
 
                 const bool isfloat = astIsFloat(expr1, true) || MathLib::isFloat(value1) || astIsFloat(expr2, true) || MathLib::isFloat(value2);

@@ -45,13 +45,13 @@ public:
     // * What functions are declared
     void parseTokens(const Tokenizer &tokenizer, const char FileName[], const Settings *settings);
 
-    void check(ErrorLogger * const errorLogger);
+    void check(ErrorLogger * const errorLogger, const Settings& settings);
 
     /** @brief Parse current TU and extract file info */
     Check::FileInfo *getFileInfo(const Tokenizer *tokenizer, const Settings *settings) const;
 
     /** @brief Analyse all file infos for all TU */
-    void analyseWholeProgram(const std::list<Check::FileInfo*> &fileInfo, ErrorLogger &errorLogger);
+    void analyseWholeProgram(const std::list<Check::FileInfo*> &fileInfo, const Settings& settings, ErrorLogger &errorLogger);
 
     static CheckUnusedFunctions instance;
 

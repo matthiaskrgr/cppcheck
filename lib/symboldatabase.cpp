@@ -54,8 +54,8 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                                          "SymbolDatabase",
                                          tok->progressValue());
         // Locate next class
-        if (Token::Match(tok, "class|struct|union|namespace ::| %name% {|:|::|<") &&
-            tok->strAt(-1) != "friend") {
+        if ((_tokenizer->isCPP() && Token::Match(tok, "class|struct|union|namespace ::| %name% {|:|::|<") && tok->strAt(-1) != "friend")
+            || (_tokenizer->isC() && Token::Match(tok, "struct|union %name% {"))) {
             const Token *tok2 = tok->tokAt(2);
 
             if (tok->strAt(1) == "::")
@@ -105,7 +105,7 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                 }
 
                 // definition may be different than declaration
-                if (tok->str() == "class") {
+                if (_tokenizer->isCPP() && tok->str() == "class") {
                     access[new_scope] = Private;
                     new_scope->type = Scope::eClass;
                 } else if (tok->str() == "struct") {
@@ -659,7 +659,7 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                     const Token* scopeBegin = argStart->link()->next();
                     if (scopeBegin->isName()) { // Jump behind 'const' or unknown Macro
                         scopeBegin = scopeBegin->next();
-                        if (scopeBegin->str() == "throw")
+                        if (_tokenizer->isCPP() && scopeBegin->str() == "throw")
                             scopeBegin = scopeBegin->next();
 
                         if (scopeBegin->link() && scopeBegin->str() == "(") // Jump behind unknown macro of type THROW(...)
@@ -844,8 +844,16 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
         // fill in base class info
         for (std::list<Type>::iterator it = typeList.begin(); it != typeList.end(); ++it) {
             // finish filling in base class info
-            for (unsigned int i = 0; i < it->derivedFrom.size(); ++i)
-                it->derivedFrom[i].type = findType(it->derivedFrom[i].nameTok, it->enclosingScope);
+            for (unsigned int i = 0; i < it->derivedFrom.size(); ++i) {
+				const Type* found = findType(it->derivedFrom[i].nameTok, it->enclosingScope);
+				if (found && found->findDependency(&(*it))) {
+						// circular dependency
+						//_tokenizer->syntaxError(nullptr);
+				}
+				else {
+					it->derivedFrom[i].type = found;
+				}
+			}
         }
 
         // fill in friend info
@@ -2052,6 +2060,16 @@ bool Type::hasCircularDependencies(std::set<BaseInfo>* anchestors) const
         }
     }
     return false;
+}
+
+bool Type::findDependency(const Type* anchestor) const {
+	if (this==anchestor)
+		return true;
+	for (std::vector<BaseInfo>::const_iterator parent=derivedFrom.begin(); parent!=derivedFrom.end(); ++parent) {
+		if (parent->type && parent->type->findDependency(anchestor))
+			return true;
+	}
+	return false;
 }
 
 bool Variable::arrayDimensions(const Library* lib)
@@ -3602,15 +3620,14 @@ Function * SymbolDatabase::findFunctionInScope(const Token *func, const Scope *n
 
 //---------------------------------------------------------------------------
 
-bool SymbolDatabase::isReservedName(const std::string& iName) const
-{
-    static const std::set<std::string> c_keywords = make_container<std::set<std::string>>() <<
+namespace {
+    const std::set<std::string> c_keywords = make_container< std::set<std::string> >() <<
             "auto" << "break" << "case" << "char" << "const" << "continue" << "default" << "do" <<
             "double" << "else" << "enum" << "extern" << "float" << "for" << "goto" << "if" << "inline" <<
             "int" << "long" << "register" << "restrict" << "return" << "short" << "signed" << "sizeof" <<
             "static" << "struct" << "switch" << "typedef" << "union" << "unsigned" << "void" << "volatile" <<
             "while";
-    static const std::set<std::string> cpp_keywords = make_container<std::set<std::string>>() <<
+    const std::set<std::string> cpp_keywords = make_container< std::set<std::string> >() <<
             "alignas" << "alignof" << "and" << "and_eq" << "asm" << "auto" << "bitand" << "bitor" << "bool" <<
             "break" << "case" << "catch" << "char" << "char16_t" << "char32_t" << "class" << "compl" <<
             "concept" << "const" << "constexpr" << "const_cast" << "continue" << "decltype" << "default" <<
@@ -3622,5 +3639,8 @@ bool SymbolDatabase::isReservedName(const std::string& iName) const
             "static_cast" << "struct" << "switch" << "template" << "this" << "thread_local" << "throw" <<
             "true" << "try" << "typedef" << "typeid" << "typename" << "union" << "unsigned" << "using" <<
             "virtual" << "void" << "volatile" << "wchar_t" << "while" << "xor" << "xor_eq";
+}
+bool SymbolDatabase::isReservedName(const std::string& iName) const
+{
     return (c_keywords.find(iName) != c_keywords.cend()) || (isCPP() && (cpp_keywords.find(iName) != cpp_keywords.cend()));
 }
