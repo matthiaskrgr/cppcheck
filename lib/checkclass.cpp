@@ -248,7 +248,7 @@ void CheckClass::checkExplicitConstructors()
             //  2) Constructor is not declared as explicit
             //  3) It is not a copy/move constructor of non-abstract class
             //  4) Constructor is not marked as delete (programmer can mark the default constructor as deleted, which is ok)
-            if (!func->isConstructor() || func->isDelete())
+            if (!func->isConstructor() || func->isDelete() || (!func->hasBody() && func->access == Private))
                 continue;
 
             if (!func->isExplicit() && func->argCount() == 1) {
@@ -1424,6 +1424,8 @@ bool CheckClass::hasAllocation(const Function *func, const Scope* scope) const
 
 bool CheckClass::hasAssignSelf(const Function *func, const Token *rhs)
 {
+    if (!rhs)
+        return false;
     const Token *last = func->functionScope->classEnd;
     for (const Token *tok = func->functionScope->classStart; tok && tok != last; tok = tok->next()) {
         if (Token::simpleMatch(tok, "if (")) {
@@ -1764,7 +1766,7 @@ bool CheckClass::isMemberVar(const Scope *scope, const Token *tok) const
     }
 
     // not found in this class
-    if (!scope->definedType->derivedFrom.empty() && !scope->definedType->hasCircularDependencies()) {
+    if (!scope->definedType->derivedFrom.empty()) {
         // check each base class
         for (std::size_t i = 0; i < scope->definedType->derivedFrom.size(); ++i) {
             // find the base class
@@ -1794,7 +1796,7 @@ bool CheckClass::isMemberFunc(const Scope *scope, const Token *tok) const
             const Type *derivedFrom = scope->definedType->derivedFrom[i].type;
 
             // find the function in the base class
-            if (derivedFrom && derivedFrom->classScope && !derivedFrom->hasCircularDependencies()) {
+            if (derivedFrom && derivedFrom->classScope) {
                 if (isMemberFunc(derivedFrom->classScope, tok))
                     return true;
             }
@@ -1817,7 +1819,7 @@ bool CheckClass::isConstMemberFunc(const Scope *scope, const Token *tok) const
             const Type *derivedFrom = scope->definedType->derivedFrom[i].type;
 
             // find the function in the base class
-            if (derivedFrom && derivedFrom->classScope && !derivedFrom->hasCircularDependencies()) {
+            if (derivedFrom && derivedFrom->classScope) {
                 if (isConstMemberFunc(derivedFrom->classScope, tok))
                     return true;
             }

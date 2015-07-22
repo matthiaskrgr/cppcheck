@@ -824,8 +824,7 @@ const Token * Token::findClosingBracket() const
                 closing = closing->link();
                 if (!closing)
                     return nullptr; // #6803
-            }
-            else if (Token::Match(closing, "}|]|)|;"))
+            } else if (Token::Match(closing, "}|]|)|;"))
                 break;
             else if (closing->str() == "<")
                 ++depth;
@@ -1100,12 +1099,16 @@ std::string Token::stringifyList(bool varid) const
 
 void Token::astOperand1(Token *tok)
 {
+    const Token* const root = tok;
     if (_astOperand1)
         _astOperand1->_astParent = nullptr;
     // goto parent operator
     if (tok) {
-        while (tok->_astParent)
+        while (tok->_astParent) {
+            if (tok->_astParent == this || tok->_astParent == root) // #6838/#6726 avoid hang on garbage code
+                throw InternalError(this, "Internal error. Token::astOperand1() cyclic dependency.");
             tok = tok->_astParent;
+        }
         tok->_astParent = this;
     }
     _astOperand1 = tok;
@@ -1113,12 +1116,17 @@ void Token::astOperand1(Token *tok)
 
 void Token::astOperand2(Token *tok)
 {
+    const Token* const root = tok;
     if (_astOperand2)
         _astOperand2->_astParent = nullptr;
     // goto parent operator
     if (tok) {
-        while (tok->_astParent)
+        while (tok->_astParent) {
+            //std::cout << tok << " -> " << tok->_astParent ;
+            if (tok->_astParent == this || tok->_astParent == root) // #6838/#6726 avoid hang on garbage code
+                throw InternalError(this, "Internal error. Token::astOperand2() cyclic dependency.");
             tok = tok->_astParent;
+        }
         tok->_astParent = this;
     }
     _astOperand2 = tok;
@@ -1233,28 +1241,26 @@ static void astStringXml(const Token *tok, std::size_t indent, std::ostream &out
 
 void Token::printAst(bool verbose, bool xml, std::ostream &out) const
 {
-    bool title = false;
-
-    bool print = true;
+    std::set<const Token *> printed;
     for (const Token *tok = this; tok; tok = tok->next()) {
-        if (print && tok->_astOperand1) {
-            if (!title && !xml)
+        if (!tok->_astParent && tok->_astOperand1) {
+            if (printed.empty() && !xml)
                 out << "\n\n##AST" << std::endl;
-            title = true;
+            else if (printed.find(tok) != printed.end())
+                continue;
+            printed.insert(tok);
+
             if (xml) {
                 out << "<ast scope=\"" << tok->scope() << "\" fileIndex=\"" << tok->fileIndex() << "\" linenr=\"" << tok->linenr() << "\">" << std::endl;
-                astStringXml(tok->astTop(), 2U, out);
+                astStringXml(tok, 2U, out);
                 out << "</ast>" << std::endl;
             } else if (verbose)
-                out << tok->astTop()->astStringVerbose(0,0) << std::endl;
+                out << tok->astStringVerbose(0,0) << std::endl;
             else
-                out << tok->astTop()->astString(" ") << std::endl;
-            print = false;
+                out << tok->astString(" ") << std::endl;
             if (tok->str() == "(")
                 tok = tok->link();
         }
-        if (Token::Match(tok, "[;{}]"))
-            print = true;
     }
 }
 
@@ -1436,8 +1442,8 @@ const Token *Token::getValueTokenDeadPointer() const
         const Variable * const var = vartok->variable();
         if (var->isStatic() || var->isReference())
             continue;
-		if (!var->scope())
-			return nullptr; // #6804
+        if (!var->scope())
+            return nullptr; // #6804
         if (var->scope()->type == Scope::eUnion && var->scope()->nestedIn == this->scope())
             continue;
         // variable must be in same function (not in subfunction)

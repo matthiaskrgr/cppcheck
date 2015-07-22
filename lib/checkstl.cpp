@@ -235,7 +235,7 @@ namespace {
             << "partition_point" << "pop_heap" << "prev_permutation" << "push_heap" << "random_shuffle" << "remove" << "remove_copy"
             << "remove_copy_if" << "remove_if" << "replace" << "replace_copy" << "replace_copy_if" << "replace_if" << "reverse" << "reverse_copy"
             << "search_n" << "shuffle" << "sort" << "sort_heap" << "stable_partition" << "stable_sort" << "swap_ranges" << "transform" << "unique"
-            << "unique_copy" << "upper_bound";
+            << "unique_copy" << "upper_bound" << "string" << "wstring" << "u16string" << "u32string";
     const std::set<std::string> algorithm22 = make_container< std::set<std::string> >() // func(begin1 << end1 << begin2 << end2
             << "find_end" << "find_first_of" << "includes" << "lexicographical_compare" << "merge" << "partial_sort_copy"
             << "search" << "set_difference" << "set_intersection" << "set_symmetric_difference" << "set_union";
@@ -287,6 +287,14 @@ void CheckStl::mismatchingContainers()
                 }
             }
             tok = arg1->linkAt(-1);
+        }
+    }
+    for (unsigned int varid = 0; varid < symbolDatabase->getVariableListSize(); varid++) {
+        const Variable* var = symbolDatabase->getVariableFromVarId(varid);
+        if (var && var->isStlStringType() && Token::Match(var->nameToken(), "%var% (") && Token::Match(var->nameToken()->tokAt(2), pattern2.c_str())) {
+            if (var->nameToken()->strAt(2) != var->nameToken()->strAt(8)) {
+                mismatchingContainersError(var->nameToken());
+            }
         }
     }
 }
@@ -742,7 +750,7 @@ static bool if_findCompare(const Token * const tokBack)
     if (!tok)
         return true;
     if (tok->isComparisonOp())
-        return true;
+        return (!tok->astOperand1()->isNumber() && !tok->astOperand2()->isNumber());
     if (tok->isArithmeticalOp()) // result is used in some calculation
         return true;  // TODO: check if there is a comparison of the result somewhere
     if (tok->str() == ".")
@@ -765,11 +773,7 @@ void CheckStl::if_find()
         if ((i->type != Scope::eIf && i->type != Scope::eWhile) || !i->classDef)
             continue;
 
-        const Token* tok = i->classDef->next();
-        if (tok->str() == "if")
-            tok = tok->next();
-
-        for (const Token* const end = tok->link(); tok != end; tok = (tok == end) ? end : tok->next()) {
+        for (const Token *tok = i->classDef; tok->str() != "{"; tok = tok->next()) {
             const Token* funcTok = nullptr;
             const Library::Container* container = nullptr;
 

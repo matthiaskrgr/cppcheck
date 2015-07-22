@@ -216,15 +216,6 @@ public:
     void checkReallocUsage();
 
     /**
-     * @brief %Check if there is a "!var" match inside a condition
-     * @param tok      first token to match
-     * @param varid    variable id
-     * @param endpar   if this is true the "!var" must be followed by ")"
-     * @return true if match
-     */
-    static bool notvar(const Token *tok, unsigned int varid, bool endpar = false);
-
-    /**
      * Inspect a function call. the call_func and getcode are recursive
      * @param tok          token where the function call occurs
      * @param callstack    callstack

@@ -134,7 +134,16 @@ private:
         TEST_CASE(garbageCode92);
         TEST_CASE(garbageCode93);
         TEST_CASE(garbageCode94);
-		TEST_CASE(garbageCode95);
+        TEST_CASE(garbageCode95);
+        TEST_CASE(garbageCode96);
+        TEST_CASE(garbageCode97);
+        TEST_CASE(garbageCode98);
+        TEST_CASE(garbageCode99);
+        TEST_CASE(garbageCode100);
+        TEST_CASE(garbageCode101); // #6835
+        TEST_CASE(garbageCode102); // #6846
+        TEST_CASE(garbageCode103); // #6824
+        TEST_CASE(garbageCode104); // #6847
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -142,18 +151,17 @@ private:
         TEST_CASE(templateSimplifierCrashes);
     }
 
-	std::string checkCode(const char code[], const std::string& filename = "test.cpp") {
-		// double the tests - run each example as C as well as C++
-		const std::string alternatefilename = (filename=="test.c") ? "test.cpp" : "test.c";
-		// run alternate check first. It should only ensure stability
-		try {
-			checkCodeInternal(code, alternatefilename);
-		}
-		catch(InternalError& ) {
-		}
+    std::string checkCode(const char code[], const std::string& filename = "test.cpp") {
+        // double the tests - run each example as C as well as C++
+        const std::string alternatefilename = (filename=="test.c") ? "test.cpp" : "test.c";
+        // run alternate check first. It should only ensure stability
+        try {
+            checkCodeInternal(code, alternatefilename);
+        } catch (InternalError&) {
+        }
 
-		return checkCodeInternal(code, filename);
-	}
+        return checkCodeInternal(code, filename);
+    }
 
     std::string checkCodeInternal(const char code[], const std::string& filename) {
         errout.str("");
@@ -170,7 +178,7 @@ private:
         // tokenize..
         Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
-		tokenizer.tokenize(istr, filename.c_str());
+        tokenizer.tokenize(istr, filename.c_str());
 
         // call all "runChecks" in all registered Check classes
         for (std::list<Check *>::const_iterator it = Check::instances().begin(); it != Check::instances().end(); ++it) {
@@ -259,16 +267,26 @@ private:
         // #3585
         const char code[] = "class x y { };";
 
-        errout.str("");
-
-        Settings settings;
-        settings.addEnabled("information");
-        Tokenizer tokenizer(&settings, this);
-        std::istringstream istr(code);
-        tokenizer.tokenize(istr, "test.c");
-        tokenizer.simplifyTokenList2();
-
-        ASSERT_EQUALS("[test.c:1]: (information) The code 'class x y {' is not handled. You can use -I or --include to add handling of this code.\n", errout.str());
+        {
+            errout.str("");
+            Settings settings;
+            settings.addEnabled("information");
+            Tokenizer tokenizer(&settings, this);
+            std::istringstream istr(code);
+            tokenizer.tokenize(istr, "test.c");
+            tokenizer.simplifyTokenList2();
+            ASSERT_EQUALS("", errout.str());
+        }
+        {
+            errout.str("");
+            Settings settings;
+            settings.addEnabled("information");
+            Tokenizer tokenizer(&settings, this);
+            std::istringstream istr(code);
+            tokenizer.tokenize(istr, "test.cpp");
+            tokenizer.simplifyTokenList2();
+            ASSERT_EQUALS("[test.cpp:1]: (information) The code 'class x y {' is not handled. You can use -I or --include to add handling of this code.\n", errout.str());
+        }
     }
 
     void syntax_case_default() {
@@ -749,7 +767,51 @@ private:
     }
 
     void garbageCode95() { // #6804
-        checkCode("{ } x x ; { } h h [ ] ( ) ( ) { struct x ( x ) ; int __attribute__ ( ) f ( ) { h - > first = & x ; struct x * n = h - > first ; ( ) n > } }");	 // do not crash
+        checkCode("{ } x x ; { } h h [ ] ( ) ( ) { struct x ( x ) ; int __attribute__ ( ) f ( ) { h - > first = & x ; struct x * n = h - > first ; ( ) n > } }");    // do not crash
+    }
+
+    void garbageCode96() { // #6807
+        ASSERT_THROW(checkCode("typedef J J[ ; typedef ( ) ( ) { ; } typedef J J ;] ( ) ( J cx ) { n } ;"), InternalError);
+    }
+
+    void garbageCode97() { // #6808
+        ASSERT_THROW(checkCode("namespace A {> } class A{ { }} class A : T< ;"), InternalError);
+    }
+
+    void garbageCode98() { // #6838
+        ASSERT_THROW(checkCode("for (cocon To::ta@Taaaaaforconst oken aaaaaaaaaaaa5Dl()\n"
+                               "const unsiged in;\n"
+                               "fon *tok = f);.s(Token i = d-)L;"), InternalError);
+    }
+
+    void garbageCode99() { // #6726
+        ASSERT_THROW(checkCode("{ xs :: i(:) ! ! x/5 ! !\n"
+                               "i, :: a :: b integer, } foo2(x) :: j(:) \n"
+                               "b type(*), d(:), a x :: end d(..), foo end\n"
+                               "foo4 b d(..), a a x type(*), b foo2 b"), InternalError);
+    }
+
+    void garbageCode100() { // #6840
+        checkCode("( ) { ( i< ) } int foo ( ) { int i ; ( for ( i => 1 ) ; ) }");
+    }
+
+    void garbageCode101() { // #6835
+        // Reported case
+        checkCode("template < class , =( , int) X = 1 > struct A { } ( ) { = } [ { } ] ( ) { A < void > 0 }");
+        // Reduced case
+        checkCode("template < class =( , ) X = 1> struct A {}; A<void> a;");
+    }
+
+    void garbageCode102() { // #6846
+        checkCode("struct Object { ( ) ; Object & operator= ( Object ) { ( ) { } if ( this != & b ) } }");
+    }
+
+    void garbageCode103() { // #6824
+        ASSERT_THROW(checkCode("a f(r) int * r; { { int s[2]; [f(s); if () ]  } }"), InternalError);
+    }
+
+    void garbageCode104() { // #6847
+        ASSERT_THROW(checkCode("template < Types > struct S {> ( S < ) S >} { ( ) { } } ( ) { return S < void > ( ) } { ( )> >} { ( ) { } } ( ) { ( ) }"), InternalError);
     }
 
     void garbageValueFlow() {

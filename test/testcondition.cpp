@@ -46,6 +46,7 @@ private:
         TEST_CASE(incorrectLogicOperator5); // complex expressions
         TEST_CASE(incorrectLogicOperator6); // char literals
         TEST_CASE(incorrectLogicOperator7); // opposite expressions: (expr || !expr)
+        TEST_CASE(incorrectLogicOperator8); // !
         TEST_CASE(secondAlwaysTrueFalseWhenFirstTrueError);
         TEST_CASE(incorrectLogicOp_condSwapping);
         TEST_CASE(testBug5895);
@@ -61,6 +62,8 @@ private:
         TEST_CASE(clarifyCondition4);     // ticket #3110
         TEST_CASE(clarifyCondition5);     // #3609 CWinTraits<WS_CHILD|WS_VISIBLE>..
         TEST_CASE(clarifyCondition6);     // #3818
+
+        TEST_CASE(alwaysTrue);
     }
 
     void check(const char code[], bool validate=true, const char* filename = "test.cpp") {
@@ -571,6 +574,16 @@ private:
              );
         ASSERT_EQUALS("[test.cpp:2]: (warning) Logical disjunction always evaluates to true: x != 1 || x != 3.\n", errout.str());
 
+        check("void f(int x) {\n"
+              "  if (x<0 && !x) {}\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Logical conjunction always evaluates to false: x < 0 && !x.\n", errout.str());
+
+        check("void f(int x) {\n"
+              "  if (x==0 && x) {}\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Logical conjunction always evaluates to false: x == 0 && x.\n", errout.str());
+
         check("void f(int x) {\n" // ast..
               "    if (y == 1 && x == 1 && x == 7) { }\n"
               "}\n");
@@ -924,6 +937,13 @@ private:
               "  if (a>b || a<b) {}\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+    }
+
+    void incorrectLogicOperator8() { // opposite expressions
+        check("void f(int i) {\n"
+              "  if (!(i!=10) && !(i!=20)) {}\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Logical conjunction always evaluates to false: !(i != 10) && !(i != 20).\n", errout.str());
     }
 
     void secondAlwaysTrueFalseWhenFirstTrueError() {
@@ -1284,6 +1304,16 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
+        // #6313 - false postive: opposite conditions in nested if blocks when condition changed
+        check("void Foo::Bar() {\n"
+              "   if(var){\n"
+              "      --var;\n"
+              "      if(!var){}\n"
+              "      else {}\n"
+              "   }\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
         // #5874 - array
         check("void testOppositeConditions2() {\n"
               "  int array[2] = { 0, 0 };\n"
@@ -1295,7 +1325,7 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
-// clarify conditions with = and comparison
+    // clarify conditions with = and comparison
     void clarifyCondition1() {
         check("void f() {\n"
               "    if (x = b() < 0) {}\n" // don't simplify and verify this code
@@ -1369,7 +1399,7 @@ private:
               "   int y = rand(), z = rand();\n"
               "   if (y==0 || y!=0 && z);\n"
               "}", false);
-        ASSERT_EQUALS("[test.cpp:3]: (style) Redundant condition: y. 'A && (!A || B)' is equivalent to 'A || B'\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (style) Redundant condition: y!=0. 'A && (!A || B)' is equivalent to 'A || B'\n", errout.str());
 
         check("void f() {\n"
               "  if (x>0 || (x<0 && y)) {}\n"
@@ -1455,7 +1485,7 @@ private:
               "        ;\n"
               "}");
 #ifdef _MSC_VER
-		ASSERT_EQUALS("", errout.str());
+        ASSERT_EQUALS("", errout.str());
 #else
         TODO_ASSERT_EQUALS("", "[test.cpp:2]: (style) Redundant condition: If init == 9894494448401390090, the comparison init == 9965707617509186058 is always true.\n", errout.str());
 #endif
@@ -1468,6 +1498,15 @@ private:
               "            && ( value <= 0x7fffffffffffffffULL ) );\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+    }
+
+    void alwaysTrue() {
+        check("void f() {\n" // #4842
+              "  int x = 0;\n"
+              "  if (a) { return; }\n" // <- this is just here to fool simplifyKnownVariabels
+              "  if (!x) {}\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (style) Condition !x is always true\n", errout.str());
     }
 };
 

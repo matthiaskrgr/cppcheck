@@ -118,6 +118,8 @@ public:
     */
     bool simplifyTokenList1(const char FileName[]);
 
+    void SimplifyNamelessRValueReferences();
+
     /**
     * Most aggressive simplification of tokenlist
     *
@@ -296,19 +298,6 @@ public:
      * Example: "a = b = c = 0;" => "a = 0; b = 0; c = 0;"
      */
     void simplifyVariableMultipleAssign();
-
-    /**
-     * simplify if-not
-     * Example: "if(0==x);" => "if(!x);"
-     */
-    void simplifyIfNot();
-
-    /**
-     * simplify if-not NULL
-     * Example: "if(0!=x);" => "if(x);"
-     * Special case: 'x = (0 != x);' is removed.
-     */
-    void simplifyIfNotNull();
 
     /** @brief simplify if (a) { if (a) */
     void simplifyIfSameInnerCondition();
@@ -533,6 +522,14 @@ public:
     static std::string simplifyString(const std::string &source);
 
 private:
+
+    /**
+     * is token pointing at function head?
+     * @param tok         A '(' or ')' token in a possible function head
+     * @param endsWith    string after function head
+     * @return token matching with endsWith if syntax seems to be a function head else nullptr
+     */
+    const Token * isFunctionHead(const Token *tok, const std::string &endsWith) const;
 
     /**
      * Change "int const x;" into "const int x;"

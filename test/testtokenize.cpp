@@ -84,7 +84,6 @@ private:
         TEST_CASE(removeCast3);
         TEST_CASE(removeCast4);
         TEST_CASE(removeCast5);
-        TEST_CASE(removeCast6);
         TEST_CASE(removeCast7);
         TEST_CASE(removeCast8);
         TEST_CASE(removeCast9);
@@ -126,8 +125,6 @@ private:
 
         TEST_CASE(forAddBraces1);
         TEST_CASE(forAddBraces2); // #5088
-
-        TEST_CASE(pointers_condition);
 
         TEST_CASE(simplifyKnownVariables1);
         TEST_CASE(simplifyKnownVariables2);
@@ -474,6 +471,7 @@ private:
 
         TEST_CASE(sizeofAddParentheses);
         TEST_CASE(incompleteTernary); // #6659
+        TEST_CASE(noreturn); // #5783
     }
 
     std::string tokenizeAndStringify(const char code[], bool simplify = false, bool expand = true, Settings::PlatformType platform = Settings::Unspecified, const char* filename = "test.cpp", bool cpp11 = true) {
@@ -972,11 +970,6 @@ private:
         ASSERT_EQUALS("a . data = f ;", tokenizeAndStringify("a->data = reinterpret_cast<void*>(static_cast<intptr_t>(f));", true));
     }
 
-    void removeCast6() {
-        // ticket #2103
-        ASSERT_EQUALS("if ( ! x ) { ; }", tokenizeAndStringify("if (x == (char *) ((void *)0)) ;", true));
-    }
-
     void removeCast7() {
         ASSERT_EQUALS("str = malloc ( 3 )", tokenizeAndStringify("str=(char **)malloc(3)", true));
     }
@@ -1075,51 +1068,11 @@ private:
         ASSERT_EQUALS("asm ( \"\"ddd\"\" ) ;", tokenizeAndStringify(" __asm __volatile__ (\"ddd\") ;"));
         ASSERT_EQUALS("asm ( \"\"ddd\"\" ) ;", tokenizeAndStringify(" __asm __volatile (\"ddd\") ;"));
         ASSERT_EQUALS("asm ( \"\"mov ax,bx\"\" ) ;", tokenizeAndStringify("__asm__ volatile ( \"mov ax,bx\" );"));
+        ASSERT_EQUALS("asm ( \"mov ax , bx\" ) ; int a ;", tokenizeAndStringify("asm { mov ax,bx } int a;"));
 
         // 'asm ( ) ;' should be in the same line
         ASSERT_EQUALS(";\n\nasm ( \"\"mov ax,bx\"\" ) ;", tokenizeAndStringify(";\n\n__asm__ volatile ( \"mov ax,bx\" );", true));
     }
-
-
-    void pointers_condition() {
-        ASSERT_EQUALS("( p )", tokenizeAndStringify("( p != NULL )", true));
-        ASSERT_EQUALS("( p )", tokenizeAndStringify("( NULL != p )", true));
-        ASSERT_EQUALS("( this . p )", tokenizeAndStringify("( this->p != NULL )", true));
-        ASSERT_EQUALS("( this . p )", tokenizeAndStringify("( NULL != this->p )", true));
-        ASSERT_EQUALS("( Foo :: p )", tokenizeAndStringify("( Foo::p != NULL )", true));
-        ASSERT_EQUALS("( Foo :: p )", tokenizeAndStringify("( NULL != Foo::p )", true));
-
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( p == NULL )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( NULL == p )", true));
-        ASSERT_EQUALS("( ! this . p )", tokenizeAndStringify("( this->p == NULL )", true));
-        ASSERT_EQUALS("( ! this . p )", tokenizeAndStringify("( NULL == this->p )", true));
-        ASSERT_EQUALS("( ! Foo :: p )", tokenizeAndStringify("( Foo::p == NULL )", true));
-        ASSERT_EQUALS("( ! Foo :: p )", tokenizeAndStringify("( NULL == Foo::p )", true));
-
-        ASSERT_EQUALS("( p1 || ! p2 )", tokenizeAndStringify("( p1 != NULL || p2 == NULL )", true));
-        ASSERT_EQUALS("( p1 && ! p2 )", tokenizeAndStringify("( p1 != NULL && p2 == NULL )", true));
-        ASSERT_EQUALS("a & & b", tokenizeAndStringify("a & &b", true));
-
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( p == false )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( p == 0 )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( p == '\\0' )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( p == 0L )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( p == 0UL )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( p == 0ul )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( p == 0l )", true));
-
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( false == p )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( 0 == p )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( '\\0' == p )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( 0L == p )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( 0UL == p )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( 0ul == p )", true));
-        ASSERT_EQUALS("( ! p )", tokenizeAndStringify("( 0l == p )", true));
-
-        // not pointer
-        ASSERT_EQUALS("( x != ( y != 0 ) )", tokenizeAndStringify("( x != ( y != 0 ) )", false));
-    }
-
 
     void ifAddBraces1() {
         const char code[] = "void f()\n"
@@ -8596,6 +8549,7 @@ private:
         ASSERT_EQUALS("name_bytes[bits~unusedBits>>unusedBits<<{=", testAst("const uint8_t name_bytes[] = { (~bits >> unusedBits) << unusedBits };"));
         ASSERT_EQUALS("abuf0{={=", testAst("a = { .buf = { 0 } };"));
         ASSERT_EQUALS("tset{=", testAst("struct cgroup_taskset tset = {};"));
+        ASSERT_EQUALS("s1a&,{2b&,{,{=", testAst("s = { {1, &a}, {2, &b} };"));
 
         // template paratheses: <>
         ASSERT_EQUALS("stdfabs::m_similarity(numeric_limitsepsilon::(<=return", testAst("return std::fabs(m_similarity) <= numeric_limits<double>::epsilon();")); // #6195
@@ -8771,6 +8725,31 @@ private:
                             "}";
 
         tokenizeAndStringify(code, true);
+    }
+
+    // see #5783
+    void noreturn() {
+        const char code[] = "void myassert() {\n"
+                            "  exit(1);\n"
+                            "}\n"
+                            "void f(char *buf) {\n"
+                            "  if(i==0) {\n"
+                            "    free(buf);\n"
+                            "    myassert();\n"
+                            "  }\n"
+                            "  free(buf);\n"
+                            "}\n";
+        Settings settings;
+
+        // tokenize..
+        Tokenizer tokenizer(&settings, this);
+        std::istringstream istr(code);
+        tokenizer.tokenize(istr, "test.cpp");
+
+        const Token * func = Token::findsimplematch(tokenizer.tokens(), "myassert");
+
+        TODO_ASSERT(func && func->isAttributeNoreturn());
+
     }
 };
 

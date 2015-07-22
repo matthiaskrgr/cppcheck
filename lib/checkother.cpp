@@ -306,12 +306,12 @@ void CheckOther::clarifyStatement()
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token* tok = scope->classStart; tok && tok != scope->classEnd; tok = tok->next()) {
             if (Token::Match(tok, "* %name%") && tok->astOperand1()) {
-                const Token *tok2=tok->previous();
+                const Token *tok2 = tok->previous();
 
                 while (tok2 && tok2->str() == "*")
                     tok2 = tok2->previous();
 
-                if (!tok2->astParent() && Token::Match(tok2, "[{};]")) {
+                if (tok2 && !tok2->astParent() && Token::Match(tok2, "[{};]")) {
                     tok2 = tok->astOperand1();
                     if (Token::Match(tok2, "++|-- [;,]"))
                         clarifyStatementError(tok2);
@@ -2638,7 +2638,7 @@ void CheckOther::checkVarFuncNullUB()
                     if (f && f->argCount() <= argnr) {
                         const Token *tok2 = f->argDef;
                         tok2 = tok2 ? tok2->link() : nullptr; // goto ')'
-                        if (Token::simpleMatch(tok2->tokAt(-3), ". . ."))
+                        if (tok2 && Token::simpleMatch(tok2->tokAt(-3), ". . ."))
                             varFuncNullUBError(tok);
                     }
                 }

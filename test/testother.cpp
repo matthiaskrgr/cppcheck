@@ -1661,39 +1661,39 @@ private:
         // atan2
         check("void foo()\n"
               "{\n"
-              "    std::cout <<  atan2(1,1)        << std::endl;\n"
-              "    std::cout <<  atan2(-1,-1)      << std::endl;\n"
-              "    std::cout <<  atan2(0.1,1)      << std::endl;\n"
-              "    std::cout <<  atan2(0.0001,100) << std::endl;\n"
-              "    std::cout <<  atan2(0.01m-1)    << std::endl;\n"
-              "    std::cout <<  atan2(1.0E-1,-3)  << std::endl;\n"
-              "    std::cout <<  atan2(-1.0E-1,+2) << std::endl;\n"
-              "    std::cout <<  atan2(+1.0E-1,0)  << std::endl;\n"
-              "    std::cout <<  atan2(0.1E-1,3)   << std::endl;\n"
-              "    std::cout <<  atan2(+0.1E-1,1)  << std::endl;\n"
-              "    std::cout <<  atan2(-0.1E-1,8)  << std::endl;\n"
-              "    std::cout <<  atan2f(1,1)        << std::endl;\n"
-              "    std::cout <<  atan2f(-1,-1)      << std::endl;\n"
-              "    std::cout <<  atan2f(0.1,1)      << std::endl;\n"
-              "    std::cout <<  atan2f(0.0001,100) << std::endl;\n"
-              "    std::cout <<  atan2f(0.01m-1)    << std::endl;\n"
-              "    std::cout <<  atan2f(1.0E-1,-3)  << std::endl;\n"
-              "    std::cout <<  atan2f(-1.0E-1,+2) << std::endl;\n"
-              "    std::cout <<  atan2f(+1.0E-1,0)  << std::endl;\n"
-              "    std::cout <<  atan2f(0.1E-1,3)   << std::endl;\n"
-              "    std::cout <<  atan2f(+0.1E-1,1)  << std::endl;\n"
-              "    std::cout <<  atan2f(-0.1E-1,8)  << std::endl;\n"
-              "    std::cout <<  atan2l(1,1)        << std::endl;\n"
-              "    std::cout <<  atan2l(-1,-1)      << std::endl;\n"
-              "    std::cout <<  atan2l(0.1,1)      << std::endl;\n"
-              "    std::cout <<  atan2l(0.0001,100) << std::endl;\n"
-              "    std::cout <<  atan2l(0.01m-1)    << std::endl;\n"
-              "    std::cout <<  atan2l(1.0E-1,-3)  << std::endl;\n"
-              "    std::cout <<  atan2l(-1.0E-1,+2) << std::endl;\n"
-              "    std::cout <<  atan2l(+1.0E-1,0)  << std::endl;\n"
-              "    std::cout <<  atan2l(0.1E-1,3)   << std::endl;\n"
-              "    std::cout <<  atan2l(+0.1E-1,1)  << std::endl;\n"
-              "    std::cout <<  atan2l(-0.1E-1,8)  << std::endl;\n"
+              "    std::cout <<  atan2(1,1)         ;\n"
+              "    std::cout <<  atan2(-1,-1)       ;\n"
+              "    std::cout <<  atan2(0.1,1)       ;\n"
+              "    std::cout <<  atan2(0.0001,100)  ;\n"
+              "    std::cout <<  atan2(0.0,1e-1)    ;\n"
+              "    std::cout <<  atan2(1.0E-1,-3)   ;\n"
+              "    std::cout <<  atan2(-1.0E-1,+2)  ;\n"
+              "    std::cout <<  atan2(+1.0E-1,0)   ;\n"
+              "    std::cout <<  atan2(0.1E-1,3)    ;\n"
+              "    std::cout <<  atan2(+0.1E-1,1)   ;\n"
+              "    std::cout <<  atan2(-0.1E-1,8)   ;\n"
+              "    std::cout <<  atan2f(1,1)        ;\n"
+              "    std::cout <<  atan2f(-1,-1)      ;\n"
+              "    std::cout <<  atan2f(0.1,1)      ;\n"
+              "    std::cout <<  atan2f(0.0001,100) ;\n"
+              "    std::cout <<  atan2f(0.0,1e-1)   ;\n"
+              "    std::cout <<  atan2f(1.0E-1,-3)  ;\n"
+              "    std::cout <<  atan2f(-1.0E-1,+2) ;\n"
+              "    std::cout <<  atan2f(+1.0E-1,0)  ;\n"
+              "    std::cout <<  atan2f(0.1E-1,3)   ;\n"
+              "    std::cout <<  atan2f(+0.1E-1,1)  ;\n"
+              "    std::cout <<  atan2f(-0.1E-1,8)  ;\n"
+              "    std::cout <<  atan2l(1,1)        ;\n"
+              "    std::cout <<  atan2l(-1,-1)      ;\n"
+              "    std::cout <<  atan2l(0.1,1)      ;\n"
+              "    std::cout <<  atan2l(0.0001,100) ;\n"
+              "    std::cout <<  atan2l(0.0,1e-1)   ;\n"
+              "    std::cout <<  atan2l(1.0E-1,-3)  ;\n"
+              "    std::cout <<  atan2l(-1.0E-1,+2) ;\n"
+              "    std::cout <<  atan2l(+1.0E-1,0)  ;\n"
+              "    std::cout <<  atan2l(0.1E-1,3)   ;\n"
+              "    std::cout <<  atan2l(+0.1E-1,1)  ;\n"
+              "    std::cout <<  atan2l(-0.1E-1,8)  ;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
 
@@ -3413,6 +3413,23 @@ private:
               "    struct callbacks ops = { .something = ops.something };\n"
               "}\n");
         TODO_ASSERT_EQUALS("[test.cpp:6]: (warning) Redundant assignment of 'something' to itself.\n", "", errout.str());
+
+        check("class V\n"
+              "{\n"
+              "public:\n"
+              "    V()\n"
+              "    {\n"
+              "        x = y = z = 0.0;\n"
+              "    }\n"
+              "    V( double x, const double y, const double &z )\n"
+              "    {\n"
+              "        x = x; y = y; z = z;\n"
+              "    }\n"
+              "    double x, y, z;\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:10]: (warning) Redundant assignment of 'x' to itself.\n"
+                      "[test.cpp:10]: (warning) Redundant assignment of 'y' to itself.\n"
+                      "[test.cpp:10]: (warning) Redundant assignment of 'z' to itself.\n", errout.str());
 
     }
 
@@ -6034,7 +6051,7 @@ private:
               "    if (ull == 0x89504e470d0a1a0a || ull == 0x8a4d4e470d0a1a0a) ;\n"
               "}\n");
 #ifdef _MSC_VER
-		TODO_ASSERT_EQUALS("", "[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
+        TODO_ASSERT_EQUALS("", "[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
 #else
         ASSERT_EQUALS("", errout.str());
 #endif
