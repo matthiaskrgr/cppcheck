@@ -124,54 +124,39 @@ bool CppCheckExecutor::parseFromArgs(CppCheck *cppcheck, int argc, const char* c
         }
     }
 
-    const std::vector<std::string>& pathnames = parser.GetPathNames();
-
-    if (!pathnames.empty()) {
-        // Execute recursiveAddFiles() to each given file parameter
-        std::vector<std::string>::const_iterator iter;
-        for (iter = pathnames.begin(); iter != pathnames.end(); ++iter)
-            FileLister::recursiveAddFiles(_files, Path::toNativeSeparators(*iter), _settings->library.markupExtensions());
+    // Output a warning for the user if he tries to exclude headers
+    bool warn = false;
+    const std::vector<std::string>& ignored = parser.GetIgnoredPaths();
+    for (std::vector<std::string>::const_iterator i = ignored.cbegin(); i != ignored.cend(); ++i) {
+        if (Path::isHeader(*i)) {
+            warn = true;
+            break;
+        }
+    }
+    if (warn) {
+        std::cout << "cppcheck: filename exclusion does not apply to header (.h and .hpp) files." << std::endl;
+        std::cout << "cppcheck: Please use --suppress for ignoring results from the header files." << std::endl;
     }
 
-    if (!_files.empty()) {
-        // Remove header files from the list of ignored files.
-        // Also output a warning for the user.
-        // TODO: Remove all unknown files? (use FileLister::acceptFile())
-        bool warn = false;
-        std::vector<std::string> ignored = parser.GetIgnoredPaths();
-        for (std::vector<std::string>::iterator i = ignored.begin(); i != ignored.end();) {
-            const std::string extension = Path::getFilenameExtension(*i);
-            if (extension == ".h" || extension == ".hpp") {
-                i = ignored.erase(i);
-                warn = true;
-            } else
-                ++i;
-        }
-        if (warn) {
-            std::cout << "cppcheck: filename exclusion does not apply to header (.h and .hpp) files." << std::endl;
-            std::cout << "cppcheck: Please use --suppress for ignoring results from the header files." << std::endl;
-        }
+    const std::vector<std::string>& pathnames = parser.GetPathNames();
 
 #if defined(_WIN32)
-        // For Windows we want case-insensitive path matching
-        const bool caseSensitive = false;
+    // For Windows we want case-insensitive path matching
+    const bool caseSensitive = false;
 #else
-        const bool caseSensitive = true;
+    const bool caseSensitive = true;
 #endif
-        PathMatch matcher(parser.GetIgnoredPaths(), caseSensitive);
-        for (std::map<std::string, std::size_t>::iterator i = _files.begin(); i != _files.end();) {
-            if (matcher.Match(i->first))
-                _files.erase(i++);
-            else
-                ++i;
-        }
-    } else {
-        std::cout << "cppcheck: error: could not find or open any of the paths given." << std::endl;
-        return false;
+    if (!pathnames.empty()) {
+        // Execute recursiveAddFiles() to each given file parameter
+        PathMatch matcher(ignored, caseSensitive);
+        for (std::vector<std::string>::const_iterator iter = pathnames.begin(); iter != pathnames.end(); ++iter)
+            FileLister::recursiveAddFiles(_files, Path::toNativeSeparators(*iter), _settings->library.markupExtensions(), matcher);
     }
 
     if (_files.empty()) {
-        std::cout << "cppcheck: error: no files to check - all paths ignored." << std::endl;
+        std::cout << "cppcheck: error: could not find or open any of the paths given." << std::endl;
+        if (!ignored.empty())
+            std::cout << "cppcheck: Maybe all paths were ignored?" << std::endl;
         return false;
     }
     return true;
@@ -595,22 +580,22 @@ static void PrintCallstack(FILE* f, PEXCEPTION_POINTERS ex)
 static void writeMemoryErrorDetails(FILE* f, PEXCEPTION_POINTERS ex, const char* description)
 {
     fputs(description, f);
-    fprintf(f, " (instruction: 0x%X) ", ex->ExceptionRecord->ExceptionAddress);
+    fprintf(f, " (instruction: 0x%p) ", ex->ExceptionRecord->ExceptionAddress);
     // Using %p for ULONG_PTR later on, so it must have size identical to size of pointer
     // This is not the universally portable solution but good enough for Win32/64
     C_ASSERT(sizeof(void*) == sizeof(ex->ExceptionRecord->ExceptionInformation[1]));
     switch (ex->ExceptionRecord->ExceptionInformation[0]) {
     case 0:
-        fprintf(f, "reading from 0x%X",
-                ex->ExceptionRecord->ExceptionInformation[1]);
+        fprintf(f, "reading from 0x%p",
+                reinterpret_cast<void*>(ex->ExceptionRecord->ExceptionInformation[1]));
         break;
     case 1:
-        fprintf(f, "writing to 0x%X",
-                ex->ExceptionRecord->ExceptionInformation[1]);
+        fprintf(f, "writing to 0x%p",
+                reinterpret_cast<void*>(ex->ExceptionRecord->ExceptionInformation[1]));
         break;
     case 8:
-        fprintf(f, "data execution prevention at 0x%X",
-                ex->ExceptionRecord->ExceptionInformation[1]);
+        fprintf(f, "data execution prevention at 0x%p",
+                reinterpret_cast<void*>(ex->ExceptionRecord->ExceptionInformation[1]));
         break;
     default:
         break;

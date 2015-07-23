@@ -37,18 +37,17 @@ class Variable;
 class CPPCHECKLIB CheckUninitVar : public Check {
 public:
     /** @brief This constructor is used when registering the CheckUninitVar */
-    CheckUninitVar() : Check(myName()), testrunner(false) {
+    CheckUninitVar() : Check(myName()) {
     }
 
     /** @brief This constructor is used when running checks. */
     CheckUninitVar(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger)
-        : Check(myName(), tokenizer, settings, errorLogger), testrunner(false) {
+        : Check(myName(), tokenizer, settings, errorLogger) {
     }
 
     /** @brief Run checks against the simplified token list */
     void runSimplifiedChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
         CheckUninitVar checkUninitVar(tokenizer, settings, errorLogger);
-        checkUninitVar.executionPaths();
         checkUninitVar.check();
         checkUninitVar.deadPointer();
     }
@@ -57,11 +56,11 @@ public:
     void check();
     void checkScope(const Scope* scope);
     void checkStruct(const Token *tok, const Variable &structvar);
-    enum Alloc { NO_ALLOC, NO_CTOR_CALL, CTOR_CALL };
+    enum Alloc { NO_ALLOC, NO_CTOR_CALL, CTOR_CALL, ARRAY };
     bool checkScopeForVariable(const Token *tok, const Variable& var, bool* const possibleInit, bool* const noreturn, Alloc* const alloc, const std::string &membervar);
     bool checkIfForWhileHead(const Token *startparentheses, const Variable& var, bool suppressErrors, bool isuninit, Alloc alloc, const std::string &membervar);
     bool checkLoopBody(const Token *tok, const Variable& var, const Alloc alloc, const std::string &membervar, const bool suppressErrors);
-    void checkRhs(const Token *tok, const Variable &var, Alloc alloc, const std::string &membervar);
+    void checkRhs(const Token *tok, const Variable &var, Alloc alloc, unsigned int number_of_if, const std::string &membervar);
     bool isVariableUsage(const Token *vartok, bool ispointer, Alloc alloc) const;
     int isFunctionParUsage(const Token *vartok, bool ispointer, Alloc alloc) const;
     bool isMemberVariableAssignment(const Token *tok, const std::string &membervar) const;
@@ -89,16 +88,16 @@ public:
 
     void analyseFunctions(const Tokenizer *tokenizer, std::set<std::string> &f) const;
 
-    /** @brief new type of check: check execution paths */
-    void executionPaths();
-
     void uninitstringError(const Token *tok, const std::string &varname, bool strncpy_);
     void uninitdataError(const Token *tok, const std::string &varname);
     void uninitvarError(const Token *tok, const std::string &varname);
+    void uninitvarError(const Token *tok, const std::string &varname, Alloc alloc) {
+        if (alloc == NO_CTOR_CALL || alloc == CTOR_CALL)
+            uninitdataError(tok, varname);
+        else
+            uninitvarError(tok, varname);
+    }
     void uninitStructMemberError(const Token *tok, const std::string &membername);
-
-    /** testrunner: (don't abort() when assertion fails, just write error message) */
-    bool testrunner;
 
 private:
     void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {

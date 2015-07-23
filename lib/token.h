@@ -374,6 +374,12 @@ public:
     void isAttributeNothrow(bool value) {
         setFlag(fIsAttributeNothrow, value);
     }
+    bool isOperatorKeyword() const {
+        return getFlag(fIsOperatorKeyword);
+    }
+    void isOperatorKeyword(bool value) {
+        setFlag(fIsOperatorKeyword, value);
+    }
 
     static const Token *findsimplematch(const Token *tok, const char pattern[]);
     static const Token *findsimplematch(const Token *tok, const char pattern[], const Token *end);
@@ -711,6 +717,9 @@ public:
 
     const Token *getValueTokenDeadPointer() const;
 
+    /** Recursively search for variable comparison against value */
+    static const Token * findVariableComparison(const Token *tok, const std::string &comp, const std::string &rhs, const Token **vartok=nullptr);
+
 private:
 
     void next(Token *nextToken) {
@@ -774,7 +783,8 @@ private:
         fIsAttributeConst       = (1 << 11), // __attribute__((const))
         fIsAttributeNoreturn    = (1 << 12), // __attribute__((noreturn)), __declspec(noreturn)
         fIsAttributeNothrow     = (1 << 13), // __attribute__((nothrow)), __declspec(nothrow)
-        fIsAttributeUsed        = (1 << 14)  // __attribute__((used))
+        fIsAttributeUsed        = (1 << 14), // __attribute__((used))
+        fIsOperatorKeyword      = (1 << 15)  // operator=, etc
     };
 
     unsigned int _flags;

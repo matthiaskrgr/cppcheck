@@ -2023,7 +2023,7 @@ void Tokenizer::simplifyExternC()
     if (isC())
         return;
     for (Token *tok = list.front(); tok; tok = tok->next()) {
-        if (Token::Match(tok, "extern \"C\" {|")) {
+        if (Token::simpleMatch(tok, "extern \"C\"")) {
             if (tok->strAt(2) == "{") {
                 tok->linkAt(2)->deleteThis();
                 tok->deleteNext(2);
@@ -2776,10 +2776,7 @@ void Tokenizer::setVarId()
                 else if (Token::Match(prev2, "%type% ( !!)") && Token::simpleMatch(tok2->link(), ") ;")) {
                     // In C++ , a variable can't be called operator+ or something like that.
                     if (isCPP() &&
-                        prev2->str().size() >= 9 &&
-                        prev2->str().compare(0, 8, "operator") == 0 &&
-                        prev2->str()[8] != '_' &&
-                        !std::isalnum(prev2->str()[8]))
+                        prev2->isOperatorKeyword())
                         continue;
 
                     const Token *tok3 = tok2->next();
@@ -6902,12 +6899,9 @@ bool Tokenizer::simplifyKnownVariablesSimplify(Token **tok2, Token *tok3, unsign
 void Tokenizer::elseif()
 {
     for (Token *tok = list.front(); tok; tok = tok->next()) {
-        if (Token::Match(tok, "(|[") ||
-            (tok->str() == "{" && tok->previous() && tok->previous()->str() == "="))
-            tok = tok->link();
-
         if (!Token::simpleMatch(tok, "else if"))
             continue;
+
         for (Token *tok2 = tok; tok2; tok2 = tok2->next()) {
             if (Token::Match(tok2, "(|{|["))
                 tok2 = tok2->link();
@@ -9983,6 +9977,9 @@ void Tokenizer::simplifyOperatorName()
                 tok->str("operator" + op);
                 Token::eraseTokens(tok, par);
             }
+
+            if (!op.empty())
+                tok->isOperatorKeyword(true);
         }
     }
 

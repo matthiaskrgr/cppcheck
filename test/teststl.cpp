@@ -72,6 +72,7 @@ private:
         TEST_CASE(eraseAssignByFunctionCall);
         TEST_CASE(eraseErase);
         TEST_CASE(eraseByValue);
+        TEST_CASE(eraseIf);
         TEST_CASE(eraseOnVector);
 
         TEST_CASE(pushback1);
@@ -654,6 +655,7 @@ private:
     void erase1() {
         check("void f()\n"
               "{\n"
+              "    std::list<int>::iterator it;\n"
               "    for (it = foo.begin(); it != foo.end(); ++it) {\n"
               "        foo.erase(it);\n"
               "    }\n"
@@ -661,8 +663,8 @@ private:
               "        foo.erase(it);\n"
               "    }\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (error) Iterator 'it' used after element has been erased.\n"
-                      "[test.cpp:6] -> [test.cpp:7]: (error) Iterator 'it' used after element has been erased.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:4] -> [test.cpp:5]: (error) Iterator 'it' used after element has been erased.\n"
+                      "[test.cpp:7] -> [test.cpp:8]: (error) Iterator 'it' used after element has been erased.\n", errout.str());
 
         check("void f(std::list<int> &ints)\n"
               "{\n"
@@ -779,7 +781,7 @@ private:
     void eraseBreak() {
         check("void f()\n"
               "{\n"
-              "    for (iterator it = foo.begin(); it != foo.end(); ++it)\n"
+              "    for (std::vector<int>::iterator it = foo.begin(); it != foo.end(); ++it)\n"
               "    {\n"
               "        foo.erase(it);\n"
               "        if (x)"
@@ -790,7 +792,7 @@ private:
 
         check("void f()\n"
               "{\n"
-              "    for (iterator it = foo.begin(); it != foo.end(); ++it)\n"
+              "    for (std::vector<int>::iterator it = foo.begin(); it != foo.end(); ++it)\n"
               "    {\n"
               "        if (x) {\n"
               "            foo.erase(it);\n"
@@ -802,7 +804,7 @@ private:
 
         check("void f(int x)\n"
               "{\n"
-              "    for (iterator it = foo.begin(); it != foo.end(); ++it)\n"
+              "    for (std::vector<int>::iterator it = foo.begin(); it != foo.end(); ++it)\n"
               "    {\n"
               "        foo.erase(it);\n"
               "        if (x)"
@@ -895,13 +897,13 @@ private:
               "        }\n"
               "    }\n"
               "}");
-        TODO_ASSERT_EQUALS("[test.cpp:9]: (error) Dangerous iterator usage after erase()-method.\n", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:5] -> [test.cpp:9]: (error) Iterator 'it' used after element has been erased.\n", errout.str());
     }
 
     void eraseGoto() {
         check("void f()\n"
               "{\n"
-              "    for (iterator it = foo.begin(); it != foo.end(); ++it)\n"
+              "    for (std::vector<int>::iterator it = foo.begin(); it != foo.end(); ++it)\n"
               "    {\n"
               "        foo.erase(it);\n"
               "        goto abc;\n"
@@ -914,7 +916,7 @@ private:
     void eraseAssign1() {
         check("void f()\n"
               "{\n"
-              "    for (iterator it = foo.begin(); it != foo.end(); ++it)\n"
+              "    for (std::vector<int>::iterator it = foo.begin(); it != foo.end(); ++it)\n"
               "    {\n"
               "        foo.erase(it);\n"
               "        it = foo.begin();\n"
@@ -1036,6 +1038,19 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void eraseIf() {
+        // #4816
+        check("void func(std::list<std::string> strlist) {\n"
+              "    for (std::list<std::string>::iterator str = strlist.begin(); str != strlist.end(); str++) {\n"
+              "        if (func2(*str)) {\n"
+              "    	       strlist.erase(str);\n"
+              "            if (strlist.empty())\n"
+              "                 return;\n"
+              "        }\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:4]: (error) Iterator 'str' used after element has been erased.\n", errout.str());
+    }
 
     void eraseOnVector() {
         check("void f(const std::vector<int>& m_ImplementationMap) {\n"
