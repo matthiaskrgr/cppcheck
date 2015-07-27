@@ -67,6 +67,8 @@ private:
         TEST_CASE(uninitvar_unconditionalTry);
         TEST_CASE(uninitvar_funcptr); // #6404
         TEST_CASE(uninitvar_operator); // #6680
+        TEST_CASE(uninitvar_ternaryexpression); // #4683
+        TEST_CASE(trac_4871);
 
         TEST_CASE(syntax_error); // Ticket #5073
 
@@ -74,7 +76,7 @@ private:
         TEST_CASE(deadPointer);
     }
 
-    void checkUninitVar(const char code[], const char fname[] = "test.cpp", bool verify = true, bool debugwarnings = false) {
+    void checkUninitVar(const char code[], const char fname[] = "test.cpp", bool debugwarnings = false) {
         // Clear the error buffer..
         errout.str("");
 
@@ -85,11 +87,7 @@ private:
         std::istringstream istr(code);
         tokenizer.tokenize(istr, fname);
 
-        const std::string str1(tokenizer.tokens()->stringifyList(0, true));
         tokenizer.simplifyTokenList2();
-        const std::string str2(tokenizer.tokens()->stringifyList(0, true));
-        if (verify && str1 != str2)
-            warnUnsimplified(str1, str2);
 
         // Check for redundant code..
         CheckUninitVar checkuninitvar(&tokenizer, &settings, this);
@@ -1808,39 +1806,7 @@ private:
         ASSERT_EQUALS(errout.str(), "");
     }
 
-    std::string analyseFunctions(const char code[]) {
-        // Clear the error buffer..
-        errout.str("");
-
-        // Tokenize..
-        Tokenizer tokenizer(&settings, this);
-        std::istringstream istr(code);
-        tokenizer.tokenize(istr, "test.cpp");
-
-        std::set<std::string> f;
-        const CheckUninitVar check((const Tokenizer *)0, (const Settings *)0, (ErrorLogger *)0);
-        check.analyseFunctions(&tokenizer, f);
-
-        std::string ret;
-        for (std::set<std::string>::const_iterator it = f.begin(); it != f.end(); ++it)
-            ret += (ret.empty() ? "" : " ") + *it;
-        return ret;
-    }
-
     void uninitvar_func() {
-        // function analysis..
-        ASSERT_EQUALS("foo", analyseFunctions("void foo(int x) { }"));
-        ASSERT_EQUALS("foo", analyseFunctions("void foo(int x);"));
-        ASSERT_EQUALS("foo", analyseFunctions("void foo(const int &x) { }"));
-        ASSERT_EQUALS("foo", analyseFunctions("void foo(int &x) { ++x; }"));
-        ASSERT_EQUALS("rename", analyseFunctions("int rename (const char* oldname, const char* newname);")); // Ticket #914
-        ASSERT_EQUALS("rename", analyseFunctions("int rename (const char oldname[], const char newname[]);"));
-        ASSERT_EQUALS("", analyseFunctions("void foo(int &x) { x = 0; }"));
-        ASSERT_EQUALS("", analyseFunctions("void foo(s x) { }"));
-        // TODO: it's ok to pass a valid pointer to "foo". See #2775 and #2946
-        TODO_ASSERT_EQUALS("foo", "", analyseFunctions("void foo(Fred *fred) { fred->x = 0; }"));
-        ASSERT_EQUALS("", analyseFunctions("void foo(int *x) { x[0] = 0; }"));
-
         // function calls..
         checkUninitVar("void assignOne(int &x)\n"
                        "{ x = 1; }\n"
@@ -3470,7 +3436,7 @@ private:
         checkUninitVar("void f() {\n" // #4911 - bad simplification => don't crash
                        "    int a;\n"
                        "    do { a=do_something() } while (a);\n"
-                       "}\n", "test.cpp", /*verify=*/true, /*debugwarnings=*/true);
+                       "}\n", "test.cpp", /*debugwarnings=*/true);
         ASSERT_EQUALS("[test.cpp:3]: (debug) ValueFlow bailout: variable a stopping on }\n", errout.str());
 
         checkUninitVar("void f() {\n"
@@ -3767,6 +3733,39 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void uninitvar_ternaryexpression() { // #4683
+        checkUninitVar("struct B { int asd; };\n"
+                       "int f() {\n"
+                       "    int a=0;\n"
+                       "    struct B *b;\n"
+                       "    if (x) {\n"
+                       "        a = 1;\n"
+                       "        b = p;\n"
+                       "    }\n"
+                       "    return a ? b->asd : 0;\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void trac_4871() { // #4871
+        checkUninitVar("void pickup(int a) {\n"
+                       "bool using_planner_action;\n"
+                       "if (a)   {\n"
+                       "  using_planner_action = false;\n"
+                       "}\n"
+                       "else {\n"
+                       "  try\n"
+                       "  {}\n"
+                       "  catch (std::exception &ex) {\n"
+                       "    return;\n"
+                       "  }\n"
+                       "  using_planner_action = true;\n"
+                       "}\n"
+                       "if (using_planner_action) {}\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void syntax_error() { // Ticket #5073
         // Nominal mode => No output
         checkUninitVar("struct flex_array {};\n"
@@ -3775,7 +3774,7 @@ private:
                        "  struct flex_array *group;\n"
                        "  struct cgroup_taskset tset = { };\n"
                        "  do { } while_each_thread(leader, tsk);\n"
-                       "}", "test.cpp", /*verify=*/true, /*debugwarnings=*/false);
+                       "}", "test.cpp", /*debugwarnings=*/false);
         ASSERT_EQUALS("", errout.str());
 
         // --debug-warnings mode => Debug warning
@@ -3785,7 +3784,7 @@ private:
                        "  struct flex_array *group;\n"
                        "  struct cgroup_taskset tset = { };\n"
                        "  do { } while_each_thread(leader, tsk);\n"
-                       "}", "test.cpp", /*verify=*/true, /*debugwarnings=*/true);
+                       "}", "test.cpp", /*debugwarnings=*/true);
         ASSERT_EQUALS("[test.cpp:6]: (debug) assertion failed '} while ('\n", errout.str());
     }
 

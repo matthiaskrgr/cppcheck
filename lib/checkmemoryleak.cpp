@@ -519,11 +519,13 @@ const char *CheckMemoryLeak::functionArgAlloc(const Function *func, unsigned int
 
 static bool notvar(const Token *tok, unsigned int varid)
 {
+    if (!tok)
+        return false;
     if (Token::Match(tok, "&&|;"))
         return notvar(tok->astOperand1(),varid) || notvar(tok->astOperand2(),varid);
-
-    const Token *vartok = Token::findVariableComparison(tok, "==", "0");
-
+    if (tok->str() == "(" && Token::Match(tok->astOperand1(), "UNLIKELY|LIKELY"))
+        return notvar(tok->astOperand2(), varid);
+    const Token *vartok = Token::isVariableComparison(tok, "==", "0");
     return vartok && (vartok->varId() == varid);
 }
 
@@ -531,14 +533,33 @@ static bool ifvar(const Token *tok, unsigned int varid, const std::string &comp,
 {
     if (!Token::simpleMatch(tok, "if ("))
         return false;
-    const Token * const condition = tok->next()->astOperand2();
+    const Token *condition = tok->next()->astOperand2();
+    if (condition && condition->str() == "(" && Token::Match(condition->astOperand1(), "UNLIKELY|LIKELY"))
+        condition = condition->astOperand2();
     if (!condition || condition->str() == "&&")
         return false;
-    const Token *vartok = nullptr;
-    Token::findVariableComparison(condition, comp, rhs, &vartok);
+
+    const Token *vartok = Token::isVariableComparison(condition, comp, rhs);
     return (vartok && vartok->varId() == varid);
 }
 
+static bool alwaysTrue(const Token *tok)
+{
+    if (!tok)
+        return false;
+    if (tok->values.size() == 1U &&
+        tok->values.front().intvalue != 0 &&
+        tok->values.front().isKnown())
+        return true;
+    if (tok->str() == "||")
+        return alwaysTrue(tok->astOperand1()) || alwaysTrue(tok->astOperand2());
+    if (tok->str() == "true")
+        return true;
+    return (tok->isComparisonOp() &&
+            tok->values.size() == 1U &&
+            tok->values.front().isKnown() &&
+            tok->values.front().intvalue != 0);
+}
 
 bool CheckMemoryLeakInFunction::test_white_list(const std::string &funcname, const Settings *settings, bool cpp)
 {
@@ -1086,7 +1107,7 @@ Token *CheckMemoryLeakInFunction::getcode(const Token *tok, std::list<const Toke
         else if ((tok->str() == "for") || (tok->str() == "while")) {
             const Token* const end = tok->linkAt(1);
 
-            if (Token::simpleMatch(tok, "while ( true )") ||
+            if ((Token::simpleMatch(tok, "while (") && alwaysTrue(tok->next()->astOperand2())) ||
                 Token::simpleMatch(tok, "for ( ; ; )")) {
                 addtoken(&rettail, tok, "while1");
                 tok = end;
@@ -2675,16 +2696,8 @@ void CheckMemoryLeakStructMember::checkStructVariable(const Variable * const var
 
 
 
-#include "checkuninitvar.h" // CheckUninitVar::analyse
-
 void CheckMemoryLeakNoVar::check()
 {
-    std::set<std::string> uvarFunctions;
-    {
-        const CheckUninitVar c(_tokenizer, _settings, _errorLogger);
-        c.analyseFunctions(_tokenizer, uvarFunctions);
-    }
-
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
 
     // only check functions
@@ -2720,10 +2733,6 @@ void CheckMemoryLeakNoVar::check()
                                     functionName == "realloc")
                                     break;
                                 if (CheckMemoryLeakInFunction::test_white_list(functionName, _settings, tokenizer->isCPP())) {
-                                    functionCallLeak(tok2, tok2->strAt(1), functionName);
-                                    break;
-                                }
-                                if (uvarFunctions.find(functionName) != uvarFunctions.end()) {
                                     functionCallLeak(tok2, tok2->strAt(1), functionName);
                                     break;
                                 }

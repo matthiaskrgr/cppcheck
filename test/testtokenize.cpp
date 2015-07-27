@@ -8413,6 +8413,9 @@ private:
         // assignments are executed from right to left
         ASSERT_EQUALS("abc==", testAst("a=b=c;"));
 
+        // assignment in ternary operator
+        ASSERT_EQUALS("ab0=c1=:?", testAst("a?b=0:c=1;"));
+
         ASSERT_EQUALS("a\"\"=", testAst("a=\"\""));
         ASSERT_EQUALS("a\'\'=", testAst("a=\'\'"));
         ASSERT_EQUALS("a1[\"\"=", testAst("char a[1]=\"\";"));
@@ -8650,7 +8653,7 @@ private:
 
         // Preprocess file..
         Settings settings;
-        Preprocessor preprocessor(&settings);
+        Preprocessor preprocessor(settings);
         std::list<std::string> configurations;
         std::string filedata = "";
         std::istringstream fin(raw_code);

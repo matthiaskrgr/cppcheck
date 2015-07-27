@@ -70,9 +70,9 @@ void Token::update_property_info()
                 _type = eName;
         } else if (std::isdigit((unsigned char)_str[0]) || (_str.length() > 1 && _str[0] == '-' && std::isdigit((unsigned char)_str[1])))
             _type = eNumber;
-        else if (_str.length() > 1 && _str[0] == '"' && _str[_str.length()-1] == '"')
+        else if (_str.length() > 1 && _str[0] == '"' && _str.back() == '"')
             _type = eString;
-        else if (_str.length() > 1 && _str[0] == '\'' && _str[_str.length()-1] == '\'')
+        else if (_str.length() > 1 && _str[0] == '\'' && _str.back() == '\'')
             _type = eChar;
         else if (_str == "=" || _str == "<<=" || _str == ">>=" ||
                  (_str.size() == 2U && _str[1] == '=' && std::strchr("+-*/%&^|", _str[0])))
@@ -1311,8 +1311,11 @@ void Token::printValueFlow(bool xml, std::ostream &out) const
         else if (line != tok->linenr())
             out << "Line " << tok->linenr() << std::endl;
         line = tok->linenr();
-        if (!xml)
-            out << "  " << tok->str() << ":{";
+        if (!xml) {
+            out << "  " << tok->str() << (tok->values.front().isKnown() ? " always " : " possible ");
+            if (tok->values.size() > 1U)
+                out << '{';
+        }
         for (std::list<ValueFlow::Value>::const_iterator it=tok->values.begin(); it!=tok->values.end(); ++it) {
             if (xml) {
                 out << "      <value ";
@@ -1322,6 +1325,10 @@ void Token::printValueFlow(bool xml, std::ostream &out) const
                     out << "intvalue=\"" << it->intvalue << '\"';
                 if (it->condition)
                     out << " condition-line=\"" << it->condition->linenr() << '\"';
+                if (it->isKnown())
+                    out << " known=\"true\"";
+                else if (it->isPossible())
+                    out << " possible=\"true\"";
                 out << "/>" << std::endl;
             }
 
@@ -1336,8 +1343,10 @@ void Token::printValueFlow(bool xml, std::ostream &out) const
         }
         if (xml)
             out << "    </values>" << std::endl;
+        else if (tok->values.size() > 1U)
+            out << '}' << std::endl;
         else
-            out << "}" << std::endl;
+            out << std::endl;
     }
     if (xml)
         out << "  </valueflow>" << std::endl;
@@ -1460,20 +1469,10 @@ const Token *Token::getValueTokenDeadPointer() const
 }
 
 
-const Token * Token::findVariableComparison(const Token *tok, const std::string &comp, const std::string &rhs, const Token **vartok)
+const Token * Token::isVariableComparison(const Token *tok, const std::string &comp, const std::string &rhs, const Token **vartok)
 {
     if (!tok)
         return nullptr;
-
-    if (tok->str() == "&&") {
-        const Token *ret = findVariableComparison(tok->astOperand1(), comp, rhs, vartok);
-        if (!ret)
-            ret = findVariableComparison(tok->astOperand2(), comp, rhs, vartok);
-        return ret;
-    }
-
-    if (tok->str() == "(" && tok->astOperand2() && Token::Match(tok->astOperand1(), "UNLIKELY|LIKELY"))
-        return findVariableComparison(tok->astOperand2(), comp, rhs, vartok);
 
     const Token *ret = nullptr;
     if (tok->isComparisonOp()) {

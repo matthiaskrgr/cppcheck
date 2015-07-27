@@ -83,7 +83,7 @@ void ErrorLogger::ErrorMessage::setmsg(const std::string &msg)
     // as an empty message to the user if --verbose is used.
     // Even this doesn't cause problems with messages that have multiple
     // lines, none of the the error messages should end into it.
-    assert(!(msg[msg.size()-1]=='\n'));
+    assert(!(msg.back() =='\n'));
 
     // The summary and verbose message are separated by a newline
     // If there is no newline then both the summary and verbose messages
@@ -159,7 +159,8 @@ bool ErrorLogger::ErrorMessage::deserialize(const std::string &data)
 
     _id = results[0];
     _severity = Severity::fromString(results[1]);
-    _cwe = MathLib::toULongNumber(results[2]);
+    std::istringstream scwe(results[2]);
+    scwe >> _cwe;
     _shortMessage = results[3];
     _verboseMessage = results[4];
 

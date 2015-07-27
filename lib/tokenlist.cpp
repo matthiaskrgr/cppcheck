@@ -130,7 +130,7 @@ void TokenList::addtoken(const std::string & str, const unsigned int lineno, con
 
     // Replace hexadecimal value with decimal
     std::string str2;
-    if (MathLib::isHex(str) || MathLib::isOct(str) || MathLib::isBin(str)) {
+    if (MathLib::isIntHex(str) || MathLib::isOct(str) || MathLib::isBin(str)) {
         std::ostringstream str2stream;
         str2stream << MathLib::toULongNumber(str);
         str2 = str2stream.str();
@@ -303,9 +303,9 @@ bool TokenList::createTokens(std::istream &code, const std::string& file0)
         } else if (std::strchr("+-", ch) &&
                    CurrentToken.length() > 0 &&
                    std::isdigit((unsigned char)CurrentToken[0]) &&
-                   (CurrentToken[CurrentToken.length()-1] == 'e' ||
-                    CurrentToken[CurrentToken.length()-1] == 'E') &&
-                   !MathLib::isHex(CurrentToken)) {
+                   (CurrentToken.back() == 'e' ||
+                    CurrentToken.back() == 'E') &&
+                   !MathLib::isIntHex(CurrentToken)) {
             // Don't separate doubles "4.2e+10"
         } else if (CurrentToken.empty() && ch == '.' && std::isdigit((unsigned char)code.peek())) {
             // tokenize .125 into 0.125
@@ -427,7 +427,8 @@ struct AST_state {
     unsigned int depth;
     unsigned int inArrayAssignment;
     bool cpp;
-    explicit AST_state(bool cpp_) : depth(0), inArrayAssignment(0), cpp(cpp_) {}
+    unsigned int assign;
+    explicit AST_state(bool cpp_) : depth(0), inArrayAssignment(0), cpp(cpp_), assign(0U) {}
 };
 
 static bool iscast(const Token *tok)
@@ -847,10 +848,22 @@ static void compileAssignTernary(Token *&tok, AST_state& state)
     while (tok) {
         // TODO: http://en.cppreference.com/w/cpp/language/operator_precedence says:
         //       "The expression in the middle of the conditional operator (between ? and :) is parsed as if parenthesized: its precedence relative to ?: is ignored."
-        if (tok->isAssignmentOp() || Token::Match(tok, "[?:]")) {
-            if (tok->str() == "?" && tok->strAt(1) == ":") {
+        if (tok->isAssignmentOp()) {
+            state.assign++;
+            compileBinOp(tok, state, compileAssignTernary);
+            if (state.assign > 0U)
+                state.assign--;
+        } else if (tok->str() == "?") {
+            if (tok->strAt(1) == ":") {
                 state.op.push(0);
             }
+            const unsigned int assign = state.assign;
+            state.assign = 0U;
+            compileBinOp(tok, state, compileAssignTernary);
+            state.assign = assign;
+        } else if (tok->str() == ":") {
+            if (state.assign > 0U)
+                break;
             compileBinOp(tok, state, compileAssignTernary);
         } else break;
     }

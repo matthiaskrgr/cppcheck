@@ -146,7 +146,7 @@ unsigned int CppCheck::processFile(const std::string& filename, std::istream& fi
     if (_settings.terminated())
         return exitcode;
 
-    if (_settings._errorsOnly == false) {
+    if (_settings.quiet == false) {
         std::string fixedpath = Path::simplifyPath(filename);
         fixedpath = Path::toNativeSeparators(fixedpath);
         _errorLogger.reportOut(std::string("Checking ") + fixedpath + std::string("..."));
@@ -154,7 +154,7 @@ unsigned int CppCheck::processFile(const std::string& filename, std::istream& fi
 
     bool internalErrorFound(false);
     try {
-        Preprocessor preprocessor(&_settings, this);
+        Preprocessor preprocessor(_settings, this);
         std::list<std::string> configurations;
         std::string filedata;
 
@@ -213,7 +213,7 @@ unsigned int CppCheck::processFile(const std::string& filename, std::istream& fi
             cfg = *it;
 
             // If only errors are printed, print filename after the check
-            if (_settings._errorsOnly == false && it != configurations.begin()) {
+            if (_settings.quiet == false && it != configurations.begin()) {
                 std::string fixedpath = Path::simplifyPath(filename);
                 fixedpath = Path::toNativeSeparators(fixedpath);
                 _errorLogger.reportOut("Checking " + fixedpath + ": " + cfg + "...");
@@ -289,7 +289,7 @@ void CppCheck::internalError(const std::string &filename, const std::string &msg
 void CppCheck::analyseFile(std::istream &fin, const std::string &filename)
 {
     // Preprocess file..
-    Preprocessor preprocessor(&_settings, this);
+    Preprocessor preprocessor(_settings, this);
     std::list<std::string> configurations;
     std::string filedata;
     preprocessor.preprocess(fin, filedata, configurations, filename, _settings._includePaths);

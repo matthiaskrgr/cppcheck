@@ -80,7 +80,7 @@ static void AddInclPathsToList(const std::string& FileList, std::list<std::strin
                 PathName = Path::removeQuotationMarks(PathName);
 
                 // If path doesn't end with / or \, add it
-                if (PathName[PathName.length()-1] != '/')
+                if (PathName.back() != '/')
                     PathName += '/';
 
                 PathNames->push_back(PathName);
@@ -147,7 +147,7 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
             CppCheckExecutor::setExceptionOutput(exceptionOutfilename);
         }
 
-        // Inconclusive checking (still in testing phase)
+        // Inconclusive checking
         else if (std::strcmp(argv[i], "--inconclusive") == 0)
             _settings->inconclusive = true;
 
@@ -180,12 +180,12 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
             std::string filename;
 
             // exitcode-suppressions filename.txt
-            // Deprecated
             if (std::strcmp(argv[i], "--exitcode-suppressions") == 0) {
-                ++i;
+                // This is deprecated and will be removed soon
+                PrintMessage("cppcheck: '--exitcode-suppressions <file>' is deprecated, use '--exitcode-suppressions=<file>' instead.");
 
-                if (i >= argc || std::strncmp(argv[i], "-", 1) == 0 ||
-                    std::strncmp(argv[i], "--", 2) == 0) {
+                ++i;
+                if (i >= argc || argv[i][0] == '-') {
                     PrintMessage("cppcheck: No filename specified for the '--exitcode-suppressions' option.");
                     return false;
                 }
@@ -235,9 +235,10 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
             }
         }
 
-        // Filter errors
-        // This is deprecated, see --suppressions-list above
         else if (std::strcmp(argv[i], "--suppressions") == 0) {
+            // This is deprecated and will be removed soon
+            PrintMessage("cppcheck: '--suppressions' is deprecated, use '--suppressions-list' instead.");
+
             ++i;
 
             if (i >= argc) {
@@ -330,9 +331,9 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
 
         // Only print something when there are errors
         else if (std::strcmp(argv[i], "-q") == 0 || std::strcmp(argv[i], "--quiet") == 0)
-            _settings->_errorsOnly = true;
+            _settings->quiet = true;
 
-        // Append userdefined code to checked source code
+        // Append user-defined code to checked source code
         else if (std::strncmp(argv[i], "--append=", 9) == 0) {
             const std::string filename = 9 + argv[i];
             if (!_settings->append(filename)) {
@@ -449,7 +450,7 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
             path = Path::removeQuotationMarks(path);
 
             // If path doesn't end with / or \, add it
-            if (path[path.length()-1] != '/')
+            if (path.back() != '/')
                 path += '/';
 
             _settings->_includePaths.push_back(path);
@@ -503,7 +504,7 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
 
                 if (FileLister::isDirectory(path)) {
                     // If directory name doesn't end with / or \, add it
-                    if (path[path.length()-1] != '/')
+                    if (path.back() != '/')
                         path += '/';
                 }
                 _ignoredPaths.push_back(path);
@@ -756,7 +757,7 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
             break;
         }
 
-        else if (std::strncmp(argv[i], "-", 1) == 0 || std::strncmp(argv[i], "--", 2) == 0) {
+        else if (argv[i][0] == '-') {
             std::string message("cppcheck: error: unrecognized command line option: \"");
             message += argv[i];
             message +=  "\".";
@@ -810,7 +811,7 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
 
 void CmdLineParser::PrintHelp()
 {
-    std::cout <<   "Cppcheck - A tool for static C/C++ code analysis\n"
+    std::cout << "Cppcheck - A tool for static C/C++ code analysis\n"
               "\n"
               "Syntax:\n"
               "    cppcheck [OPTIONS] [files or paths]\n"
@@ -824,6 +825,13 @@ void CmdLineParser::PrintHelp()
               "                         analysis is disabled by this flag.\n"
               "    --check-library      Show information messages when library files have\n"
               "                         incomplete info.\n"
+              "    --config-exclude=<dir>\n"
+              "                         Path (prefix) to be excluded from configuration checking.\n"
+              "                         Preprocessor configurations defined in headers (but not sources)\n"
+              "                         matching the prefix will not be considered for evaluation\n"
+              "                         of configuration alternatives\n"
+              "    --config-excludes-file=<file>\n"
+              "                         A file that contains a list of config-excludes\n"
               "    --dump               Dump xml data for each translation unit. The dump\n"
               "                         files have the extension .dump and contain ast,\n"
               "                         tokenlist, symboldatabase, valueflow.\n"
@@ -886,13 +894,6 @@ void CmdLineParser::PrintHelp()
               "                         First given path is searched for contained header\n"
               "                         files first. If paths are relative to source files,\n"
               "                         this is not needed.\n"
-              "    --config-exclude=<dir>\n"
-              "                         Path (prefix) to be excluded from configuration checking.\n"
-              "                         Preprocessor configurations defined in headers (but not sources)\n"
-              "                         matching the prefix will not be considered for evaluation\n"
-              "                         of configuration alternatives\n"
-              "    --config-excludes-file=<file>\n"
-              "                         A file that contains a list of config-excludes\n"
               "    --include=<file>\n"
               "                         Force inclusion of a file before the checked file. Can\n"
               "                         be used for example when checking the Linux kernel,\n"
@@ -946,7 +947,7 @@ void CmdLineParser::PrintHelp()
               "                          * native\n"
               "                                 Unspecified platform. Type sizes of host system\n"
               "                                 are assumed, but no further assumptions.\n"
-              "    -q, --quiet          Only print error messages.\n"
+              "    -q, --quiet          Do not show progress reports.\n"
               "    -rp, --relative-paths\n"
               "    -rp=<paths>, --relative-paths=<paths>\n"
               "                         Use relative paths in output. When given, <paths> are\n"
