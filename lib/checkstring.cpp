@@ -64,9 +64,9 @@ void CheckString::stringLiteralWriteError(const Token *tok, const Token *strValu
         std::string s = strValue->strValue();
         if (s.size() > 15U)
             s = s.substr(0,13) + "..";
-        errmsg += " \"" + s + "\"";
+        errmsg += " '" + s + "'";
     }
-    errmsg += " directly or indirectly is undefined behaviour";
+    errmsg += " directly or indirectly is undefined behaviour.";
 
     reportError(callstack, Severity::error, "stringLiteralWrite", errmsg);
 }
