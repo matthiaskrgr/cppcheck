@@ -7268,7 +7268,7 @@ void Tokenizer::duplicateEnumError(const Token * tok1, const Token * tok2, const
     const std::string tok2_str = tok2 ? tok2->str() : std::string("name");
 
     reportError(locationList, Severity::style, "variableHidingEnum",
-                std::string(type + " '" + tok2_str + "' hides enumerator with same name"));
+                std::string(type + " '" + tok2_str + "' hides enumerator with the same name."));
 }
 
 // Check if this statement is a duplicate definition.  A duplicate

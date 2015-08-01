@@ -3047,10 +3047,10 @@ private:
                           "{\n"
                           "   EF_Vector<float,6> d;\n"
                           "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:1]: (style) Template parameter 'S' hides enumerator with same name\n"
-                      "[test.cpp:11] -> [test.cpp:1]: (style) Template parameter 'S' hides enumerator with same name\n"
-                      "[test.cpp:16] -> [test.cpp:1]: (style) Template parameter 'S' hides enumerator with same name\n"
-                      "[test.cpp:23] -> [test.cpp:1]: (style) Template parameter 'S' hides enumerator with same name\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:1]: (style) Template parameter 'S' hides enumerator with the same name.\n"
+                      "[test.cpp:11] -> [test.cpp:1]: (style) Template parameter 'S' hides enumerator with the same name.\n"
+                      "[test.cpp:16] -> [test.cpp:1]: (style) Template parameter 'S' hides enumerator with the same name.\n"
+                      "[test.cpp:23] -> [test.cpp:1]: (style) Template parameter 'S' hides enumerator with the same name.\n", errout.str());
     }
 
     void enum9() {
@@ -3092,8 +3092,8 @@ private:
                                 "}";
         ASSERT_EQUALS(expected, checkSimplifyEnum(code));
 
-        ASSERT_EQUALS("[test.cpp:4] -> [test.cpp:3]: (style) Variable 'u' hides enumerator with same name\n"
-                      "[test.cpp:4] -> [test.cpp:3]: (style) Variable 'v' hides enumerator with same name\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:4] -> [test.cpp:3]: (style) Variable 'u' hides enumerator with the same name.\n"
+                      "[test.cpp:4] -> [test.cpp:3]: (style) Variable 'v' hides enumerator with the same name.\n", errout.str());
     }
 
     void enum12() {
@@ -3235,8 +3235,8 @@ private:
                             "    x+=1;\n"
                             "}\n";
         checkSimplifyEnum(code);
-        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:1]: (style) Variable 'x' hides enumerator with same name\n"
-                      "[test.cpp:6] -> [test.cpp:1]: (style) Function argument 'x' hides enumerator with same name\n",
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:1]: (style) Variable 'x' hides enumerator with the same name.\n"
+                      "[test.cpp:6] -> [test.cpp:1]: (style) Function argument 'x' hides enumerator with the same name.\n",
                       errout.str());
 
         // avoid false positive: in other scope
