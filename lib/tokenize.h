@@ -277,6 +277,12 @@ public:
      */
     void simplifyCompoundAssignment();
 
+
+    /**
+     * Simplify "* const" to "*"
+     */
+    void simplifyPointerConst();
+
     /**
      * Simplify the location of "static" and "const" qualifiers in
      * a variable declaration or definition.
@@ -755,7 +761,12 @@ public:
     void createSymbolDatabase();
     void deleteSymbolDatabase();
 
-    void printDebugOutput() const;
+    /** print --debug output if debug flags match the simplification:
+     * 0=unknown/both simplifications
+     * 1=1st simplifications
+     * 2=2nd simplifications
+     */
+    void printDebugOutput(unsigned int simplification) const;
 
     void dump(std::ostream &out) const;
 

@@ -682,7 +682,7 @@ private:
                             "-(Foo *)foo: (Bar *)bar\n"
                             "{ }\n"
                             "@end\n";
-        ASSERT_EQUALS("", tokenizeAndStringify(code));
+        ASSERT_THROW(tokenizeAndStringify(code), InternalError);
     }
 
     // Ticket #2361: 0X10 => 16
@@ -4190,7 +4190,7 @@ private:
                 tokenizer.tokenize(istr, "test.cpp");
                 assertThrowFail(__FILE__, __LINE__);
             } catch (InternalError& e) {
-                ASSERT_EQUALS("Invalid number of character (() when these macros are defined: ''.", e.errorMessage);
+                ASSERT_EQUALS("Invalid number of character '(' when these macros are defined: ''.", e.errorMessage);
                 ASSERT_EQUALS("syntaxError", e.id);
                 ASSERT_EQUALS(2, e.token->linenr());
             }
@@ -5425,6 +5425,40 @@ private:
             ASSERT_EQUALS("return doSomething ( X ) , 0 ;", tokenizeAndStringify(code, false));
             ASSERT_EQUALS("", errout.str());
         }
+
+        {
+            const char code[] = "const int x(1);"
+                                "const int y(2);"
+                                "const int z((x+1)*y);"
+                                "f(z);";
+            ASSERT_EQUALS("f ( 4 ) ;", tokenizeAndStringify(code, true));
+            ASSERT_EQUALS("", errout.str());
+        }
+
+        {
+            const char code[] = "const int x(1);"
+                                "const int y(2);"
+                                "const int z((x+1)*y);"
+                                "f(&z);";
+            ASSERT_EQUALS("const int z ( 4 ) ; f ( & z ) ;", tokenizeAndStringify(code, true));
+            ASSERT_EQUALS("", errout.str());
+        }
+
+        {
+            const char code[] = "const bool x(true);"
+                                "const bool y(!x);"
+                                "f(y);";
+            ASSERT_EQUALS("f ( false ) ;", tokenizeAndStringify(code, true));
+            ASSERT_EQUALS("", errout.str());
+        }
+
+        {
+            const char code[] = "const bool x(true);"
+                                "const bool y(!x);"
+                                "f(&y);";
+            ASSERT_EQUALS("const bool y ( false ) ; f ( & y ) ;", tokenizeAndStringify(code, true));
+            ASSERT_EQUALS("", errout.str());
+        }
     }
 
     void simplifyInitVar2() {
@@ -6024,6 +6058,7 @@ private:
         ASSERT_EQUALS("; * p = * p + y ;", tokenizeAndStringify("; *p += y;"));
         ASSERT_EQUALS("; ( * p ) = ( * p ) + y ;", tokenizeAndStringify("; (*p) += y;"));
         ASSERT_EQUALS("; * ( p [ 0 ] ) = * ( p [ 0 ] ) + y ;", tokenizeAndStringify("; *(p[0]) += y;"));
+        ASSERT_EQUALS("; p [ { 1 , 2 } ] = p [ { 1 , 2 } ] + y ;", tokenizeAndStringify("; p[{1,2}] += y;"));
 
         ASSERT_EQUALS("void foo ( ) { switch ( n ) { case 0 : ; x = x + y ; break ; } }", tokenizeAndStringify("void foo() { switch (n) { case 0: x += y; break; } }"));
 
@@ -8430,6 +8465,10 @@ private:
         ASSERT_EQUALS("absizeofd(ef.+(=", testAst("a = b(sizeof(c d) + e.f)"));
 
         ASSERT_EQUALS("a*b***", testAst("*a * **b;")); // Correctly distinguish between unary and binary operator*
+
+        // strings
+        ASSERT_EQUALS("f\"A\"1,(",testAst("f(\"A\" B, 1);"));
+        ASSERT_EQUALS("fA1,(",testAst("f(A \"B\", 1);"));
 
         // for
         ASSERT_EQUALS("for;;(", testAst("for(;;)"));

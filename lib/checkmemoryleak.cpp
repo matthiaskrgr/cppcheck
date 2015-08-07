@@ -21,6 +21,7 @@
 #include "symboldatabase.h"
 #include "mathlib.h"
 #include "tokenize.h"
+#include "astutils.h"
 
 #include <algorithm>
 #include <sstream>
@@ -525,7 +526,7 @@ static bool notvar(const Token *tok, unsigned int varid)
         return notvar(tok->astOperand1(),varid) || notvar(tok->astOperand2(),varid);
     if (tok->str() == "(" && Token::Match(tok->astOperand1(), "UNLIKELY|LIKELY"))
         return notvar(tok->astOperand2(), varid);
-    const Token *vartok = Token::isVariableComparison(tok, "==", "0");
+    const Token *vartok = astIsVariableComparison(tok, "==", "0");
     return vartok && (vartok->varId() == varid);
 }
 
@@ -539,7 +540,7 @@ static bool ifvar(const Token *tok, unsigned int varid, const std::string &comp,
     if (!condition || condition->str() == "&&")
         return false;
 
-    const Token *vartok = Token::isVariableComparison(condition, comp, rhs);
+    const Token *vartok = astIsVariableComparison(condition, comp, rhs);
     return (vartok && vartok->varId() == varid);
 }
 
@@ -2816,7 +2817,7 @@ void CheckMemoryLeakNoVar::functionCallLeak(const Token *loc, const std::string 
 
 void CheckMemoryLeakNoVar::returnValueNotUsedError(const Token *tok, const std::string &alloc)
 {
-    reportError(tok, Severity::error, "leakReturnValNotUsed", "Return value of allocation function " + alloc + " is not stored.");
+    reportError(tok, Severity::error, "leakReturnValNotUsed", "Return value of allocation function '" + alloc + "' is not stored.");
 }
 
 void CheckMemoryLeakNoVar::unsafeArgAllocError(const Token *tok, const std::string &funcName, const std::string &ptrType, const std::string& objType)

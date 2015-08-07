@@ -145,6 +145,14 @@ private:
         TEST_CASE(garbageCode103); // #6824
         TEST_CASE(garbageCode104); // #6847
         TEST_CASE(garbageCode105); // #6859
+        TEST_CASE(garbageCode106);
+        TEST_CASE(garbageCode107);
+        TEST_CASE(garbageCode108);
+        TEST_CASE(garbageCode109);
+        TEST_CASE(garbageCode110);
+        TEST_CASE(garbageCode111);
+        TEST_CASE(garbageCode112);
+        TEST_CASE(garbageCode113);
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -582,7 +590,7 @@ private:
     }
 
     void garbageCode49() { // #6715
-        ASSERT_THROW(checkCode(" ( ( ) ) { } ( { ( __builtin_va_arg_pack ( ) ) ; } ) { ( int { ( ) ( ( ) ) } ( ) { } ( ) ) += ( ) }"), InternalError);
+        checkCode(" ( ( ) ) { } ( { ( __builtin_va_arg_pack ( ) ) ; } ) { ( int { ( ) ( ( ) ) } ( ) { } ( ) ) += ( ) }");
     }
 
     void garbageCode50() { // #6718
@@ -735,7 +743,7 @@ private:
     }
 
     void garbageCode87() { // #6788
-        ASSERT_THROW(checkCode("((X (128))) (int a) { v[ = {} (x 42) a] += }"), InternalError); // do not crash
+        checkCode("((X (128))) (int a) { v[ = {} (x 42) a] += }"); // do not crash
     }
 
     void garbageCode88() { // #6786
@@ -817,6 +825,38 @@ private:
 
     void garbageCode105() { // #6859
         checkCode("void foo (int i) { int a , for (a 1; a( < 4; a++) if (a) (b b++) (b);) n++; }");
+    }
+
+    void garbageCode106() { // #6880
+        ASSERT_THROW(checkCode("[ ] typedef typedef b_array b_array_ref [ ; ] ( ) b_array_ref b_array_ref_gbl_obj0 { ; { b_array_ref b_array_ref_gbl_obj0 } }"), InternalError);
+    }
+
+    void garbageCode107() { // #6881
+        ASSERT_THROW(checkCode("enum { val = 1{ }; { const} }; { } Bar { const int A = val const } ;"), InternalError);
+    }
+
+    void garbageCode108() { //  #6895 "segmentation fault (invalid code) in CheckCondition::isOppositeCond"
+        checkCode("A( ) { } bool f( ) { ( ) F; ( ) { ( == ) if ( !=< || ( !A( ) && r[2] ) ) ( !A( ) ) ( ) } }");
+    }
+
+    void garbageCode109() { //  #6900 "segmentation fault (invalid code) in CheckStl::runSimplifiedChecks"
+        checkCode("( *const<> (( ) ) { } ( *const ( ) ( ) ) { } ( * const<> ( size_t )) ) { } ( * const ( ) ( ) ) { }");
+    }
+
+    void garbageCode110() { //  #6902 "segmentation fault (invalid code) in CheckStl::string_c_str"
+        checkCode("( *const<> ( size_t ) ; foo ) { } * ( *const ( size_t ) ( ) ;> foo )< { }");
+    }
+
+    void garbageCode111() { //  #6907
+        ASSERT_THROW(checkCode("enum { FOO = 1( ,) } {{ FOO }} ;"), InternalError);
+    }
+
+    void garbageCode112() { //  #6909
+        ASSERT_THROW(checkCode("enum { FOO = ( , ) } {{ }}>> enum { FOO< = ( ) } { { } } ;"), InternalError);
+    }
+
+    void garbageCode113() { //  #6858
+        checkCode("*(*const<> (size_t); foo) { } *(*const (size_t)() ; foo) { }");
     }
 
     void garbageValueFlow() {

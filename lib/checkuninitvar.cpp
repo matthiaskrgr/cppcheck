@@ -19,6 +19,7 @@
 
 //---------------------------------------------------------------------------
 #include "checkuninitvar.h"
+#include "astutils.h"
 #include "mathlib.h"
 #include "checknullpointer.h"   // CheckNullPointer::parseFunctionCall
 #include "symboldatabase.h"
@@ -280,7 +281,7 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
             unsigned int condVarId = 0, condVarValue = 0;
             const Token *condVarTok = nullptr;
             if (Token::simpleMatch(tok, "if (") &&
-                Token::isVariableComparison(tok->next()->astOperand2(), "!=", "0", &condVarTok)) {
+                astIsVariableComparison(tok->next()->astOperand2(), "!=", "0", &condVarTok)) {
                 std::map<unsigned int,int>::const_iterator it = variableValue.find(condVarTok->varId());
                 if (it != variableValue.end() && it->second == NOT_ZERO)
                     return true;   // this scope is not fully analysed => return true
@@ -895,15 +896,14 @@ int CheckUninitVar::isFunctionParUsage(const Token *vartok, bool pointer, Alloc 
     // is this a function call?
     if (start && Token::Match(start->previous(), "%name% (")) {
         const bool address(vartok->previous()->str() == "&");
+        const bool array(vartok->variable() && vartok->variable()->isArray());
         // check how function handle uninitialized data arguments..
         const Function *func = start->previous()->function();
         if (func) {
             const Variable *arg = func->getArgumentVar(argumentNumber);
             if (arg) {
                 const Token *argStart = arg->typeStartToken();
-                if (!address && Token::Match(argStart, "struct| %type% [,)]"))
-                    return 1;
-                if (!address && Token::Match(argStart, "struct| %type% %name% [,)]"))
+                if (!address && !array && Token::Match(argStart, "struct| %type% %name%| [,)]"))
                     return 1;
                 if (pointer && !address && alloc == NO_ALLOC && Token::Match(argStart, "struct| %type% * %name% [,)]"))
                     return 1;
