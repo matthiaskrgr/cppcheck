@@ -33,6 +33,7 @@
 class TokenList;
 namespace tinyxml2 {
     class XMLDocument;
+    class XMLElement;
 }
 
 /// @addtogroup Core
@@ -62,22 +63,18 @@ public:
     /** this is primarily meant for unit tests. it only returns true/false */
     bool loadxmldata(const char xmldata[], std::size_t len);
 
-    /** get allocation id for function by name */
+    /** get allocation id for function by name (deprecated, use other alloc) */
     int alloc(const char name[]) const {
         return getid(_alloc, name);
     }
 
     /** get allocation id for function */
-    int alloc(const Token *tok) const {
-        return isNotLibraryFunction(tok) && argumentChecks.find(tok->str()) != argumentChecks.end() ? 0 : getid(_alloc, tok->str());
-    }
+    int alloc(const Token *tok) const;
 
     /** get deallocation id for function */
-    int dealloc(const Token *tok) const {
-        return isNotLibraryFunction(tok) && argumentChecks.find(tok->str()) != argumentChecks.end() ? 0 : getid(_dealloc, tok->str());
-    }
+    int dealloc(const Token *tok) const;
 
-    /** get deallocation id for function by name */
+    /** get deallocation id for function by name (deprecated, use other alloc) */
     int dealloc(const char name[]) const {
         return getid(_dealloc, name);
     }
@@ -379,6 +376,9 @@ public:
     }
 
 private:
+    // load a <function> xml node
+    Error loadFunction(const tinyxml2::XMLElement * const node, const std::string &name, std::set<std::string> &unknown_elements);
+
     class ExportedFunctions {
     public:
         void addPrefix(const std::string& prefix) {

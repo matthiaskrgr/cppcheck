@@ -235,21 +235,25 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
 
             // not a local variable nor argument?
             const Variable *var = tok->variable();
-            if (var && !var->isArgument() && (!var->isLocal() || var->isStatic())) {
-                continue;
-            }
-
-            // non-pod variable
-            if (_tokenizer->isCPP() && (!var || !var->typeStartToken()->isStandardType()))
+            if (var && !var->isArgument() && (!var->isLocal() || var->isStatic()))
                 continue;
 
             // Don't check reference variables
             if (var && var->isReference())
                 continue;
 
+            // non-pod variable
+            if (_tokenizer->isCPP()) {
+                if (!var)
+                    continue;
+                // Possibly automatically deallocated memory
+                if (!var->typeStartToken()->isStandardType() && Token::Match(tok, "%var% = new"))
+                    continue;
+            }
+
             // allocation?
-            if (Token::Match(tok->tokAt(2), "%type% (")) {
-                int i = _settings->library.alloc(tok->tokAt(2));
+            if (tok->next()->astOperand2() && Token::Match(tok->next()->astOperand2()->previous(), "%type% (")) {
+                int i = _settings->library.alloc(tok->next()->astOperand2()->previous());
                 if (i > 0) {
                     alloctype[tok->varId()].type = i;
                     alloctype[tok->varId()].status = VarInfo::ALLOC;

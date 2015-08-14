@@ -98,6 +98,7 @@ private:
         TEST_CASE(returnReference7);
         TEST_CASE(returnReferenceLiteral);
         TEST_CASE(returnReferenceCalculation);
+        TEST_CASE(returnReferenceLambda);
 
         // global namespace
         TEST_CASE(testglobalnamespace);
@@ -262,6 +263,11 @@ private:
               "    b = foo(b);\n"
               "}");
         ASSERT_EQUALS("[test.cpp:2]: (style) Assignment of function parameter has no effect outside the function.\n", errout.str());
+
+        check("void foo(char* p) {\n" // don't warn for self assignment, there is another warning for this
+              "  p = p;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
 
         check("void foo(char* p) {\n"
               "    if (!p) p = buf;\n"
@@ -949,6 +955,16 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void returnReferenceLambda() {
+        // #6787
+        check("const Item& foo(const Container& items) const {\n"
+              "    return bar(items.begin(), items.end(),\n"
+              "    [](const Item& lhs, const Item& rhs) {\n"
+              "        return false;\n"
+              "    });\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
 
     void testglobalnamespace() {
         check("class SharedPtrHolder\n"

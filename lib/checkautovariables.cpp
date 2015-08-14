@@ -130,6 +130,7 @@ void CheckAutoVariables::assignFunctionArg()
         for (const Token *tok = scope->classStart; tok && tok != scope->classEnd; tok = tok->next()) {
             if (Token::Match(tok, "[;{}] %var% =|++|--") &&
                 isNonReferenceArg(tok->next()) &&
+                !Token::Match(tok->tokAt(2), "= %varid% ;", tok->next()->varId()) &&
                 !variableIsUsedInScope(Token::findsimplematch(tok->tokAt(2), ";"), tok->next()->varId(), scope) &&
                 !Token::findsimplematch(tok, "goto", scope->classEnd)) {
                 if (tok->next()->variable()->isPointer() && printWarning)
@@ -398,6 +399,10 @@ void CheckAutoVariables::returnReference()
         // have we reached a function that returns a reference?
         if (tok->previous() && tok->previous()->str() == "&") {
             for (const Token *tok2 = scope->classStart->next(); tok2 && tok2 != scope->classEnd; tok2 = tok2->next()) {
+                // Skip over lambdas
+                if (tok2->str() == "[" && tok2->link()->strAt(1) == "(" && tok2->link()->linkAt(1)->strAt(1) == "{")
+                    tok2 = tok2->link()->linkAt(1)->linkAt(1);
+
                 if (tok2->str() != "return")
                     continue;
 

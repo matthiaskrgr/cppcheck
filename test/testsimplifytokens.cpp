@@ -194,6 +194,7 @@ private:
         TEST_CASE(enum41); // ticket #5212 (valgrind errors during enum simplification)
         TEST_CASE(enum42); // ticket #5182 (template function call in enum value)
         TEST_CASE(enum43); // lhs in assignment
+        TEST_CASE(enum44);
         TEST_CASE(enumscope1); // ticket #3949
         TEST_CASE(duplicateDefinition); // ticket #3565
         TEST_CASE(invalid_enum); // #5600
@@ -856,10 +857,7 @@ private:
 
     void ifa_ifa() {
         ASSERT_EQUALS("int a ; if ( a ) { { ab } cd }", tok("int a ; if (a) { if (a) { ab } cd }", true));
-        ASSERT_EQUALS("int a ; if ( a ) { { ab } cd }", tok("int a ; if (unlikely(a)) { if (a) { ab } cd }", true));
     }
-
-
 
 
     unsigned int sizeofFromTokenizer(const char type[]) {
@@ -3412,6 +3410,16 @@ private:
         ASSERT_EQUALS("A = 1 ;", checkSimplifyEnum(code));
     }
 
+    void enum44() {
+        const char code1[] = "enum format_t { YYYYMMDD = datemask_traits< datemask<'Y', 'Y', 'Y', 'Y', '/', 'M', 'M', '/', 'D', 'D'> >::value, };\n"
+                             "YYYYMMDD;";
+        ASSERT_EQUALS("( datemask_traits < datemask < 'Y' , 'Y' , 'Y' , 'Y' , '/' , 'M' , 'M' , '/' , 'D' , 'D' > > :: value ) ;", checkSimplifyEnum(code1));
+
+        const char code2[] = "enum format_t { YYYYMMDD = datemask_traits< datemask<'Y', 'Y', 'Y', 'Y', '/', 'M', 'M', '/', 'D', 'D'>>::value, };\n"
+                             "YYYYMMDD;";
+        ASSERT_EQUALS("( datemask_traits < datemask < 'Y' , 'Y' , 'Y' , 'Y' , '/' , 'M' , 'M' , '/' , 'D' , 'D' > > :: value ) ;", checkSimplifyEnum(code2));
+    }
+
     void enumscope1() { // #3949 - don't simplify enum from one function in another function
         const char code[] = "void foo() { enum { A = 0, B = 1 }; }\n"
                             "void bar() { int a = A; }";
@@ -3857,8 +3865,6 @@ private:
         ASSERT_EQUALS("class C { int f ( ) ; } ;", tok("class C { int f() override ; };", true));
         ASSERT_EQUALS("class C { int f ( ) ; } ;", tok("class C { int f() final ; };", true));
         ASSERT_EQUALS("void f ( ) { int final [ 10 ] ; }", tok("void f() { int final[10]; }", true));
-        ASSERT_EQUALS("if ( a ) { }", tok("if ( likely ( a ) ) { }", true));
-        ASSERT_EQUALS("if ( a ) { }", tok("if ( unlikely ( a ) ) { }", true));
         ASSERT_EQUALS("int * p ;", tok("int * __restrict p;", "test.c"));
         ASSERT_EQUALS("int * * p ;", tok("int * __restrict__ * p;", "test.c"));
         ASSERT_EQUALS("void foo ( float * a , float * b ) ;", tok("void foo(float * __restrict__ a, float * __restrict__ b);", "test.c"));

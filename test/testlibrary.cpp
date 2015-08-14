@@ -39,6 +39,7 @@ private:
         TEST_CASE(function_arg_any);
         TEST_CASE(function_arg_valid);
         TEST_CASE(function_arg_minsize);
+        TEST_CASE(function_namespace);
         TEST_CASE(memory);
         TEST_CASE(memory2); // define extra "free" allocation functions
         TEST_CASE(resource);
@@ -285,6 +286,37 @@ private:
             const Library::ArgumentChecks::MinSize &m = minsizes->front();
             ASSERT_EQUALS(Library::ArgumentChecks::MinSize::ARGVALUE, m.type);
             ASSERT_EQUALS(3, m.arg);
+        }
+    }
+
+    void function_namespace() const {
+        const char xmldata[] = "<?xml version=\"1.0\"?>\n"
+                               "<def>\n"
+                               "  <function name=\"Foo::foo,bar\">\n"
+                               "    <noreturn>false</noreturn>\n"
+                               "  </function>\n"
+                               "</def>";
+        tinyxml2::XMLDocument doc;
+        doc.Parse(xmldata, sizeof(xmldata));
+
+        Library library;
+        library.load(doc);
+        ASSERT(library.use.empty());
+        ASSERT(library.leakignore.empty());
+        ASSERT(library.argumentChecks.empty());
+
+        {
+            TokenList tokenList(nullptr);
+            std::istringstream istr("Foo::foo();");
+            tokenList.createTokens(istr);
+            ASSERT(library.isnotnoreturn(tokenList.front()->tokAt(2)));
+        }
+
+        {
+            TokenList tokenList(nullptr);
+            std::istringstream istr("bar();");
+            tokenList.createTokens(istr);
+            ASSERT(library.isnotnoreturn(tokenList.front()));
         }
     }
 

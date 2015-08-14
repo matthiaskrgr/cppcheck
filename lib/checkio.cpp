@@ -367,12 +367,9 @@ void CheckIO::seekOnAppendedFileError(const Token *tok)
 //---------------------------------------------------------------------------
 void CheckIO::invalidScanf()
 {
-    const bool printWarning = _settings->isEnabled("warning");
-    const bool printPortability = _settings->isEnabled("portability");
-    if (!printWarning && !printPortability)
+    if (!_settings->isEnabled("warning"))
         return;
 
-    const bool windows = _settings->isWindowsPlatform();
     const SymbolDatabase * const symbolDatabase = _tokenizer->getSymbolDatabase();
     std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t j = 0; j < functions; ++j) {
@@ -406,10 +403,8 @@ void CheckIO::invalidScanf()
                 }
 
                 else if (std::isalpha((unsigned char)formatstr[i]) || formatstr[i] == '[') {
-                    if (printWarning && (formatstr[i] == 's' || formatstr[i] == '[' || formatstr[i] == 'S' || (formatstr[i] == 'l' && formatstr[i+1] == 's')))  // #3490 - field width limits are only necessary for string input
-                        invalidScanfError(tok, false);
-                    else if (printPortability && formatstr[i] != 'n' && formatstr[i] != 'c' && !windows)
-                        invalidScanfError(tok, true); // Warn about libc bug in versions prior to 2.13-25
+                    if (formatstr[i] == 's' || formatstr[i] == '[' || formatstr[i] == 'S' || (formatstr[i] == 'l' && formatstr[i+1] == 's'))  // #3490 - field width limits are only necessary for string input
+                        invalidScanfError(tok);
                     format = false;
                 }
             }
@@ -417,50 +412,31 @@ void CheckIO::invalidScanf()
     }
 }
 
-void CheckIO::invalidScanfError(const Token *tok, bool portability)
+void CheckIO::invalidScanfError(const Token *tok)
 {
-    if (portability)
-        reportError(tok, Severity::portability,
-                    "invalidscanf_libc", "scanf without field width limits can crash with huge input data on some versions of libc.\n"
-                    "scanf without field width limits can crash with huge input data on libc versions older than 2.13-25. Add a field "
-                    "width specifier to fix this problem:\n"
-                    "    %i => %3i\n"
-                    "\n"
-                    "Sample program that can crash:\n"
-                    "\n"
-                    "#include <stdio.h>\n"
-                    "int main()\n"
-                    "{\n"
-                    "    int a;\n"
-                    "    scanf(\"%i\", &a);\n"
-                    "    return 0;\n"
-                    "}\n"
-                    "\n"
-                    "To make it crash:\n"
-                    "perl -e 'print \"5\"x2100000' | ./a.out");
-    else
-        reportError(tok, Severity::warning,
-                    "invalidscanf", "scanf without field width limits can crash with huge input data.\n"
-                    "scanf without field width limits can crash with huge input data. Add a field width "
-                    "specifier to fix this problem:\n"
-                    "    %s => %20s\n"
-                    "\n"
-                    "Sample program that can crash:\n"
-                    "\n"
-                    "#include <stdio.h>\n"
-                    "int main()\n"
-                    "{\n"
-                    "    char c[5];\n"
-                    "    scanf(\"%s\", c);\n"
-                    "    return 0;\n"
-                    "}\n"
-                    "\n"
-                    "Typing in 5 or more characters may make the program crash. The correct usage "
-                    "here is 'scanf(\"%4s\", c);', as the maximum field width does not include the "
-                    "terminating null byte.\n"
-                    "Source: http://linux.die.net/man/3/scanf\n"
-                    "Source: http://www.opensource.apple.com/source/xnu/xnu-1456.1.26/libkern/stdio/scanf.c"
-                   );
+
+    reportError(tok, Severity::warning,
+                "invalidscanf", "scanf without field width limits can crash with huge input data.\n"
+                "scanf without field width limits can crash with huge input data. Add a field width "
+                "specifier to fix this problem:\n"
+                "    %s => %20s\n"
+                "\n"
+                "Sample program that can crash:\n"
+                "\n"
+                "#include <stdio.h>\n"
+                "int main()\n"
+                "{\n"
+                "    char c[5];\n"
+                "    scanf(\"%s\", c);\n"
+                "    return 0;\n"
+                "}\n"
+                "\n"
+                "Typing in 5 or more characters may make the program crash. The correct usage "
+                "here is 'scanf(\"%4s\", c);', as the maximum field width does not include the "
+                "terminating null byte.\n"
+                "Source: http://linux.die.net/man/3/scanf\n"
+                "Source: http://www.opensource.apple.com/source/xnu/xnu-1456.1.26/libkern/stdio/scanf.c"
+               );
 }
 
 //---------------------------------------------------------------------------
@@ -526,7 +502,6 @@ void CheckIO::checkWrongPrintfScanfArguments()
 
             const Token* argListTok = 0; // Points to first va_list argument
             const Token* formatStringTok = 0; // Points to format string token
-            std::string formatString;
 
             bool scan = false;
             bool scanf_s = false;
@@ -589,10 +564,10 @@ void CheckIO::checkWrongPrintfScanfArguments()
                 continue;
             }
 
-            if (formatStringTok)
-                formatString = formatStringTok->str();
-            else
+            if (!formatStringTok)
                 continue;
+
+            const std::string& formatString = formatStringTok->str();
 
             // Count format string parameters..
             unsigned int numFormat = 0;
@@ -600,7 +575,7 @@ void CheckIO::checkWrongPrintfScanfArguments()
             bool percent = false;
             const Token* argListTok2 = argListTok;
             std::set<unsigned int> parameterPositionsUsed;
-            for (std::string::iterator i = formatString.begin(); i != formatString.end(); ++i) {
+            for (std::string::const_iterator i = formatString.begin(); i != formatString.end(); ++i) {
                 if (*i == '%') {
                     percent = !percent;
                 } else if (percent && *i == '[') {

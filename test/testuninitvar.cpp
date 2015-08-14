@@ -16,9 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tokenize.h"
-#include "checkuninitvar.h"
 #include "testsuite.h"
+#include "checkuninitvar.h"
+#include "tokenize.h"
+#include "settings.h"
 
 
 class TestUninitVar : public TestFixture {
@@ -33,6 +34,7 @@ private:
         LOAD_LIB_2(settings.library, "std.cfg");
 
         TEST_CASE(uninitvar1);
+        TEST_CASE(uninitvar_decl);      // handling various types in C and C++ files
         TEST_CASE(uninitvar_bitop);     // using uninitialized operand in bit operation
         TEST_CASE(uninitvar_alloc);     // data is allocated but not initialized
         TEST_CASE(uninitvar_arrays);    // arrays
@@ -44,9 +46,6 @@ private:
         TEST_CASE(uninitvar_references); // references
         TEST_CASE(uninitvar_return);    // return
         TEST_CASE(uninitvar_strncpy);   // strncpy doesn't always null-terminate
-        TEST_CASE(uninitvar_memset_nonchar);
-        TEST_CASE(uninitvar_memset_char_access);
-        TEST_CASE(uninitvar_func);      // analyse functions
         TEST_CASE(func_uninit_var);     // analyse function calls for: 'int a(int x) { return x+x; }'
         TEST_CASE(func_uninit_pointer); // analyse function calls for: 'void a(int *p) { *p = 0; }'
         TEST_CASE(uninitvar_typeof);    // typeof
@@ -54,7 +53,6 @@ private:
         TEST_CASE(uninitvar3);          // #3844
         TEST_CASE(uninitvar4);          // #3869 (reference)
         TEST_CASE(uninitvar5);          // #3861
-        TEST_CASE(uninitvar6);          // handling unknown types in C and C++ files
         TEST_CASE(uninitvar2_func);     // function calls
         TEST_CASE(uninitvar2_value);    // value flow
         TEST_CASE(uninitvar2_structmembers); // struct members
@@ -645,6 +643,58 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    // Handling of unknown types. Assume they are POD in C.
+    void uninitvar_decl() {
+        const char code[] = "void f() {\n"
+                            "    dfs a;\n"
+                            "    return a;\n"
+                            "}";
+
+        // Assume dfs is a non POD type if file is C++
+        checkUninitVar(code, "test.cpp");
+        ASSERT_EQUALS("", errout.str());
+
+        // Assume dfs is a POD type if file is C
+        checkUninitVar(code, "test.c");
+        ASSERT_EQUALS("[test.c:3]: (error) Uninitialized variable: a\n", errout.str());
+
+        const char code2[] = "struct AB { int a,b; };\n"
+                             "void f() {\n"
+                             "    struct AB ab;\n"
+                             "    return ab;\n"
+                             "}";
+        checkUninitVar(code2, "test.cpp");
+        ASSERT_EQUALS("", errout.str());
+        checkUninitVar(code2, "test.c");
+        ASSERT_EQUALS("[test.c:4]: (error) Uninitialized variable: ab\n", errout.str());
+
+        // Ticket #3890 - False positive for std::map
+        checkUninitVar("void f() {\n"
+                       "    std::map<int,bool> x;\n"
+                       "    return x;\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // Ticket #3906 - False positive for std::vector pointer
+        checkUninitVar("void f() {\n"
+                       "    std::vector<int> *x = NULL;\n"
+                       "    return x;\n"
+                       "}", "test.cpp", false);
+        ASSERT_EQUALS("", errout.str());
+
+        // Ticket #6701 - Variable name is a POD type according to cfg
+        const char xmldata[] = "<?xml version=\"1.0\"?>\n"
+                               "<def format=\"1\">"
+                               "  <podtype name=\"_tm\"/>"
+                               "</def>";
+        settings.library.loadxmldata(xmldata, sizeof(xmldata));
+        checkUninitVar("void f() {\n"
+                       "  Fred _tm;\n"
+                       "  _tm.dostuff();\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void uninitvar3() { // #3844
         // avoid false positive
         checkUninitVar("namespace std _GLIBCXX_VISIBILITY(default)\n"
@@ -1204,6 +1254,26 @@ private:
                        "}");
         ASSERT_EQUALS("", errout.str());
 
+        // array usage in ?: (tests that the isVariableUsed() works)
+        checkUninitVar("void f() {\n"
+                       "    char a[10], *p;\n"
+                       "    p = c?a:0;\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+
+        checkUninitVar("void f() {\n"
+                       "    char a[10], c;\n"
+                       "    c = *(x?a:0);\n"
+                       "}");
+        ASSERT_EQUALS("[test.cpp:3]: (error) Uninitialized variable: a\n", errout.str());
+
+        checkUninitVar("void f() {\n"
+                       "    char a[10], c;\n"
+                       "    strcpy(dest, x?a:\"\");\n"
+                       "}");
+        TODO_ASSERT_EQUALS("error", "", errout.str());
+
+        // passing array to library functions
         checkUninitVar("void f()\n"
                        "{\n"
                        "    char c[50] = \"\";\n"
@@ -1796,252 +1866,6 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
-    void uninitvar_memset_nonchar() {
-        checkUninitVar("void f() {\n"
-                       "    int a[20];\n"
-                       "    memset(a, 1, 20);\n"
-                       "    a[0] |= 2;\n"
-                       "}");
-        ASSERT_EQUALS(errout.str(), "");
-    }
-
-    void uninitvar_memset_char_access() {
-        checkUninitVar("void f() {\n"
-                       "    unsigned char c[10];\n"
-                       "    memset(c, 32, 10);\n"
-                       "    unsigned char value = c[3];\n"
-                       "}");
-        ASSERT_EQUALS(errout.str(), "");
-    }
-
-    void uninitvar_func() {
-        // function calls..
-        checkUninitVar("void assignOne(int &x)\n"
-                       "{ x = 1; }\n"
-                       "\n"
-                       "int f()\n"
-                       "{\n"
-                       "    int i;\n"
-                       "    assignOne(i);\n"
-                       "    return i;\n"
-                       "};");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("int f(int (*assign)(int *p))\n"
-                       "{\n"
-                       "    int i;\n"
-                       "    (*assign)(&i);\n"
-                       "    return i;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("int f()\n"
-                       "{\n"
-                       "    char s[10];\n"
-                       "    return bar(s);\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("void f() {\n"
-                       "    FILE *f;\n"
-                       "    fflush(f);\n"
-                       "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Uninitialized variable: f\n", errout.str());
-
-        checkUninitVar("void f() {\n"
-                       "    int i;\n"
-                       "    x(i+2);\n"
-                       "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Uninitialized variable: i\n", errout.str());
-
-        checkUninitVar("void f()\n"
-                       "{\n"
-                       "    char *p = malloc(10);\n"
-                       "    read(p + 1);\n"
-                       "    return p;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("void f()\n"
-                       "{\n"
-                       "    Abc *p;\n"
-                       "    int sz = sizeof(*p);\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("void foo() {\n"
-                       "    Foo *p;\n"
-                       "    x = bar(sizeof(*p));\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("void foo() {\n"
-                       "    Foo *p;\n"
-                       "    x = bar(p->begin());\n"
-                       "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Uninitialized variable: p\n", errout.str());
-
-        checkUninitVar("int foo(int x) { return x; }\n"
-                       "void f2()\n"
-                       "{\n"
-                       "    int x;\n"
-                       "    foo(x);\n"
-                       "}");
-        ASSERT_EQUALS("[test.cpp:5]: (error) Uninitialized variable: x\n", errout.str());
-
-        checkUninitVar("void foo(const char *s)\n"
-                       "{\n"
-                       "    char *p;\n"
-                       "    memcpy(p, s, 100);\n"
-                       "}");
-        ASSERT_EQUALS("[test.cpp:4]: (error) Uninitialized variable: p\n", errout.str());
-
-        checkUninitVar("void foo(const char *s)\n"
-                       "{\n"
-                       "    char *p = malloc(100);\n"
-                       "    memcpy(p, s, 100);\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("int calc(const int *p, int n);\n"
-                       "void f() {\n"
-                       "    int x[10];\n"
-                       "    calc(x,10);\n"
-                       "}");
-        TODO_ASSERT_EQUALS("[test.cpp:4]: (error) Uninitialized variable: x\n",
-                           "", errout.str());
-
-        // #2401 - unknown function/macro might init the variable
-        checkUninitVar("int f() {\n"
-                       "    int x;\n"
-                       "    INIT(x);\n"
-                       "    return x;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        // #3222 - calling function through function pointer
-        checkUninitVar("char f() {\n"
-                       "    char buffer[100];\n"
-                       "    (foo.init)(buffer);\n"
-                       "    return buffer[0];\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("void f() {\n" // #3586 - calling template function
-                       "    int i;\n"
-                       "    a::b<int>(i);\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("void test() {\n"
-                       "  double d;\n"
-                       "  double x = dostuff<int>(d);\n"
-                       "  return x;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("template <class T> double dostuff(int x, T &y);\n"
-                       "void test() {\n"
-                       "  double d;\n"
-                       "  a = dostuff<double>(0, d);\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        // using uninitialized function pointer..
-        checkUninitVar("void foo()\n"
-                       "{\n"
-                       "    void (*f)();\n"
-                       "    f();\n"
-                       "}");
-        ASSERT_EQUALS("[test.cpp:4]: (error) Uninitialized variable: f\n", errout.str());
-
-        checkUninitVar("void foo() {\n"
-                       "    int f = 1 + f();\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        // calling noreturn function..
-        checkUninitVar("int foo(int a) {\n"
-                       "    int x;\n"
-                       "    if (a==1)\n"
-                       "        g();\n"    // might be a noreturn function
-                       "    else\n"
-                       "        x = 3;\n"
-                       "    return x;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("int foo(int a) {\n"
-                       "    int x;\n"
-                       "    if (a==1)\n"
-                       "        g(1);\n"    // might be a noreturn function
-                       "    else\n"
-                       "        x = 3;\n"
-                       "    return x;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("int foo(int a) {\n" // #4880
-                       "    int x;\n"
-                       "    if (a==1)\n"
-                       "        g(1);\n"    // might be a noreturn function
-                       "    if (a==17)\n"
-                       "        g(2);\n"    // might be a noreturn function
-                       "    return x;\n"
-                       "}");
-        ASSERT_EQUALS("[test.cpp:7]: (error) Uninitialized variable: x\n", errout.str());
-
-        checkUninitVar("void (*init)(char *str);\n"
-                       "\n"
-                       "char x() {\n"
-                       "    char cmd[10];\n"
-                       "    init(cmd);\n"
-                       "    return cmd[0];\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("char fn(FILE *f) {\n"
-                       "    char buf[10];\n"
-                       "    fread(buf, 1, 10, f);\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        // #2775 - uninitialized struct pointer in subfunction
-        checkUninitVar("void a(struct Fred *fred) {\n"
-                       "    fred->x = 0;\n"
-                       "}\n"
-                       "\n"
-                       "void b() {\n"
-                       "    struct Fred *p;\n"
-                       "    a(p);\n"
-                       "}");
-        ASSERT_EQUALS("[test.cpp:7]: (error) Uninitialized variable: p\n", errout.str());
-
-        // #2946 - FP array is initialized in subfunction
-        checkUninitVar("void a(char *buf) {\n"
-                       "    buf[0] = 0;\n"
-                       "}\n"
-                       "void b() {\n"
-                       "    char buf[10];\n"
-                       "    a(buf);\n"
-                       "    buf[1] = buf[0];\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        // #3159 - initialization by function
-        checkUninitVar("static int isnumber(const char *arg) {\n"
-                       "    char *p;\n"
-                       "    return strtod(arg, &p) != 0 || p != arg;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("static int isnumber(const char *arg) {\n"
-                       "    char *p;\n"
-                       "    return strtod(&arg) != 0 || p != arg;\n"
-                       "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Uninitialized variable: p\n", errout.str());
-    }
-
     // valid and invalid use of 'int a(int x) { return x + x; }'
     void func_uninit_var() {
         const std::string funca("int a(int x) { return x + x; }");
@@ -2554,20 +2378,6 @@ private:
                        "}");
         ASSERT_EQUALS("", errout.str());
 
-        // Ticket #3890 - False positive for std::map
-        checkUninitVar("void f() {\n"
-                       "    std::map<int,bool> x;\n"
-                       "    return x;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        // Ticket #3906 - False positive for std::vector pointer
-        checkUninitVar("void f() {\n"
-                       "    std::vector<int> *x = NULL;\n"
-                       "    return x;\n"
-                       "}", "test.cpp", false);
-        ASSERT_EQUALS("", errout.str());
-
         // &
         checkUninitVar("void f() {\n"  // #4426 - address of uninitialized variable
                        "    int a,b;\n"
@@ -2626,32 +2436,6 @@ private:
                        "    a << 1;\n"  // there might be a operator<<
                        "}");
         ASSERT_EQUALS("", errout.str());
-    }
-
-    // Handling of unknown types. Assume they are POD in C.
-    void uninitvar6() {
-        const char code[] = "void f() {\n"
-                            "    dfs a;\n"
-                            "    return a;\n"
-                            "}";
-
-        // Assume dfs is a non POD type if file is C++
-        checkUninitVar(code, "test.cpp");
-        ASSERT_EQUALS("", errout.str());
-
-        // Assume dfs is a POD type if file is C
-        checkUninitVar(code, "test.c");
-        ASSERT_EQUALS("[test.c:3]: (error) Uninitialized variable: a\n", errout.str());
-
-        const char code2[] = "struct AB { int a,b; };\n"
-                             "void f() {\n"
-                             "    struct AB ab;\n"
-                             "    return ab;\n"
-                             "}";
-        checkUninitVar(code2, "test.cpp");
-        ASSERT_EQUALS("", errout.str());
-        checkUninitVar(code2, "test.c");
-        ASSERT_EQUALS("[test.c:4]: (error) Uninitialized variable: ab\n", errout.str());
     }
 
     void uninitvar7() {
@@ -2869,6 +2653,16 @@ private:
                        "}");
         ASSERT_EQUALS("", errout.str());
 
+        // array
+        checkUninitVar("int calc(const int *p, int n);\n"
+                       "void f() {\n"
+                       "    int x[10];\n"
+                       "    calc(x,10);\n"
+                       "}");
+        TODO_ASSERT_EQUALS("[test.cpp:4]: (error) Uninitialized variable: x\n",
+                           "", errout.str());
+
+        // ....
         checkUninitVar("struct ABC { int a; };\n"  // struct initialization
                        "void clear(struct ABC &abc);\n"
                        "int f() {\n"
@@ -2895,6 +2689,28 @@ private:
                        "    strcmp(&now0, sth);\n"
                        "}", "test.c");
         ASSERT_EQUALS("[test.c:3]: (error) Uninitialized variable: now0\n", errout.str());
+
+        // #2775 - uninitialized struct pointer in subfunction
+        checkUninitVar("void a(struct Fred *fred) {\n"
+                       "    fred->x = 0;\n"
+                       "}\n"
+                       "\n"
+                       "void b() {\n"
+                       "    struct Fred *p;\n"
+                       "    a(p);\n"
+                       "}");
+        ASSERT_EQUALS("[test.cpp:7]: (error) Uninitialized variable: p\n", errout.str());
+
+        // #2946 - FP array is initialized in subfunction
+        checkUninitVar("void a(char *buf) {\n"
+                       "    buf[0] = 0;\n"
+                       "}\n"
+                       "void b() {\n"
+                       "    char buf[10];\n"
+                       "    a(buf);\n"
+                       "    buf[1] = buf[0];\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void uninitvar2_value() {

@@ -4137,6 +4137,9 @@ private:
         check("int f(int x) { return x+x; }");
         ASSERT_EQUALS("", errout.str());
 
+        check("void f(int x) { while (x+=x) ; }");
+        ASSERT_EQUALS("", errout.str());
+
         check("void foo() {\n"
               "    if (a && b && b) {}\n"
               "}");
@@ -6074,27 +6077,27 @@ private:
         check("bool f(int x){\n"
               "   return isless(x,x);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Comparison of two identical variables with isless(x,x) evaluates always to false.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Comparison of two identical variables with isless(x,x) always evaluates to false.\n", errout.str());
 
         check("bool f(int x){\n"
               "   return isgreater(x,x);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Comparison of two identical variables with isgreater(x,x) evaluates always to false.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Comparison of two identical variables with isgreater(x,x) always evaluates to false.\n", errout.str());
 
         check("bool f(int x){\n"
               "   return islessgreater(x,x);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Comparison of two identical variables with islessgreater(x,x) evaluates always to false.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Comparison of two identical variables with islessgreater(x,x) always evaluates to false.\n", errout.str());
 
         check("bool f(int x){\n"
               "   return islessequal(x,x);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Comparison of two identical variables with islessequal(x,x) evaluates always to true.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Comparison of two identical variables with islessequal(x,x) always evaluates to true.\n", errout.str());
 
         check("bool f(int x){\n"
               "   return isgreaterequal(x,x);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Comparison of two identical variables with isgreaterequal(x,x) evaluates always to true.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Comparison of two identical variables with isgreaterequal(x,x) always evaluates to true.\n", errout.str());
 
         // no warning should be reported for
         check("bool f(int x, int y){\n"
@@ -6256,201 +6259,201 @@ private:
 
     void raceAfterInterlockedDecrement() {
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    whatever();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    whatever();\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    if (counter)\n"
-              "        return;\n"
-              "    destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    if (counter)\n"
+            "        return;\n"
+            "    destroy();\n"
+            "}\n");
         ASSERT_EQUALS("[test.cpp:4]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    if (!counter)\n"
-              "        destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    if (!counter)\n"
+            "        destroy();\n"
+            "}\n");
         ASSERT_EQUALS("[test.cpp:4]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    if (counter > 0)\n"
-              "        return;\n"
-              "    destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    if (counter > 0)\n"
+            "        return;\n"
+            "    destroy();\n"
+            "}\n");
         ASSERT_EQUALS("[test.cpp:4]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    if (0 < counter)\n"
-              "        return;\n"
-              "    destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    if (0 < counter)\n"
+            "        return;\n"
+            "    destroy();\n"
+            "}\n");
         ASSERT_EQUALS("[test.cpp:4]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    if (counter == 0)\n"
-              "        destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    if (counter == 0)\n"
+            "        destroy();\n"
+            "}\n");
         ASSERT_EQUALS("[test.cpp:4]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    if (0 == counter)\n"
-              "        destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    if (0 == counter)\n"
+            "        destroy();\n"
+            "}\n");
         ASSERT_EQUALS("[test.cpp:4]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    if (0 != counter)\n"
-              "        return;\n"
-              "    destroy()\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    if (0 != counter)\n"
+            "        return;\n"
+            "    destroy()\n"
+            "}\n");
         ASSERT_EQUALS("[test.cpp:4]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    if (counter != 0)\n"
-              "        return;\n"
-              "    destroy()\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    if (counter != 0)\n"
+            "        return;\n"
+            "    destroy()\n"
+            "}\n");
         ASSERT_EQUALS("[test.cpp:4]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    if (counter <= 0)\n"
-              "        destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    if (counter <= 0)\n"
+            "        destroy();\n"
+            "}\n");
         ASSERT_EQUALS("[test.cpp:4]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    InterlockedDecrement(&counter);\n"
-              "    if (0 >= counter)\n"
-              "        destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    InterlockedDecrement(&counter);\n"
+            "    if (0 >= counter)\n"
+            "        destroy();\n"
+            "}\n");
         ASSERT_EQUALS("[test.cpp:4]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    int newCount = InterlockedDecrement(&counter);\n"
-              "    if (newCount)\n"
-              "        return;\n"
-              "    destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    int newCount = InterlockedDecrement(&counter);\n"
+            "    if (newCount)\n"
+            "        return;\n"
+            "    destroy();\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    int newCount = InterlockedDecrement(&counter);\n"
-              "    if (!newCount)\n"
-              "        destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    int newCount = InterlockedDecrement(&counter);\n"
+            "    if (!newCount)\n"
+            "        destroy();\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    int newCount = InterlockedDecrement(&counter);\n"
-              "    if (newCount > 0)\n"
-              "        return;\n"
-              "    destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    int newCount = InterlockedDecrement(&counter);\n"
+            "    if (newCount > 0)\n"
+            "        return;\n"
+            "    destroy();\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    int newCount = InterlockedDecrement(&counter);\n"
-              "    if (0 < newCount)\n"
-              "        return;\n"
-              "    destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    int newCount = InterlockedDecrement(&counter);\n"
+            "    if (0 < newCount)\n"
+            "        return;\n"
+            "    destroy();\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    int newCount = InterlockedDecrement(&counter);\n"
-              "    if (newCount == 0)\n"
-              "        destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    int newCount = InterlockedDecrement(&counter);\n"
+            "    if (newCount == 0)\n"
+            "        destroy();\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    int newCount = InterlockedDecrement(&counter);\n"
-              "    if (0 == newCount)\n"
-              "        destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    int newCount = InterlockedDecrement(&counter);\n"
+            "    if (0 == newCount)\n"
+            "        destroy();\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    int newCount = InterlockedDecrement(&counter);\n"
-              "    if (0 != newCount)\n"
-              "        return;\n"
-              "    destroy()\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    int newCount = InterlockedDecrement(&counter);\n"
+            "    if (0 != newCount)\n"
+            "        return;\n"
+            "    destroy()\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    int newCount = InterlockedDecrement(&counter);\n"
-              "    if (newCount != 0)\n"
-              "        return;\n"
-              "    destroy()\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    int newCount = InterlockedDecrement(&counter);\n"
+            "    if (newCount != 0)\n"
+            "        return;\n"
+            "    destroy()\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    int newCount = InterlockedDecrement(&counter);\n"
-              "    if (newCount <= 0)\n"
-              "        destroy();\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    int newCount = InterlockedDecrement(&counter);\n"
+            "    if (newCount <= 0)\n"
+            "        destroy();\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
 
         checkInterlockedDecrement(
-              "void f() {\n"
-              "    int counter = 0;\n"
-              "    int newCount = InterlockedDecrement(&counter);\n"
-              "    if (0 >= newCount)\n"
-              "        destroy;\n"
-              "}\n");
+            "void f() {\n"
+            "    int counter = 0;\n"
+            "    int newCount = InterlockedDecrement(&counter);\n"
+            "    if (0 >= newCount)\n"
+            "        destroy;\n"
+            "}\n");
         ASSERT_EQUALS("", errout.str());
     }
 };
