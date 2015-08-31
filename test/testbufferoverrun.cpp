@@ -234,8 +234,6 @@ private:
 
         TEST_CASE(negativeMemoryAllocationSizeError) // #389
         TEST_CASE(negativeArraySize);
-
-        TEST_CASE(garbage1) // #6303
     }
 
 
@@ -1592,6 +1590,28 @@ private:
               "  a[0][0] = 0;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        check("void draw_quad(float z)  {\n"
+              "    int i;\n"
+              "    float (*vertices)[2][4];\n"
+              "    vertices[0][0][0] = z;\n"
+              "    vertices[0][0][1] = z;\n"
+              "    vertices[1][0][0] = z;\n"
+              "    vertices[1][0][1] = z;\n"
+              "    vertices[2][0][0] = z;\n"
+              "    vertices[2][0][1] = z;\n"
+              "    vertices[3][0][0] = z;\n"
+              "    vertices[3][0][1] = z;\n"
+              "    for (i = 0; i < 4; i++) {\n"
+              "        vertices[i][0][2] = z;\n"
+              "        vertices[i][0][3] = 1.0;\n"
+              "        vertices[i][1][0] = 2.0;\n"
+              "        vertices[i][1][1] = 3.0;\n"
+              "        vertices[i][1][2] = 4.0;\n"
+              "        vertices[i][1][3] = 5.0;\n"
+              "    }\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void array_index_switch_in_for() {
@@ -2479,6 +2499,14 @@ private:
               "f(a);\n"
               "");
         ASSERT_EQUALS("", errout.str());
+
+        check("void CreateLeafTex(unsigned char buf[256][2048][4]);\n"
+              "void foo() {\n"
+              "  unsigned char(* tree)[2048][4] = new unsigned char[256][2048][4];\n"
+              "  CreateLeafTex(tree);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
     }
 
     void possible_buffer_overrun_1() { // #3035
@@ -3804,14 +3832,6 @@ private:
               "int a[-1];\n"
               "int b[x?1:-1];\n"
               "int c[x?y:-1];\n");
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void garbage1() {
-        check("void foo() {\n"
-              "char *a = malloc(10);\n"
-              "a[0]\n"
-              "}\n");
         ASSERT_EQUALS("", errout.str());
     }
 };

@@ -1,9 +1,27 @@
-# Python module that loads a cppcheck dump
-# License: No restrictions, use this as you need.
+## @mainpage cppcheckdata
+#
+# @brief This is a Python module that helps you access Cppcheck dump data.<br><br>
+#
+# License: No restrictions, use this as you need.<br><br>
+#
 
-from lxml import etree
+import xml.etree.ElementTree as ET
 
 ## Token class. Contains information about each token in the source code.
+#
+# The CppcheckData.tokenlist is a list of Token items
+#
+# C++ class: http://cppcheck.sourceforge.net/devinfo/doxyoutput/classToken.html
+#
+# To iterate through all tokens use such code:
+# @code
+# data = CppcheckData.parsedump(...)
+# code = ''
+# for token in data.tokenlist:
+#   code = code + token.str + ' '
+# print(code)
+# @endcode
+#
 class Token:
     Id = None
     ## Token string
@@ -48,22 +66,85 @@ class Token:
     varId = None
     variableId = None
     ## Variable information for this token. See the Variable class.
+    #
+    # Example code:
+    # @code
+    # data = CppcheckData.parsedump(...)
+    # code = ''
+    # for token in data.tokenlist:
+    #   code = code + token.str
+    #   if token.variable:
+    #     if token.variable.isLocal:
+    #       code = code + ':localvar'
+    #     if token.variable.isArgument:
+    #       code = code + ':arg'
+    #   code = code + ' '
+    # print(code)
+    # @endcode
     variable = None
     functionId = None
-    ## If this token points at a function call, this attribute has the Function information. See the Function class.
+    ## If this token points at a function call, this attribute has the Function
+    # information. See the Function class.
     function = None
     valuesId = None
     ## Possible values of token
+    #
+    # Example code:
+    # @code
+    # data = CppcheckData.parsedump(...)
+    # code = ''
+    # for token in data.tokenlist:
+    #   code = code + token.str
+    #   if token.values:
+    #     # print values..
+    #     code = code + '{'
+    #     for value in token.values:
+    #       if value.intvalue:
+    #         code = code + str(value.intvalue) + ' '
+    #     code = code + '}'
+    #   code = code + ' '
+    # print(code)
+    # @endcode
     values = None
-    
+
+    typeScopeId = None
+    ## type scope (token->type()->classScope)
+    typeScope = None
+
     astParentId = None
     ## syntax tree parent
     astParent = None
     astOperand1Id = None
     ## syntax tree operand1
+    #
+    # Example code:
+    # @code
+    # data = CppcheckData.parsedump(...)
+    # for token in data.tokenlist:
+    #
+    #   # is this a addition?
+    #   if token.str == '+':
+    #
+    #     # print LHS operand
+    #     print(token.astOperand1.str)
+    # 
+    # @endcode
     astOperand1 = None
     astOperand2Id = None
     ## syntax tree operand2
+    #
+    # Example code:
+    # @code
+    # data = CppcheckData.parsedump(...)
+    # for token in data.tokenlist:
+    #
+    #   # is this a division?
+    #   if token.str == '/':
+    #
+    #     # print RHS operand
+    #     print(token.astOperand2.str)
+    # 
+    # @endcode
     astOperand2 = None
 
     ## file name
@@ -111,6 +192,8 @@ class Token:
         self.function = None
         self.valuesId = element.get('values')
         self.values = None
+        self.typeScopeId = element.get('type-scope')
+        self.typeScope = None
         self.astParentId = element.get('astParent')
         self.astParent = None
         self.astOperand1Id = element.get('astOperand1')
@@ -126,11 +209,12 @@ class Token:
         self.variable = IdMap[self.variableId]
         self.function = IdMap[self.functionId]
         self.values = IdMap[self.valuesId]
+        self.typeScope = IdMap[self.typeScopeId]
         self.astParent = IdMap[self.astParentId]
         self.astOperand1 = IdMap[self.astOperand1Id]
         self.astOperand2 = IdMap[self.astOperand2Id]
 
-    # Get value if it exists
+    ## Get value if it exists
     # Returns None if it doesn't exist
     def getValue(self, v):
         if not self.values:
@@ -140,14 +224,20 @@ class Token:
                 return value
         return None
 
-
+## Scope. Information about global scope, function scopes, class scopes, inner scopes, etc.
+# C++ class: http://cppcheck.sourceforge.net/devinfo/doxyoutput/classScope.html
 class Scope:
     Id = None
     classStartId = None
+    
+    ## The { Token for this scope
     classStart = None
     classEndId = None
+    ## The } Token for this scope
     classEnd = None
+    ## Name of this scope. For a function scope, this is the function name, For a class scope, this is the class name.
     className = None
+    ## Type of scope: Global, Function, Class, If, While
     type = None
 
     def __init__(self, element):
@@ -166,7 +256,8 @@ class Scope:
         self.classEnd = IdMap[self.classEndId]
         self.nestedIn = IdMap[self.nestedInId]
 
-
+## Information about a function
+# C++ class: http://cppcheck.sourceforge.net/devinfo/doxyoutput/classFunction.html
 class Function:
     Id = None
     argument = None
@@ -189,20 +280,32 @@ class Function:
             self.argument[argnr] = IdMap[argid]
         self.tokenDef = IdMap[self.tokenDefId]
 
+## Information about a variable
+# C++ class: http://cppcheck.sourceforge.net/devinfo/doxyoutput/classVariable.html
 class Variable:
     Id = None
     nameTokenId = None
+    # name token in variable declaration
     nameToken = None
     typeStartTokenId = None
+    ## start token of variable declaration
     typeStartToken = None
     typeEndTokenId = None
+    ## end token of variable declaration
     typeEndToken = None
+    ## Is this variable a function argument?
     isArgument = False
+    ## Is this variable an array?
     isArray = False
+    ## Is this variable a class or struct?
     isClass = False
+    ## Is this variable a local variable?
     isLocal = False
+    ## Is this variable a pointer
     isPointer = False
+    ## Is this variable a reference
     isReference = False
+    ## Is this variable static?
     isStatic = False
 
     def __init__(self, element):
@@ -226,12 +329,18 @@ class Variable:
         self.typeStartToken = IdMap[self.typeStartTokenId]
         self.typeEndToken = IdMap[self.typeEndTokenId]
 
-
+## ValueFlow class
 class ValueFlow:
-
+    ## ValueFlow::Value class
+    # Each possible value has a ValueFlow::Value item.
+    # Each ValueFlow::Value either has a intvalue or tokvalue
+    # C++ class: http://cppcheck.sourceforge.net/devinfo/doxyoutput/classValueFlow_1_1Value.html
     class Value:
+        # integer value
         intvalue = None
+        # token value
         tokvalue = None
+        # condition where this Value comes from
         condition = None
 
         def __init__(self, element):
@@ -244,6 +353,8 @@ class ValueFlow:
                 self.condition = int(self.condition)
 
     Id = None
+
+    ## Possible values
     values = None
 
     def __init__(self, element):
@@ -252,21 +363,44 @@ class ValueFlow:
         for value in element:
             self.values.append(ValueFlow.Value(value))
 
-
+## Class that makes cppcheck dump data available
+#
+# To iterate through all tokens use such code:
+# @code
+# data = CppcheckData.parsedump(...)
+# code = ''
+# for token in data.tokenlist:
+#   code = code + token.str + ' '
+# print(code)
+# @endcode
+#
+# To iterate through all scopes (functions, types, etc) use such code:
+# @code
+# data = CppcheckData.parsedump(...)
+# for scope in data.scopes:
+#   print('type:' + scope.type + ' name:' + scope.className)
+# @endcode
+#
 class CppcheckData:
+    ## List of Token items
     tokenlist = []
+    ## List of Scope items
     scopes = []
+    ## List of Function items
     functions = []
+    ## List of Variable items
     variables = []
+    ## List of ValueFlow values
     valueflow = []
 
     def __init__(self, filename):
         self.tokenlist = []
         self.scopes = []
+        self.functions = []
         self.variables = []
         self.valueflow = []
 
-        data = etree.parse(filename)
+        data = ET.parse(filename)
         for element in data.getroot():
             if element.tag == 'tokenlist':
                 for token in element:
@@ -316,13 +450,11 @@ class CppcheckData:
         for variable in self.variables:
             variable.setId(IdMap)
 
-
+## parse a cppcheck dump file
 def parsedump(filename):
     return CppcheckData(filename)
 
-# Check if type of ast node is float/double
-
-
+## Check if type of ast node is float/double
 def astIsFloat(token):
     if not token:
         return False

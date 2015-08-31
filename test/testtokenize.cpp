@@ -47,7 +47,6 @@ private:
         TEST_CASE(tokenize9);
         TEST_CASE(tokenize10);
         TEST_CASE(tokenize11);
-        TEST_CASE(tokenize12);
         TEST_CASE(tokenize13);  // bailout if the code contains "@" - that is not handled well.
         TEST_CASE(tokenize14);  // tokenize "0X10" => 16
         TEST_CASE(tokenize15);  // tokenize ".123"
@@ -63,12 +62,9 @@ private:
         TEST_CASE(tokenize26);  // #4245 (segmentation fault)
         TEST_CASE(tokenize27);  // #4525 (segmentation fault)
         TEST_CASE(tokenize28);  // #4725 (writing asm() around "^{}")
-        TEST_CASE(tokenize29);  // #5506 (segmentation fault upon invalid code)
-        TEST_CASE(tokenize30);  // #5356 (segmentation fault upon invalid code)
         TEST_CASE(tokenize31);  // #3503 (Wrong handling of member function taking function pointer as argument)
         TEST_CASE(tokenize32);  // #5884 (fsanitize=undefined: left shift of negative value -10000 in lib/templatesimplifier.cpp:852:46)
         TEST_CASE(tokenize33);  // #5780 Various crashes on valid template code
-        TEST_CASE(tokenize34);  // #6121 (crash upon invalid enum)
 
         TEST_CASE(syntax_case_default);
         TEST_CASE(simplifyFileAndLineMacro);  // tokenize "return - __LINE__;"
@@ -353,7 +349,6 @@ private:
 
         TEST_CASE(simplifyNamespaceStd);
 
-        TEST_CASE(microsoftMFC);
         TEST_CASE(microsoftMemory);
 
         TEST_CASE(borland);
@@ -664,15 +659,6 @@ private:
         ASSERT_EQUALS("X * sizeof ( Y ( ) ) ;", tokenizeAndStringify("X * sizeof(Y());", false));
     }
 
-    // ticket #2118 - invalid syntax error
-    void tokenize12() {
-        const char code[] = "Q_GLOBAL_STATIC_WITH_INITIALIZER(Qt4NodeStaticData, qt4NodeStaticData, {\n"
-                            "    for (unsigned i = 0 ; i < count; i++) {\n"
-                            "    }\n"
-                            "});";
-        ASSERT_THROW(tokenizeAndStringify(code), InternalError);
-    }
-
     // bailout if there is "@" - it is not handled well
     void tokenize13() {
         const char code[] = "@implementation\n"
@@ -784,16 +770,6 @@ private:
         ASSERT_EQUALS("; asm ( \"voidf^{return}intmain\" ) ; ( ) { }", tokenizeAndStringify("; void f ^ { return } int main ( ) { }"));
     }
 
-    // #5506 - segmentation fault upon invalid code
-    void tokenize29() {
-        tokenizeAndStringify("A template < int { int = -1 ; } template < int N > struct B { int [ A < N > :: zero ] ;  } ; B < 0 > b ;");
-    }
-
-    // #5356 - segmentation fault upon invalid code
-    void tokenize30() {
-        tokenizeAndStringify("struct template<int { = }; > struct B { }; B < 0 > b;");
-    }
-
     // #3503 - don't "simplify" SetFunction member function to a variable
     void tokenize31() {
         ASSERT_EQUALS("struct TTestClass { TTestClass ( ) { }\n"
@@ -825,12 +801,6 @@ private:
                             "    vector<int> VI;\n"
                             "}\n";
         tokenizeAndStringify(code, true);
-    }
-
-    void tokenize34() { // #6121
-        const char code[] = "enum E { f = {} };\n"
-                            "int a = f;";
-        ASSERT_THROW(tokenizeAndStringify(code, true), InternalError);
     }
 
     void syntax_case_default() { // correct syntax
@@ -3330,7 +3300,7 @@ private:
     }
 
     void removeParentheses18() {
-        ASSERT_EQUALS("float * a [ 2 ] ;", tokenizeAndStringify("float(*a)[2];", false));
+        ASSERT_EQUALS("float ( * a ) [ 2 ] ;", tokenizeAndStringify("float(*a)[2];", false));
     }
 
     void removeParentheses19() {
@@ -3354,7 +3324,7 @@ private:
         static char  exp[] = "struct S { "
                              "char * a ; "
                              "char & b ; "
-                             "const static char * c ; "
+                             "static const char * c ; "
                              "} ;";
         ASSERT_EQUALS(exp, tokenizeAndStringify(code));
     }
@@ -3494,7 +3464,7 @@ private:
             "a = SZ;\n"
             "}\n";
         const char expected[] =
-            "const static char str [ 5 ] = \"abcd\" ;\n\nvoid f ( ) {\na = 5 ;\n}";
+            "static const char str [ 5 ] = \"abcd\" ;\n\nvoid f ( ) {\na = 5 ;\n}";
         ASSERT_EQUALS(expected, tokenizeAndStringify(code,true));
     }
 
@@ -3776,11 +3746,11 @@ private:
                                 "  unsigned int *foo = &x;"
                                 "}";
             ASSERT_EQUALS("unsigned int x ; "
-                          "const static unsigned int A = 1 ; "
-                          "const static unsigned int B = A ; "
-                          "const static unsigned int C = 0 ; "
-                          "const static unsigned int D = A ; "
-                          "const static unsigned int E = 0 ; "
+                          "static const unsigned int A = 1 ; "
+                          "static const unsigned int B = A ; "
+                          "static const unsigned int C = 0 ; "
+                          "static const unsigned int D = A ; "
+                          "static const unsigned int E = 0 ; "
                           "void f ( ) { "
                           "unsigned int * foo ; "
                           "foo = & x ; "
@@ -4618,6 +4588,36 @@ private:
         {
             const char code[] = "int short signed x;";
             const char expected[] = "signed short x ;";
+            ASSERT_EQUALS(expected, tokenizeAndStringify(code));
+        }
+        {
+            const char code[] = "unsigned static short const int i;";
+            const char expected[] = "static const unsigned short i ;";
+            ASSERT_EQUALS(expected, tokenizeAndStringify(code));
+        }
+        {
+            const char code[] = "float complex x;";
+            const char expected[] = "_Complex float x ;";
+            ASSERT_EQUALS(expected, tokenizeAndStringify(code));
+        }
+        {
+            const char code[] = "complex float x;";
+            const char expected[] = "_Complex float x ;";
+            ASSERT_EQUALS(expected, tokenizeAndStringify(code));
+        }
+        {
+            const char code[] = "complex long double x;";
+            const char expected[] = "_Complex long double x ;";
+            ASSERT_EQUALS(expected, tokenizeAndStringify(code));
+        }
+        {
+            const char code[] = "long double complex x;";
+            const char expected[] = "_Complex long double x ;";
+            ASSERT_EQUALS(expected, tokenizeAndStringify(code));
+        }
+        {
+            const char code[] = "double complex;";
+            const char expected[] = "double complex ;";
             ASSERT_EQUALS(expected, tokenizeAndStringify(code));
         }
     }
@@ -5777,20 +5777,6 @@ private:
                                          "void search ( ) { }\n"
                                          "} ;";
         ASSERT_EQUALS(expected14, tokenizeAndStringify(code14, false));
-    }
-
-    void microsoftMFC() {
-        const char code1[] = "class MyDialog : public CDialog { DECLARE_MESSAGE_MAP() private: CString text; };";
-        ASSERT_EQUALS("class MyDialog : public CDialog { private: CString text ; } ;", tokenizeAndStringify(code1,false,true,Settings::Win32A));
-
-        const char code2[] = "class MyDialog : public CDialog { DECLARE_DYNAMIC(MyDialog) private: CString text; };";
-        ASSERT_EQUALS("class MyDialog : public CDialog { private: CString text ; } ;", tokenizeAndStringify(code2,false,true,Settings::Win32A));
-
-        const char code3[] = "class MyDialog : public CDialog { DECLARE_DYNCREATE(MyDialog) private: CString text; };";
-        ASSERT_EQUALS("class MyDialog : public CDialog { private: CString text ; } ;", tokenizeAndStringify(code3,false,true,Settings::Win32A));
-
-        const char code4[] = "class MyDialog : public CDialog { DECLARE_DYNAMIC_CLASS(MyDialog) private: CString text; };";
-        ASSERT_EQUALS("class MyDialog : public CDialog { private: CString text ; } ;", tokenizeAndStringify(code4,false,true,Settings::Win32A));
     }
 
     void microsoftMemory() {
@@ -7245,15 +7231,15 @@ private:
     void simplifyMathFunctions_fma() {
         // verify fma(), fmal(), fmaf() - simplifcation
         const char code_fma[] ="int f(int a, int b, int c) { return fma(a,b,c); }";
-        const char expected_fma[] = "int f ( int a , int b , int c ) { return ( a ) * ( b ) + ( c ) ; }";
+        const char expected_fma[] = "int f ( int a , int b , int c ) { return ( a * b + c ) ; }";
         ASSERT_EQUALS(expected_fma, tokenizeAndStringify(code_fma));
 
         const char code_fmaf[] ="float f ( float a , float b , float c ) { return fmaf(a,b,c); }";
-        const char expected_fmaf[] = "float f ( float a , float b , float c ) { return ( a ) * ( b ) + ( c ) ; }";
+        const char expected_fmaf[] = "float f ( float a , float b , float c ) { return ( a * b + c ) ; }";
         ASSERT_EQUALS(expected_fmaf, tokenizeAndStringify(code_fmaf));
 
         const char code_fmal[] ="long double f ( long double a , long double b , long double c ) { return fmal(a,b,c); }";
-        const char expected_fmal[] = "long double f ( long double a , long double b , long double c ) { return ( a ) * ( b ) + ( c ) ; }";
+        const char expected_fmal[] = "long double f ( long double a , long double b , long double c ) { return ( a * b + c ) ; }";
         ASSERT_EQUALS(expected_fmal, tokenizeAndStringify(code_fmal));
 
         const char code_fma1[] = "void f() {\n"
@@ -7269,9 +7255,9 @@ private:
                                      "} ;";
 
         const char current_fma1[] = "void f ( ) {\n"
-                                    "std :: cout << \"fma(1,2,3): \" << ( 1 ) * ( 2 ) + ( 3 ) << std :: endl ;\n"
-                                    "std :: cout << \"fmaf(1,2,3): \" << ( 1 ) * ( 2 ) + ( 3 ) << std :: endl ;\n"
-                                    "std :: cout << \"fmal(1,2,3): \" << ( 1 ) * ( 2 ) + ( 3 ) << std :: endl ;\n"
+                                    "std :: cout << \"fma(1,2,3): \" << ( 1 * 2 + 3 ) << std :: endl ;\n"
+                                    "std :: cout << \"fmaf(1,2,3): \" << ( 1 * 2 + 3 ) << std :: endl ;\n"
+                                    "std :: cout << \"fmal(1,2,3): \" << ( 1 * 2 + 3 ) << std :: endl ;\n"
                                     "} ;";
         TODO_ASSERT_EQUALS(expected_fma1, current_fma1,tokenizeAndStringify(code_fma1));
     }
@@ -8327,12 +8313,12 @@ private:
             "static const signed long long i4 ;\n"
             "static const signed long long i5 ;\n"
             "static const signed long long i6 ;\n"
-            "static const long long signed int i7 ;\n"
-            "static const long long signed int i8 ;\n"
-            "static const signed int long long i9 ;\n"
-            "static const signed int long long i10 ;\n"
-            "static const int signed long long i11 ;\n"
-            "static const int signed long long i12 ;\n"
+            "static const signed long long i7 ;\n"
+            "static const signed long long i8 ;\n"
+            "static const signed long long i9 ;\n"
+            "static const signed long long i10 ;\n"
+            "static const signed long long i11 ;\n"
+            "static const signed long long i12 ;\n"
             "static const signed long long i13 ;\n"
             "static const signed long long i14 ;\n"
             "static const signed long long i15 ;\n"
@@ -8343,6 +8329,10 @@ private:
             "+ i13 + i14 + i15 + i16 + i17 + i18 ;\n"
             "}";
         ASSERT_EQUALS(expected2, tokenizeAndStringify(code2, true));
+
+        const char code3[] = "const unsigned long extern int i;";
+        const char expected3[] = "extern const unsigned long i ;";
+        ASSERT_EQUALS(expected3, tokenizeAndStringify(code3, true));
     }
 
     void simplifyDeprecated() {

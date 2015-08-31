@@ -75,6 +75,7 @@ private:
         TEST_CASE(testautovar15); // ticket #6538
         TEST_CASE(testautovar_array1);
         TEST_CASE(testautovar_array2);
+        TEST_CASE(testautovar_ptrptr); // ticket #6956
         TEST_CASE(testautovar_return1);
         TEST_CASE(testautovar_return2);
         TEST_CASE(testautovar_return3);
@@ -99,6 +100,7 @@ private:
         TEST_CASE(returnReferenceLiteral);
         TEST_CASE(returnReferenceCalculation);
         TEST_CASE(returnReferenceLambda);
+        TEST_CASE(returnReferenceInnerScope);
 
         // global namespace
         TEST_CASE(testglobalnamespace);
@@ -328,11 +330,11 @@ private:
 
     void testautovar11() { // #4641 - fp, assign local struct member address to function parameter
         check("struct A {\n"
-              "    char *data[10];\n"
+              "    char (*data)[10];\n"
               "};\n"
               "void foo(char** p) {\n"
               "    struct A a = bar();\n"
-              "    *p = &a.data[0];\n"
+              "    *p = &(*a.data)[0];\n"
               "}");
         ASSERT_EQUALS("", errout.str());
 
@@ -421,6 +423,14 @@ private:
               "    arr[0]=&num;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:6]: (error) Address of local auto-variable assigned to a function parameter.\n", errout.str());
+    }
+
+    void testautovar_ptrptr() { // #6596
+        check("void remove_duplicate_matches (char **matches) {\n"
+              "  char dead_slot;\n"
+              "  matches[0] = (char *)&dead_slot;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:3]: (error) Address of local auto-variable assigned to a function parameter.\n", errout.str());
     }
 
     void testautovar_return1() {
@@ -542,13 +552,13 @@ private:
               "   long *pKoeff[256];\n"
               "   delete[] pKoeff;\n"
               "}");
-        TODO_ASSERT_EQUALS("[test.cpp:3]: (error) Deallocation of an auto-variable results in undefined behaviour.\n", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Deallocation of an auto-variable results in undefined behaviour.\n", errout.str());
 
         check("int main() {\n"
               "   long *pKoeff[256];\n"
               "   free (pKoeff);\n"
               "}");
-        TODO_ASSERT_EQUALS("[test.cpp:3]: (error) Deallocation of an auto-variable results in undefined behaviour.\n", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Deallocation of an auto-variable results in undefined behaviour.\n", errout.str());
 
         check("void foo() {\n"
               "   const intPtr& intref = Getter();\n"
@@ -962,6 +972,19 @@ private:
               "    [](const Item& lhs, const Item& rhs) {\n"
               "        return false;\n"
               "    });\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void returnReferenceInnerScope() {
+        // #6951
+        check("const Callback& make() {\n"
+              "    struct _Wrapper {\n"
+              "        static ulong call(void* o, const void* f, const void*[]) {\n"
+              "            return 1;\n"
+              "        }\n"
+              "    };\n"
+              "    return _make(_Wrapper::call, pmf);\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }

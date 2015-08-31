@@ -305,9 +305,6 @@ public:
      */
     void simplifyVariableMultipleAssign();
 
-    /** @brief simplify if (a) { if (a) */
-    void simplifyIfSameInnerCondition();
-
     /**
      * Simplify the 'C Alternative Tokens'
      * Examples:
@@ -437,9 +434,6 @@ public:
      */
     bool simplifyFunctionReturn();
 
-    /** Struct initialization */
-    void simplifyStructInit();
-
     /** Struct simplification
      * "struct S { } s;" => "struct S { }; S s;"
      */
@@ -499,13 +493,9 @@ public:
 
     void simplifyRoundCurlyParentheses();
 
-    void simplifyDebugNew();
-
     void simplifySQL();
 
-    bool hasEnumsWithTypedef();
-
-    void simplifyDefaultAndDeleteInsideClass();
+    void checkForEnumsWithTypedef();
 
     void findComplicatedSyntaxErrorsInTemplates();
 
@@ -536,11 +526,6 @@ private:
      * @return token matching with endsWith if syntax seems to be a function head else nullptr
      */
     const Token * isFunctionHead(const Token *tok, const std::string &endsWith) const;
-
-    /**
-     * Change "int const x;" into "const int x;"
-     */
-    void simplifyConst();
 
     /**
      * simplify "while (0)"
@@ -663,11 +648,6 @@ private:
      * Add std:: in front of std classes, when using namespace std; was given
      */
     void simplifyNamespaceStd();
-
-    /**
-     * Remove Microsoft MFC 'DECLARE_MESSAGE_MAP()'
-     */
-    void simplifyMicrosoftMFC();
 
     /**
     * Convert Microsoft memory functions

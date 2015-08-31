@@ -148,6 +148,7 @@ private:
         TEST_CASE(uninitVarArray6);
         TEST_CASE(uninitVarArray7);
         TEST_CASE(uninitVarArray8);
+        TEST_CASE(uninitVarArray9); // ticket #6957, #6959
         TEST_CASE(uninitVarArray2D);
         TEST_CASE(uninitVarArray3D);
         TEST_CASE(uninitVarCpp11Init1);
@@ -2283,7 +2284,7 @@ private:
               "{\n"
               "public:\n"
               "    John() { }\n"
-              "    A *a[5];\n"
+              "    A (*a)[5];\n"
               "};");
         ASSERT_EQUALS("[test.cpp:5]: (warning) Member variable 'John::a' is not initialized in the constructor.\n", errout.str());
     }
@@ -2402,6 +2403,26 @@ private:
               "    Foo() { ::ZeroMemory(a); }\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+    }
+
+    void uninitVarArray9() { // #6957
+        check("class BaseGDL;\n"
+              "struct IxExprListT {\n"
+              "private:\n"
+              "    BaseGDL* eArr[3];\n"
+              "public:\n"
+              "    IxExprListT() {}\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:6]: (warning) Member variable 'IxExprListT::eArr' is not initialized in the constructor.\n", errout.str());
+        check("struct sRAIUnitDefBL {\n"
+              "  sRAIUnitDefBL();\n"
+              "  ~sRAIUnitDefBL();\n"
+              "};\n"
+              "struct sRAIUnitDef {\n"
+              "  sRAIUnitDef() {}\n"
+              "  sRAIUnitDefBL *List[35];\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:6]: (warning) Member variable 'sRAIUnitDef::List' is not initialized in the constructor.\n", errout.str());
     }
 
     void uninitVarArray2D() {

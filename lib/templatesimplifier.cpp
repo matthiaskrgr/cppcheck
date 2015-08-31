@@ -118,16 +118,15 @@ void TemplateSimplifier::cleanupAfterSimplify(Token *tokens)
 }
 
 
-bool TemplateSimplifier::hasComplicatedSyntaxErrorsInTemplates(const Token *tokens, const Token *& errorToken)
+void TemplateSimplifier::checkComplicatedSyntaxErrorsInTemplates(const Token *tokens)
 {
-    errorToken=nullptr;
     // check for more complicated syntax errors when using templates..
     for (const Token *tok = tokens; tok; tok = tok->next()) {
         // skip executing scopes (ticket #3183)..
         if (Token::simpleMatch(tok, "( {")) {
             tok = tok->link();
             if (!tok)
-                return true;
+                syntaxError(nullptr);
         }
         // skip executing scopes..
         const Token *start = Tokenizer::startOfExecutableScope(tok);
@@ -146,7 +145,7 @@ bool TemplateSimplifier::hasComplicatedSyntaxErrorsInTemplates(const Token *toke
         }
 
         if (!tok)
-            return true;
+            syntaxError(nullptr);
         // not start of statement?
         if (tok->previous() && !Token::Match(tok, "[;{}]"))
             continue;
@@ -210,15 +209,10 @@ bool TemplateSimplifier::hasComplicatedSyntaxErrorsInTemplates(const Token *toke
                         --level;
                 }
             }
-            if (level > 0) {
-                errorToken=tok;
+            if (level > 0)
                 syntaxError(tok);
-                return true;
-            }
         }
     }
-
-    return false;
 }
 
 unsigned int TemplateSimplifier::templateParameters(const Token *tok)
@@ -277,7 +271,7 @@ unsigned int TemplateSimplifier::templateParameters(const Token *tok)
             return 0;
 
         // num/type ..
-        if (!tok->isNumber() && tok->type() != Token::eChar && !tok->isName())
+        if (!tok->isNumber() && tok->tokType() != Token::eChar && !tok->isName())
             return 0;
         tok = tok->next();
         if (!tok)
@@ -292,10 +286,9 @@ unsigned int TemplateSimplifier::templateParameters(const Token *tok)
 
         // Function pointer or prototype..
         while (Token::Match(tok, "(|[")) {
-            if (!tok->link()) {
+            if (!tok->link())
                 syntaxError(tok);
-                return 0;
-            }
+
             tok = tok->link()->next();
             while (Token::Match(tok, "const|volatile")) // Ticket #5786: Skip function cv-qualifiers
                 tok = tok->next();
@@ -943,7 +936,7 @@ bool TemplateSimplifier::simplifyNumericCalculations(Token *tok)
     while (tok->tokAt(4) && tok->next()->isNumber() && tok->tokAt(3)->isNumber()) { // %any% %num% %any% %num% %any%
         const Token* op = tok->tokAt(2);
         const Token* after = tok->tokAt(4);
-        if (Token::Match(tok, "* %num% /") && (tok->strAt(3) != "0") && tok->next()->str() == MathLib::multiply(tok->strAt(3), MathLib::divide(tok->next()->str(), tok->strAt(3)))) {
+        if (Token::Match(tok, "* %num% /") && (op->strAt(1) != "0") && tok->next()->str() == MathLib::multiply(op->strAt(1), MathLib::divide(tok->next()->str(), op->strAt(1)))) {
             // Division where result is a whole number
         } else if (!((op->str() == "*" && (isLowerThanMulDiv(tok) || tok->str() == "*") && isLowerEqualThanMulDiv(after)) || // associative
                      (Token::Match(op, "[/%]") && isLowerThanMulDiv(tok) && isLowerEqualThanMulDiv(after)) || // NOT associative
@@ -1160,7 +1153,7 @@ bool TemplateSimplifier::simplifyCalculations(Token *_tokens)
                         result = (op1 >= op2) ? "1" : "0";
                     else if (cmp == "<")
                         result = (op1 < op2) ? "1" : "0";
-                    else if (cmp == ">")
+                    else
                         result = (op1 > op2) ? "1" : "0";
 
                     tok->str(result);

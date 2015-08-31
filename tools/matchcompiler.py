@@ -86,7 +86,7 @@ class MatchCompiler:
         elif tok == '%bool%':
             return 'tok->isBoolean()'
         elif tok == '%char%':
-            return '(tok->type()==Token::eChar)'
+            return '(tok->tokType()==Token::eChar)'
         elif tok == '%comp%':
             return 'tok->isComparisonOp()'
         elif tok == '%num%':
@@ -96,11 +96,11 @@ class MatchCompiler:
         elif tok == '%op%':
             return 'tok->isOp()'
         elif tok == '%or%':
-            return '(tok->type() == Token::eBitOp && tok->str()==MatchCompiler::makeConstString("|") )'
+            return '(tok->tokType() == Token::eBitOp && tok->str()==MatchCompiler::makeConstString("|") )'
         elif tok == '%oror%':
-            return '(tok->type() == Token::eLogicalOp && tok->str()==MatchCompiler::makeConstString("||"))'
+            return '(tok->tokType() == Token::eLogicalOp && tok->str()==MatchCompiler::makeConstString("||"))'
         elif tok == '%str%':
-            return '(tok->type()==Token::eString)'
+            return '(tok->tokType()==Token::eString)'
         elif tok == '%type%':
             return (
                 '(tok->isName() && tok->varId()==0U && !tok->isKeyword())'
@@ -274,7 +274,7 @@ class MatchCompiler:
                 elif line[pos] == '"':
                     inString = True
             pos += 1
-        return inString 
+        return inString
 
     def _parseStringComparison(self, line, pos1):
         startPos = 0
@@ -650,7 +650,7 @@ def main():
                         help='verify compiled matches against on-the-fly parser. Slow!')
     parser.add_argument('--show-skipped', action='store_true', default=False,
                         help='show skipped (non-static) patterns')
-    parser.add_argument('--read-dir', default="lib", 
+    parser.add_argument('--read-dir', default="lib",
                         help='directory from which files are read')
     parser.add_argument('--write-dir', default="build",
                         help='directory into which files are written')
@@ -683,7 +683,7 @@ def main():
     if not files:
         # select all *.cpp files in lib_dir
         for f in glob.glob(lib_dir + '/*.cpp'):
-            files.append(f[len(lib_dir)+1:])
+            files.append(f[len(lib_dir) + 1:])
 
     # convert files
     for fi in files:
@@ -695,4 +695,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

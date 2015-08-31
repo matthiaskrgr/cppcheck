@@ -689,6 +689,8 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
                 type = Variables::reference;
             else if (i->nameToken()->previous()->str() == "*" && i->nameToken()->strAt(-2) == "*")
                 type = Variables::pointerPointer;
+            else if (i->isPointerToArray())
+                type = Variables::pointerPointer;
             else if (i->isPointer())
                 type = Variables::pointer;
             else if (_tokenizer->isC() ||
@@ -878,12 +880,12 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
             else if (tok->str() == "(")
                 tok = tok->next();
 
-            if (tok->type() == Token::eIncDecOp) {
+            if (tok->tokType() == Token::eIncDecOp) {
                 pre = true;
                 tok = tok->next();
             }
 
-            if (tok->next()->type() == Token::eIncDecOp)
+            if (tok->next()->tokType() == Token::eIncDecOp)
                 post = true;
 
             const unsigned int varid1 = tok->varId();
@@ -1049,7 +1051,7 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
         }
 
         // ++|--
-        else if (tok->next() && tok->next()->type() == Token::eIncDecOp && tok->next()->astOperand1() && tok->next()->astOperand1()->varId()) {
+        else if (tok->next() && tok->next()->tokType() == Token::eIncDecOp && tok->next()->astOperand1() && tok->next()->astOperand1()->varId()) {
             if (tok->next()->astParent())
                 variables.use(tok->next()->astOperand1()->varId(), tok);
             else
@@ -1224,24 +1226,24 @@ void CheckUnusedVar::checkStructMemberUsage()
             structname.clear();
 
         if (!structname.empty() && Token::Match(tok, "[{;]")) {
-            // Declaring struct variable..
-            std::string varname;
-
             // declaring a POD variable?
             if (!tok->next()->isStandardType())
                 continue;
 
+            // Declaring struct variable..
+            const std::string* varname;
+
             if (Token::Match(tok->next(), "%type% %name% [;[]"))
-                varname = tok->strAt(2);
+                varname = &tok->strAt(2);
             else if (Token::Match(tok->next(), "%type% %type%|* %name% [;[]"))
-                varname = tok->strAt(3);
+                varname = &tok->strAt(3);
             else if (Token::Match(tok->next(), "%type% %type% * %name% [;[]"))
-                varname = tok->strAt(4);
+                varname = &tok->strAt(4);
             else
                 continue;
 
             // Check if the struct variable is used anywhere in the file
-            const std::string usagePattern(". " + varname);
+            const std::string usagePattern(". " + *varname);
             bool used = false;
             for (const Token *tok2 = _tokenizer->tokens(); tok2; tok2 = tok2->next()) {
                 if (Token::simpleMatch(tok2, usagePattern.c_str())) {
@@ -1251,7 +1253,7 @@ void CheckUnusedVar::checkStructMemberUsage()
             }
 
             if (! used) {
-                unusedStructMemberError(tok->next(), structname, varname);
+                unusedStructMemberError(tok->next(), structname, *varname);
             }
         }
     }

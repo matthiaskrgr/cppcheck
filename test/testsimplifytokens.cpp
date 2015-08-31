@@ -59,7 +59,6 @@ private:
         TEST_CASE(removePreIncrement);
 
         TEST_CASE(elseif1);
-        TEST_CASE(ifa_ifa);     // "if (a) { if (a) .." => "if (a) { if (1) .."
 
         TEST_CASE(sizeof_array);
         TEST_CASE(sizeof5);
@@ -197,7 +196,6 @@ private:
         TEST_CASE(enum44);
         TEST_CASE(enumscope1); // ticket #3949
         TEST_CASE(duplicateDefinition); // ticket #3565
-        TEST_CASE(invalid_enum); // #5600
 
         // remove "std::" on some standard functions
         TEST_CASE(removestd);
@@ -852,11 +850,6 @@ private:
             const char expected[] = "\n\n##file 0\n1: = { [ ] { if ( ab ) { cd } else { if ( ef ) { gh } else { ij } } kl } ( ) }\n";
             ASSERT_EQUALS(expected, elseif(src));
         }
-    }
-
-
-    void ifa_ifa() {
-        ASSERT_EQUALS("int a ; if ( a ) { { ab } cd }", tok("int a ; if (a) { if (a) { ab } cd }", true));
     }
 
 
@@ -3251,6 +3244,17 @@ private:
                              "void f() { if (aa) ; else if (bb==x) df; }\n";
         checkSimplifyEnum(code3);
         ASSERT_EQUALS("", errout.str());
+
+        // avoid false positive: Initializer list
+        const char code4[] = "struct S {\n"
+                             "    enum { E = 1 };\n"
+                             "    explicit S(float f)\n"
+                             "        : f_(f * E)\n"
+                             "    {}\n"
+                             "    float f_;\n"
+                             "};";
+        checkSimplifyEnum(code4);
+        ASSERT_EQUALS("", errout.str());
     }
 
     void enum23() { // ticket #2804
@@ -3433,17 +3437,6 @@ private:
         tokenizer.tokenize(istr, "test.c");
         Token *x_token = tokenizer.list.front()->tokAt(5);
         ASSERT_EQUALS(false, tokenizer.duplicateDefinition(&x_token, tokenizer.tokens()));
-    }
-
-    void invalid_enum() { // #5600: missing include causes invalid enum
-        const char code [] = "enum {\n"
-                             "    NUM_OPCODES = \n"
-                             // #include "definition"
-                             "};\n"
-                             "struct bytecode {};\n"
-                             "jv jq_next() { opcode = ((opcode) +NUM_OPCODES);\n"
-                             "}";
-        ASSERT_THROW(checkSimplifyEnum(code), InternalError);
     }
 
     void removestd() {

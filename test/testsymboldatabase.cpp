@@ -113,6 +113,7 @@ private:
         TEST_CASE(test_isVariableDeclarationIdentifiesDeclarationWithIndirection);
         TEST_CASE(test_isVariableDeclarationIdentifiesDeclarationWithMultipleIndirection);
         TEST_CASE(test_isVariableDeclarationIdentifiesArray);
+        TEST_CASE(test_isVariableDeclarationIdentifiesPointerArray);
         TEST_CASE(test_isVariableDeclarationIdentifiesOfArrayPointers);
         TEST_CASE(isVariableDeclarationIdentifiesTemplatedPointerVariable);
         TEST_CASE(isVariableDeclarationIdentifiesTemplatedPointerToPointerVariable);
@@ -491,10 +492,11 @@ private:
         Variable v(vartok, typetok, vartok->previous(), 0, Public, 0, 0, &settings.library);
         ASSERT(true == v.isArray());
         ASSERT(false == v.isPointer());
+        ASSERT(false == v.isPointerArray());
         ASSERT(false == v.isReference());
     }
 
-    void test_isVariableDeclarationIdentifiesOfArrayPointers() {
+    void test_isVariableDeclarationIdentifiesPointerArray() {
         reset();
         givenACodeSampleToTokenize arr("A *a[5];");
         bool result = si.isVariableDeclaration(arr.tokens(), vartok, typetok);
@@ -502,8 +504,25 @@ private:
         ASSERT_EQUALS("a", vartok->str());
         ASSERT_EQUALS("A", typetok->str());
         Variable v(vartok, typetok, vartok->previous(), 0, Public, 0, 0, &settings.library);
+        ASSERT(false == v.isPointer());
         ASSERT(true == v.isArray());
+        ASSERT(false == v.isPointerToArray());
+        ASSERT(true == v.isPointerArray());
+        ASSERT(false == v.isReference());
+    }
+
+    void test_isVariableDeclarationIdentifiesOfArrayPointers() {
+        reset();
+        givenACodeSampleToTokenize arr("A (*a)[5];");
+        bool result = si.isVariableDeclaration(arr.tokens(), vartok, typetok);
+        ASSERT_EQUALS(true, result);
+        ASSERT_EQUALS("a", vartok->str());
+        ASSERT_EQUALS("A", typetok->str());
+        Variable v(vartok, typetok, vartok->previous(), 0, Public, 0, 0, &settings.library);
         ASSERT(true == v.isPointer());
+        ASSERT(false == v.isArray());
+        ASSERT(true == v.isPointerToArray());
+        ASSERT(false == v.isPointerArray());
         ASSERT(false == v.isReference());
     }
 
@@ -1866,9 +1885,6 @@ private:
                       "class Bar;\n"
                       "class Sub;\n");
         ASSERT(db && db->typeList.size() == 5);
-        ASSERT(db && db->isClassOrStruct("Foo"));
-        ASSERT(db && db->isClassOrStruct("Bar"));
-        ASSERT(db && db->isClassOrStruct("Sub"));
         if (!db || db->typeList.size() < 5)
             return;
         std::list<Type>::const_iterator i = db->typeList.begin();
@@ -1938,9 +1954,6 @@ private:
                       "    struct Barney barney;\n"
                       "};\n");
         ASSERT(db && db->typeList.size() == 3);
-        ASSERT(db && db->isClassOrStruct("Fred"));
-        ASSERT(db && db->isClassOrStruct("Wilma"));
-        ASSERT(db && db->isClassOrStruct("Barney"));
         if (!db || db->typeList.size() != 3)
             return;
         std::list<Type>::const_iterator i = db->typeList.begin();

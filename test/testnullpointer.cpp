@@ -70,6 +70,8 @@ private:
         TEST_CASE(nullpointer25); // #5061
         TEST_CASE(nullpointer26); // #3589
         TEST_CASE(nullpointer27); // #6568
+        TEST_CASE(nullpointer28); // #6491
+        TEST_CASE(nullpointer30); // #6392
         TEST_CASE(nullpointer_addressOf); // address of
         TEST_CASE(nullpointerSwitch); // #2626
         TEST_CASE(nullpointer_cast); // #4692
@@ -1291,6 +1293,32 @@ private:
               "}");
         ASSERT_EQUALS("[test.cpp:8]: (error) Possible null pointer dereference: pointer_\n"
                       "[test.cpp:8]: (error) Null pointer dereference\n", errout.str());
+    }
+
+    void nullpointer28() { // #6491
+        check("typedef struct { int value; } S;\n"
+              "int f(const S *s) { \n"
+              "  int i = s ? s->value + 1 \n"
+              "            : s->value - 1; // <-- null ptr dereference \n"
+              "  return i;\n"
+              "}\n"
+              "int main(){f(0);}\n", true);
+        ASSERT_EQUALS("[test.cpp:4]: (error) Possible null pointer dereference: s\n", errout.str());
+    }
+
+    void nullpointer30() { // #6392
+        check("void f(std::vector<std::string> *values)\n"
+              "{\n"
+              "  values->clear();\n"
+              "  if (values) \n"
+              "  {\n"
+              "    for (int i = 0; i < values->size(); ++i)\n"
+              "    {\n"
+              "      values->push_back(\"test\");\n"
+              "    }\n"
+              "  }\n"
+              "}\n", true);
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (warning, inconclusive) Either the condition 'if(values)' is redundant or there is possible null pointer dereference: values.\n", errout.str());
     }
 
     void nullpointer_addressOf() { // address of

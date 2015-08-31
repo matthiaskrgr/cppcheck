@@ -168,6 +168,8 @@ private:
         TEST_CASE(redundantPointerOp);
         TEST_CASE(test_isSameExpression);
         TEST_CASE(raceAfterInterlockedDecrement);
+
+        TEST_CASE(testUnusedLabel);
     }
 
     void check(const char code[], const char *filename = nullptr, bool experimental = false, bool inconclusive = true, bool runSimpleChecks=true, Settings* settings = 0) {
@@ -3091,7 +3093,7 @@ private:
               "  label:\n"
               "    throw 0;\n"
               "}", nullptr, false, false, false);
-        ASSERT_EQUALS("", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (style) Label 'label' is not used.\n", errout.str());
 
         check("void foo() {\n"
               "    wxCHECK2(state < 3 && state >= 0, return);\n"
@@ -3186,13 +3188,6 @@ private:
               "    per_state_info() : enter(0), exit(0), events(0) {}\n"
               "};", nullptr, false, false, false);
         ASSERT_EQUALS("", errout.str());
-
-        // Garbage code - don't crash
-        check("namespace pr16989 {\n"
-              "    class C {\n"
-              "        C tpl_mem(T *) { return }\n"
-              "    };\n"
-              "}");
     }
 
 
@@ -3813,12 +3808,6 @@ private:
         check("void f() {\n"
               "    return (2*a)?b:c;\n"
               "}");
-        ASSERT_EQUALS("", errout.str());
-
-        // Ticket #2585 - segmentation fault for invalid code
-        check("abcdef?""?<"
-              "123456?""?>"
-              "+?""?=");
         ASSERT_EQUALS("", errout.str());
 
         check("void f(char c) {\n"
@@ -5301,7 +5290,7 @@ private:
               "    Foo a[5];\n"
               "    memset(a, 'a', 5);\n"
               "}");
-        TODO_ASSERT_EQUALS("[test.cpp:3]: (warning, inconclusive) Array 'a' is filled incompletely. Did you forget to multiply the size given to 'memset()' with 'sizeof(*a)'?\n", "", errout.str());
+        TODO_ASSERT_EQUALS("[test.cpp:4]: (warning, inconclusive) Array 'a' is filled incompletely. Did you forget to multiply the size given to 'memset()' with 'sizeof(*a)'?\n", "", errout.str());
 
         check("void f() {\n"
               "    Foo a[5];\n" // Size of foo is unknown
@@ -6054,12 +6043,6 @@ private:
               "}", nullptr, true, false, false);
         ASSERT_EQUALS("", errout.str());
 
-        // ticket #4927 Segfault in CheckOther::checkCommaSeparatedReturn() on invalid code
-        check("int main() {\n"
-              "   return 0\n"
-              "}", nullptr, true, false, false);
-        ASSERT_EQUALS("", errout.str());
-
         // #4943 take care of C++11 initializer lists
         check("std::vector<Foo> Bar() {\n"
               "    return\n"
@@ -6122,7 +6105,7 @@ private:
         Settings settings;
         const char xmldata[] = "<?xml version=\"1.0\"?>\n"
                                "<def>\n"
-                               "  <function name=\"mystrcmp\">\n"
+                               "  <function name=\"mystrcmp,foo::mystrcmp\">\n"
                                "    <use-retval/>\n"
                                "    <arg nr=\"1\"/>\n"
                                "    <arg nr=\"2\"/>\n"
@@ -6134,6 +6117,11 @@ private:
 
         check("void foo() {\n"
               "  mystrcmp(a, b);\n"
+              "}", "test.cpp", false, false, true, &settings);
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Return value of function mystrcmp() is not used.\n", errout.str());
+
+        check("void foo() {\n"
+              "  foo::mystrcmp(a, b);\n"
               "}", "test.cpp", false, false, true, &settings);
         ASSERT_EQUALS("[test.cpp:2]: (warning) Return value of function mystrcmp() is not used.\n", errout.str());
 
@@ -6156,6 +6144,11 @@ private:
 
         check("void foo() {\n"
               "    return mystrcmp(a, b);\n"
+              "}", "test.cpp", false, false, true, &settings);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n"
+              "    return foo::mystrcmp(a, b);\n"
               "}", "test.cpp", false, false, true, &settings);
         ASSERT_EQUALS("", errout.str());
 
@@ -6454,6 +6447,51 @@ private:
             "    if (0 >= newCount)\n"
             "        destroy;\n"
             "}\n");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void testUnusedLabel() {
+        check("void f() {\n"
+              "    label:\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (style) Label 'label' is not used.\n", errout.str());
+
+        check("void f() {\n"
+              "    label:\n"
+              "    foo();\n"
+              "    goto label;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    label:\n"
+              "    foo();\n"
+              "    goto label;\n"
+              "}\n"
+              "void g() {\n"
+              "    label:\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:7]: (style) Label 'label' is not used.\n", errout.str());
+
+        check("void f() {\n"
+              "    switch(a) {\n"
+              "        default:\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    class X {\n"
+              "        protected:\n"
+              "    };\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    class X {\n"
+              "        my_protected:\n"
+              "    };\n"
+              "}");
         ASSERT_EQUALS("", errout.str());
     }
 };

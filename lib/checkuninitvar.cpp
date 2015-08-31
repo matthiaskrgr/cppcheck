@@ -72,8 +72,10 @@ void CheckUninitVar::checkScope(const Scope* scope)
             continue;
         }
 
-        if (i->isArray()) {
+        if (i->isArray() || i->isPointerToArray()) {
             const Token *tok = i->nameToken()->next();
+            if (i->isPointerToArray())
+                tok = tok->next();
             while (Token::simpleMatch(tok->link(), "] ["))
                 tok = tok->link()->next();
             if (Token::simpleMatch(tok->link(), "] ="))
@@ -218,18 +220,20 @@ static bool isVariableUsed(const Token *tok, const Variable& var)
         return false;
     if (tok->isConstOp())
         return isVariableUsed(tok->astOperand1(),var) || isVariableUsed(tok->astOperand2(),var);
-    if (var.isArray()) {
-        const Token *parent = tok->astParent();
-        while (Token::Match(parent, "[?:]"))
-            parent = parent->astParent();
-        // no dereference, then array is not "used"
-        if (!Token::Match(parent, "*|["))
-            return false;
-        const Token *parent2 = parent->astParent();
-        // TODO: handle function calls. There is a TODO assertion in TestUninitVar::uninitvar_arrays
-        return !parent2 || parent2->isConstOp() || (parent2->str() == "=" && parent2->astOperand2() == parent);
-    }
-    return (tok->varId() == var.declarationId());
+    if (tok->varId() != var.declarationId())
+        return false;
+    if (!var.isArray())
+        return true;
+
+    const Token *parent = tok->astParent();
+    while (Token::Match(parent, "[?:]"))
+        parent = parent->astParent();
+    // no dereference, then array is not "used"
+    if (!Token::Match(parent, "*|["))
+        return false;
+    const Token *parent2 = parent->astParent();
+    // TODO: handle function calls. There is a TODO assertion in TestUninitVar::uninitvar_arrays
+    return !parent2 || parent2->isConstOp() || (parent2->str() == "=" && parent2->astOperand2() == parent);
 }
 
 bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var, bool * const possibleInit, bool * const noreturn, Alloc* const alloc, const std::string &membervar)
@@ -497,6 +501,7 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
             if (noreturn)
                 *noreturn = true;
 
+            tok = tok->next();
             while (tok && tok->str() != ";") {
                 // variable is seen..
                 if (tok->varId() == var.declarationId()) {
@@ -825,23 +830,6 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, Alloc al
 
     if (alloc == NO_ALLOC && Token::Match(vartok->previous(), "= %name% ;|%cop%"))
         return true;
-
-    if (Token::Match(vartok->previous(), "? %name%")) {
-        // this is only variable usage if variable is either:
-        // * unconditionally uninitialized
-        // * used in both rhs and lhs of ':' operator
-        bool rhs = false;
-        for (const Token *tok2 = vartok; tok2; tok2 = tok2->next()) {
-            if (tok2->str() == "(")
-                tok2 = tok2->link();
-            else if (tok2->str() == ":")
-                rhs = true;
-            else if (Token::Match(tok2, "[)];,{}=]"))
-                break;
-            else if (rhs && tok2->varId() == vartok->varId())
-                return true;
-        }
-    }
 
     bool unknown = false;
     if (pointer && CheckNullPointer::isPointerDeRef(vartok, unknown)) {

@@ -127,7 +127,7 @@ void CheckOther::clarifyCalculation()
             // ? operator where lhs is arithmetical expression
             if (tok->str() != "?" || !tok->astOperand1() || !tok->astOperand1()->isCalculation())
                 continue;
-            if (!tok->astOperand1()->isArithmeticalOp() && tok->astOperand1()->type() != Token::eBitOp)
+            if (!tok->astOperand1()->isArithmeticalOp() && tok->astOperand1()->tokType() != Token::eBitOp)
                 continue;
 
             // Is code clarified by parentheses already?
@@ -267,7 +267,7 @@ void CheckOther::warningOldStylePointerCast()
                 continue;
 
             // Is "type" a class?
-            if (_tokenizer->getSymbolDatabase()->isClassOrStruct(typeTok->str()))
+            if (typeTok->type())
                 cstyleCastError(tok);
         }
     }
@@ -497,7 +497,7 @@ void CheckOther::checkRedundantAssignment()
             } else if (Token::Match(tok, "break|return|continue|throw|goto|asm")) {
                 varAssignments.clear();
                 memAssignments.clear();
-            } else if (tok->type() == Token::eVariable && !Token::Match(tok, "%name% (")) {
+            } else if (tok->tokType() == Token::eVariable && !Token::Match(tok, "%name% (")) {
                 // Set initialization flag
                 if (!Token::Match(tok, "%var% ["))
                     initialized.insert(tok->varId());
@@ -550,7 +550,7 @@ void CheckOther::checkRedundantAssignment()
                         varAssignments[tok->varId()] = tok;
                     memAssignments.erase(tok->varId());
                     eraseMemberAssignments(tok->varId(), membervars, varAssignments);
-                } else if (tok->next()->type() == Token::eIncDecOp || (tok->previous()->type() == Token::eIncDecOp && tok->strAt(1) == ";")) { // Variable incremented/decremented; Prefix-Increment is only suspicious, if its return value is unused
+                } else if (tok->next()->tokType() == Token::eIncDecOp || (tok->previous()->tokType() == Token::eIncDecOp && tok->strAt(1) == ";")) { // Variable incremented/decremented; Prefix-Increment is only suspicious, if its return value is unused
                     varAssignments[tok->varId()] = tok;
                     memAssignments.erase(tok->varId());
                     eraseMemberAssignments(tok->varId(), membervars, varAssignments);
@@ -936,7 +936,7 @@ void CheckOther::invalidFunctionUsage()
             const Token * const functionToken = tok;
             int argnr = 1;
             const Token *argtok = tok->tokAt(2);
-            while (argtok && argtok->str() != ")") {
+            do {
                 if (Token::Match(argtok,"%num% [,)]")) {
                     if (MathLib::isInt(argtok->str()) &&
                         !_settings->library.isargvalid(functionToken, argnr, MathLib::toLongNumber(argtok->str())))
@@ -958,7 +958,7 @@ void CheckOther::invalidFunctionUsage()
                 }
                 argnr++;
                 argtok = argtok->nextArgument();
-            }
+            } while (argtok && argtok->str() != ")");
         }
     }
 }
@@ -1220,7 +1220,7 @@ void CheckOther::checkVariableScope()
         const Token* tok = var->nameToken()->next();
         if (Token::Match(tok, "; %varid% = %any% ;", var->declarationId())) {
             tok = tok->tokAt(3);
-            if (!tok->isNumber() && tok->type() != Token::eString && tok->type() != Token::eChar && !tok->isBoolean())
+            if (!tok->isNumber() && tok->tokType() != Token::eString && tok->tokType() != Token::eChar && !tok->isBoolean())
                 continue;
         }
         bool reduce = true;
@@ -1383,8 +1383,9 @@ void CheckOther::checkCommaSeparatedReturn()
 
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
         if (tok->str() == "return") {
+            tok = tok->next();
             while (tok && tok->str() != ";") {
-                if (Token::Match(tok, "[([{<]") && tok->link())
+                if (tok->link() && Token::Match(tok, "[([{<]"))
                     tok = tok->link();
 
                 if (!tok->isExpandedMacro() && tok->str() == "," && tok->linenr() != tok->next()->linenr())
@@ -1797,9 +1798,9 @@ void CheckOther::checkMisusedScopedObject()
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token *tok = scope->classStart; tok && tok != scope->classEnd; tok = tok->next()) {
-            if (Token::Match(tok, "[;{}] %name% (")
+            if ((tok->next()->type() || (tok->next()->function() && tok->next()->function()->isConstructor())) // TODO: The rhs of || should be removed; It is a workaround for a symboldatabase bug
+                && Token::Match(tok, "[;{}] %name% (")
                 && Token::Match(tok->linkAt(2), ") ; !!}")
-                && symbolDatabase->isClassOrStruct(tok->next()->str())
                 && (!tok->next()->function() || // is not a function on this scope
                     tok->next()->function()->isConstructor())) { // or is function in this scope and it's a ctor
                 tok = tok->next();
@@ -2381,7 +2382,9 @@ void CheckOther::checkIncompleteArrayFill()
                     continue;
 
                 if (MathLib::toLongNumber(tok->linkAt(1)->strAt(-1)) == var->dimension(0)) {
-                    const unsigned int size = _tokenizer->sizeOfType(var->typeStartToken());
+                    unsigned int size = _tokenizer->sizeOfType(var->typeStartToken());
+                    if (size == 0 && var->typeStartToken()->next()->str() == "*")
+                        size = _settings->sizeof_pointer;
                     if ((size != 1 && size != 100 && size != 0) || var->isPointer()) {
                         if (printWarning)
                             incompleteArrayFillError(tok, var->name(), tok->str(), false);
@@ -2506,14 +2509,22 @@ void CheckOther::checkIgnoredReturnValue()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
-            if (tok->varId() || !Token::Match(tok, "%name% (") || tok->strAt(-1) == "." || tok->next()->astOperand1() != tok)
+        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+            if (tok->varId() || !Token::Match(tok, "%name% (") || tok->strAt(-1) == ".")
                 continue;
 
-            if (!tok->scope()->isExecutable())
+            if (!tok->scope()->isExecutable()) {
                 tok = tok->scope()->classEnd;
+                continue;
+            }
 
-            if (!tok->next()->astParent() && (!tok->function() || !Token::Match(tok->function()->retDef, "void %name%")) && _settings->library.useretval.find(tok->str()) != _settings->library.useretval.end())
+            const Token* parent = tok;
+            while (parent->astParent() && parent->astParent()->str() == "::")
+                parent = parent->astParent();
+            if (tok->next()->astOperand1() != parent)
+                continue;
+
+            if (!tok->next()->astParent() && (!tok->function() || !Token::Match(tok->function()->retDef, "void %name%")) && _settings->library.isUseRetVal(tok))
                 ignoredReturnValueError(tok, tok->str());
         }
     }
@@ -2606,4 +2617,32 @@ void CheckOther::raceAfterInterlockedDecrementError(const Token* tok)
 {
     reportError(tok, Severity::error, "raceAfterInterlockedDecrement",
                 "Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.");
+}
+
+void CheckOther::checkUnusedLabel()
+{
+    if (!_settings->isEnabled("style"))
+        return;
+
+    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
+    const std::size_t functions = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < functions; ++i) {
+        const Scope * scope = symbolDatabase->functionScopes[i];
+
+        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
+            if (!tok->scope()->isExecutable())
+                tok = tok->scope()->classEnd;
+
+            if (Token::Match(tok, "{|}|; %name% :") && tok->strAt(1) != "default") {
+                if (!Token::findsimplematch(scope->classStart->next(), ("goto " + tok->strAt(1)).c_str(), scope->classEnd->previous()))
+                    unusedLabelError(tok->next());
+            }
+        }
+    }
+}
+
+void CheckOther::unusedLabelError(const Token* tok)
+{
+    reportError(tok, Severity::style, "unusedLabel",
+                "Label '" + (tok?tok->str():emptyString) + "' is not used.");
 }

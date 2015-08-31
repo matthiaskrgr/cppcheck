@@ -148,7 +148,7 @@ void CheckClass::constructors()
                     continue;
 
                 // Check if this is a class constructor
-                if (!var->isPointer() && var->isClass() && func->type == Function::eConstructor) {
+                if (!var->isPointer() && !var->isPointerArray() && var->isClass() && func->type == Function::eConstructor) {
                     // Unknown type so assume it is initialized
                     if (!var->type())
                         continue;
@@ -160,7 +160,7 @@ void CheckClass::constructors()
                 }
 
                 // Check if type can't be copied
-                if (!var->isPointer() && var->typeScope()) {
+                if (!var->isPointer() && !var->isPointerArray() && var->typeScope()) {
                     if (func->type == Function::eMoveConstructor) {
                         if (canNotMove(var->typeScope()))
                             continue;
@@ -1010,28 +1010,30 @@ void CheckClass::checkMemset()
                 else if (Token::simpleMatch(arg3, "sizeof ( * this ) )") || Token::simpleMatch(arg1, "this ,")) {
                     type = findFunctionOf(arg3->scope());
                 } else if (Token::Match(arg1, "&|*|%var%")) {
-                    int derefs = 1;
+                    int numIndirToVariableType = 0; // Offset to the actual type in terms of dereference/addressof
                     for (;; arg1 = arg1->next()) {
                         if (arg1->str() == "&")
-                            derefs--;
+                            ++numIndirToVariableType;
                         else if (arg1->str() == "*")
-                            derefs++;
+                            --numIndirToVariableType;
                         else
                             break;
                     }
 
                     const Variable *var = arg1->variable();
                     if (var && arg1->strAt(1) == ",") {
-                        if (var->isPointer()) {
-                            derefs--;
-                            if (var->typeEndToken() && Token::simpleMatch(var->typeEndToken()->previous(), "* *")) // Check if it's a pointer to pointer
-                                derefs--;
+                        if (var->isArrayOrPointer()) {
+                            const Token *endTok = var->typeEndToken();
+                            while (endTok && Token::simpleMatch(endTok, "*")) {
+                                ++numIndirToVariableType;
+                                endTok = endTok->previous();
+                            }
                         }
 
                         if (var->isArray())
-                            derefs -= (int)var->dimensions().size();
+                            numIndirToVariableType += (int)var->dimensions().size();
 
-                        if (derefs == 0)
+                        if (numIndirToVariableType == 1)
                             type = var->typeScope();
                     }
                 }
@@ -1043,11 +1045,8 @@ void CheckClass::checkMemset()
                 if (typeTok && typeTok->str() == "(")
                     typeTok = typeTok->next();
 
-                if (!type) {
-                    const Type* t = symbolDatabase->findVariableType(scope, typeTok);
-                    if (t)
-                        type = t->classScope;
-                }
+                if (!type && typeTok->type())
+                    type = typeTok->type()->classScope;
 
                 if (type) {
                     std::list<const Scope *> parsedTypes;
@@ -1673,7 +1672,7 @@ void CheckClass::checkConst()
                     if (func->retDef->str() != "const")
                         continue;
                 } else if (Token::Match(previous->previous(), "*|& >")) {
-                    const Token *temp = previous;
+                    const Token *temp = previous->previous();
 
                     bool foundConst = false;
                     while (!Token::Match(temp->previous(), ";|}|{|public:|protected:|private:")) {
@@ -1693,7 +1692,7 @@ void CheckClass::checkConst()
                 } else {
                     // don't warn for unknown types..
                     // LPVOID, HDC, etc
-                    if (previous->isUpperCaseName() && previous->str().size() > 2 && !symbolDatabase->isClassOrStruct(previous->str()))
+                    if (previous->str().size() > 2 && !previous->type() && previous->isUpperCaseName())
                         continue;
                 }
 
@@ -1851,16 +1850,16 @@ bool CheckClass::checkConstFunc(const Scope *scope, const Function *func, bool& 
                 return (false);
 
 
-            const Token* lhs = tok1->tokAt(-1);
+            const Token* lhs = tok1->previous();
             if (lhs->str() == "&") {
                 lhs = lhs->previous();
-                if (lhs->type() == Token::eAssignmentOp && lhs->previous()->variable()) {
+                if (lhs->tokType() == Token::eAssignmentOp && lhs->previous()->variable()) {
                     if (lhs->previous()->variable()->typeStartToken()->strAt(-1) != "const" && lhs->previous()->variable()->isPointer())
                         return false;
                 }
             } else {
                 const Variable* v2 = lhs->previous()->variable();
-                if (lhs->type() == Token::eAssignmentOp && v2)
+                if (lhs->tokType() == Token::eAssignmentOp && v2)
                     if (!v2->isConst() && v2->isReference() && lhs == v2->nameToken()->next())
                         return false;
             }
@@ -1900,7 +1899,7 @@ bool CheckClass::checkConstFunc(const Scope *scope, const Function *func, bool& 
             }
 
             // Assignment
-            else if (end->next()->type() == Token::eAssignmentOp)
+            else if (end->next()->tokType() == Token::eAssignmentOp)
                 return (false);
 
             // Streaming
@@ -1910,7 +1909,7 @@ bool CheckClass::checkConstFunc(const Scope *scope, const Function *func, bool& 
                 return (false);
 
             // ++/--
-            else if (end->next()->type() == Token::eIncDecOp || tok1->previous()->type() == Token::eIncDecOp)
+            else if (end->next()->tokType() == Token::eIncDecOp || tok1->previous()->tokType() == Token::eIncDecOp)
                 return (false);
 
 

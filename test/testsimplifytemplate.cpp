@@ -59,7 +59,6 @@ private:
         TEST_CASE(template26);  // #2721 - passing 'char[2]' as template parameter
         TEST_CASE(template27);  // #3350 - removing unused template in macro call
         TEST_CASE(template28);
-        TEST_CASE(template29);  // #3449 - don't crash for garbage code
         TEST_CASE(template30);  // #3529 - template < template < ..
         TEST_CASE(template31);  // #4010 - reference type
         TEST_CASE(template32);  // #3818 - mismatching template not handled well
@@ -86,6 +85,7 @@ private:
         TEST_CASE(template53);  // #4335 - bail out for valid code
         TEST_CASE(template54);  // #6587 - memory corruption upon valid code
         TEST_CASE(template55);  // #6604 - simplify "const const" to "const" in template instantiations
+        TEST_CASE(template_enum);  // #6299 Syntax error in complex enum declaration (including template)
         TEST_CASE(template_unhandled);
         TEST_CASE(template_default_parameter);
         TEST_CASE(template_default_type);
@@ -94,7 +94,6 @@ private:
 
         // Test TemplateSimplifier::templateParameters
         TEST_CASE(templateParameters);
-        TEST_CASE(templateParameters1);  // #4169 - segmentation fault
 
         TEST_CASE(templateNamePosition);
     }
@@ -658,14 +657,6 @@ private:
         ASSERT_EQUALS("Fred<int,Fred<int,int>> x ; class Fred<int,int> { } ; class Fred<int,Fred<int,int>> { } ;", tok(code));
     }
 
-    void template29() {
-        // #3449 - garbage code (don't segfault)
-        const char code[] = "template<typename T> struct A;\n"
-                            "struct B { template<typename T> struct C };\n"
-                            "{};";
-        ASSERT_EQUALS("template < typename T > struct A ; struct B { template < typename T > struct C } ; { } ;", tok(code));
-    }
-
     void template30() {
         // #3529 - template < template < ..
         const char code[] = "template<template<class> class A, class B> void f(){}";
@@ -996,6 +987,40 @@ private:
                 "A<int> a(0);"));
     }
 
+    void template_enum() {
+        const char code1[] = "template <class T>\n"
+                             "struct Unconst {\n"
+                             "    typedef T type;\n"
+                             "};\n"
+                             "template <class T>\n"
+                             "struct Unconst<const T> {\n"
+                             "    typedef T type;\n"
+                             "};\n"
+                             "template <class T>\n"
+                             "struct Unconst<const T&> {\n"
+                             "    typedef T& type;\n"
+                             "};\n"
+                             "template <class T>\n"
+                             "struct Unconst<T* const> {\n"
+                             "    typedef T* type;\n"
+                             "};\n"
+                             "template <class T1, class T2>\n"
+                             "struct type_equal {\n"
+                             "    enum {  value = 0   };\n"
+                             "};\n"
+                             "template <class T>\n"
+                             "struct type_equal<T, T> {\n"
+                             "    enum {  value = 1   };\n"
+                             "};\n"
+                             "template<class T>\n"
+                             "struct template_is_const\n"
+                             "{\n"
+                             "    enum {value = !type_equal<T, typename Unconst<T>::type>::value  };\n"
+                             "};";
+        const char expected1[]="template < class T > struct Unconst { } ; template < class T > struct type_equal<T,T> { } ; template < class T > struct template_is_const { } ; struct type_equal<T,T> { } ; struct Unconst<constT*const> { } ; struct Unconst<constT&*const> { } ; struct Unconst<T*const*const> { } ; struct Unconst<T*const> { } ; struct Unconst<T*const> { } ; struct Unconst<T*const> { } ; struct Unconst<constT&><};template<T> { } ; struct Unconst<constT><};template<T> { } ;";
+        ASSERT_EQUALS(expected1, tok(code1));
+    }
+
     void template_default_parameter() {
         {
             const char code[] = "template <class T, int n=3>\n"
@@ -1179,13 +1204,6 @@ private:
         ASSERT_EQUALS(3U, templateParameters("<char, int(*)(), bool> x;"));
         TODO_ASSERT_EQUALS(1U, 0U, templateParameters("<int...> x;")); // Mishandled valid syntax
         TODO_ASSERT_EQUALS(2U, 0U, templateParameters("<class, typename...> x;")); // Mishandled valid syntax
-    }
-
-    void templateParameters1() {
-        // #4169 - segmentation fault (invalid code)
-        const char code[] = "volatile true , test < test < #ifdef __ppc__ true ,";
-        // do not crash on invalid code
-        ASSERT_EQUALS(0, templateParameters(code));
     }
 
     // Helper function to unit test TemplateSimplifier::getTemplateNamePosition
