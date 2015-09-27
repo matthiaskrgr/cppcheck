@@ -1407,13 +1407,19 @@ private:
                        "    int a[1];\n"
                        "    return a[0];\n"
                        "}");
-        TODO_ASSERT_EQUALS("[test.cpp:3]: (error) Uninitialized variable: a\n", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Uninitialized variable: a\n", errout.str());
 
         checkUninitVar("int foo() {\n"
                        "    int a[2][2];\n"
                        "    return a[0][1];\n"
                        "}");
-        TODO_ASSERT_EQUALS("[test.cpp:3]: (error) Uninitialized variable: a\n", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Uninitialized variable: a\n", errout.str());
+
+        checkUninitVar("int foo() {\n"
+                       "    int a[10];\n"
+                       "    dostuff(a[0]);\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
 
         // # 4740
         checkUninitVar("void f() {\n"
@@ -1428,6 +1434,15 @@ private:
                        "  char x[10];\n"
                        "  bar(x);\n"
                        "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // struct
+        checkUninitVar("struct Fred { int x; int y; };\n"
+                       ""
+                       "void f() {\n"
+                       "  struct Fred fred[10];\n"
+                       "  fred[1].x = 0;\n"
+                       "}", "test.c");
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -1487,19 +1502,17 @@ private:
                        "}");
         TODO_ASSERT_EQUALS("[test.cpp:4]: (error) Memory is allocated but not initialized: p\n", "", errout.str());
 
-        checkUninitVar("void f()\n"
-                       "{\n"
+        checkUninitVar("void f() {\n"
                        "    char *p = malloc(64);\n"
                        "    if (p[0]) { }\n"
                        "}");
-        TODO_ASSERT_EQUALS("[test.cpp:4]: (error) Memory is allocated but not initialized: p\n", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Memory is allocated but not initialized: p\n", errout.str());
 
-        checkUninitVar("void f()\n"
-                       "{\n"
+        checkUninitVar("void f() {\n"
                        "    char *p = malloc(64);\n"
                        "    return p[0];\n"
                        "}");
-        TODO_ASSERT_EQUALS("[test.cpp:4]: (error) Memory is allocated but not initialized: p\n", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Memory is allocated but not initialized: p\n", errout.str());
 
         checkUninitVar("void f()\n"
                        "{\n"
@@ -3640,25 +3653,14 @@ private:
     }
 
     void syntax_error() { // Ticket #5073
-        // Nominal mode => No output
-        checkUninitVar("struct flex_array {};\n"
-                       "struct cgroup_taskset {};\n"
-                       "void cgroup_attach_task() {\n"
-                       "  struct flex_array *group;\n"
-                       "  struct cgroup_taskset tset = { };\n"
-                       "  do { } while_each_thread(leader, tsk);\n"
-                       "}", "test.cpp", /*debugwarnings=*/false);
-        ASSERT_EQUALS("", errout.str());
-
-        // --debug-warnings mode => Debug warning
-        checkUninitVar("struct flex_array {};\n"
-                       "struct cgroup_taskset {};\n"
-                       "void cgroup_attach_task() {\n"
-                       "  struct flex_array *group;\n"
-                       "  struct cgroup_taskset tset = { };\n"
-                       "  do { } while_each_thread(leader, tsk);\n"
-                       "}", "test.cpp", /*debugwarnings=*/true);
-        ASSERT_EQUALS("[test.cpp:6]: (debug) assertion failed '} while ('\n", errout.str());
+        const char code[] = "struct flex_array {};\n"
+                            "struct cgroup_taskset {};\n"
+                            "void cgroup_attach_task() {\n"
+                            "  struct flex_array *group;\n"
+                            "  struct cgroup_taskset tset = { };\n"
+                            "  do { } while_each_thread(leader, tsk);\n"
+                            "}";
+        ASSERT_THROW(checkUninitVar(code), InternalError);
     }
 
     void checkDeadPointer(const char code[]) {

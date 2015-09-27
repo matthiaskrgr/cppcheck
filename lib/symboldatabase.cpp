@@ -804,17 +804,17 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                     scope->nestedList.push_back(&scopeList.back());
                     scope = &scopeList.back();
                 } else if (Token::Match(tok, "if|for|while|catch|switch (") && Token::simpleMatch(tok->next()->link(), ") {")) {
-                    const Token *tok1 = tok->next()->link()->next();
+                    const Token *scopeStartTok = tok->next()->link()->next();
                     if (tok->str() == "if")
-                        scopeList.push_back(Scope(this, tok, scope, Scope::eIf, tok1));
+                        scopeList.push_back(Scope(this, tok, scope, Scope::eIf, scopeStartTok));
                     else if (tok->str() == "for") {
-                        scopeList.push_back(Scope(this, tok, scope, Scope::eFor, tok1));
+                        scopeList.push_back(Scope(this, tok, scope, Scope::eFor, scopeStartTok));
                     } else if (tok->str() == "while")
-                        scopeList.push_back(Scope(this, tok, scope, Scope::eWhile, tok1));
+                        scopeList.push_back(Scope(this, tok, scope, Scope::eWhile, scopeStartTok));
                     else if (tok->str() == "catch") {
-                        scopeList.push_back(Scope(this, tok, scope, Scope::eCatch, tok1));
+                        scopeList.push_back(Scope(this, tok, scope, Scope::eCatch, scopeStartTok));
                     } else // if (tok->str() == "switch")
-                        scopeList.push_back(Scope(this, tok, scope, Scope::eSwitch, tok1));
+                        scopeList.push_back(Scope(this, tok, scope, Scope::eSwitch, scopeStartTok));
 
                     scope->nestedList.push_back(&scopeList.back());
                     scope = &scopeList.back();
@@ -822,7 +822,7 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                         scope->checkVariable(tok->tokAt(2), Local, &settings->library); // check for variable declaration and add it to new scope if found
                     else if (scope->type == Scope::eCatch)
                         scope->checkVariable(tok->tokAt(2), Throw, &settings->library); // check for variable declaration and add it to new scope if found
-                    tok = tok1;
+                    tok = scopeStartTok;
                 } else if (tok->str() == "{" && !tok->previous()->varId()) {
                     if (tok->strAt(-1) == ")" && tok->linkAt(-1)->strAt(-1) == "]") {
                         scopeList.push_back(Scope(this, tok->linkAt(-1)->linkAt(-1), scope, Scope::eLambda, tok));
@@ -1888,7 +1888,7 @@ void SymbolDatabase::addNewFunction(Scope **scope, const Token **tok)
 {
     const Token *tok1 = *tok;
     scopeList.push_back(Scope(this, tok1, *scope));
-    Scope *new_scope = &scopeList.back();
+    Scope *newScope = &scopeList.back();
 
     // find start of function '{'
     bool foundInitList = false;
@@ -1907,11 +1907,11 @@ void SymbolDatabase::addNewFunction(Scope **scope, const Token **tok)
     }
 
     if (tok1 && tok1->str() == "{") {
-        new_scope->classStart = tok1;
-        new_scope->classEnd = tok1->link();
+        newScope->classStart = tok1;
+        newScope->classEnd = tok1->link();
 
         // syntax error?
-        if (!new_scope->classEnd) {
+        if (!newScope->classEnd) {
             scopeList.pop_back();
             while (tok1->next())
                 tok1 = tok1->next();
@@ -1920,8 +1920,8 @@ void SymbolDatabase::addNewFunction(Scope **scope, const Token **tok)
             return;
         }
 
-        (*scope)->nestedList.push_back(new_scope);
-        *scope = new_scope;
+        (*scope)->nestedList.push_back(newScope);
+        *scope = newScope;
         *tok = tok1;
     } else {
         scopeList.pop_back();
@@ -1976,9 +1976,10 @@ const Token *Type::initBaseInfo(const Token *tok, const Token *tok1)
                 tok2 = tok2->next();
             }
 
-            base.nameTok = tok2;
             if (!tok2)
                 return nullptr;
+
+            base.nameTok = tok2;
             // handle global namespace
             if (tok2->str() == "::") {
                 tok2 = tok2->next();
@@ -2043,34 +2044,34 @@ const Function* Type::getFunction(const std::string& funcName) const
     return 0;
 }
 
-bool Type::hasCircularDependencies(std::set<BaseInfo>* anchestors) const
+bool Type::hasCircularDependencies(std::set<BaseInfo>* ancestors) const
 {
-    std::set<BaseInfo> knownAnchestors;
-    if (!anchestors) {
-        anchestors=&knownAnchestors;
+    std::set<BaseInfo> knownAncestors;
+    if (!ancestors) {
+        ancestors=&knownAncestors;
     }
     for (std::vector<BaseInfo>::const_iterator parent=derivedFrom.begin(); parent!=derivedFrom.end(); ++parent) {
         if (!parent->type)
             continue;
         else if (this==parent->type)
             return true;
-        else if (anchestors->find(*parent)!=anchestors->end())
+        else if (ancestors->find(*parent)!=ancestors->end())
             return true;
         else {
-            anchestors->insert(*parent);
-            if (parent->type->hasCircularDependencies(anchestors))
+            ancestors->insert(*parent);
+            if (parent->type->hasCircularDependencies(ancestors))
                 return true;
         }
     }
     return false;
 }
 
-bool Type::findDependency(const Type* anchestor) const
+bool Type::findDependency(const Type* ancestor) const
 {
-    if (this==anchestor)
+    if (this==ancestor)
         return true;
     for (std::vector<BaseInfo>::const_iterator parent=derivedFrom.begin(); parent!=derivedFrom.end(); ++parent) {
-        if (parent->type && parent->type->findDependency(anchestor))
+        if (parent->type && parent->type->findDependency(ancestor))
             return true;
     }
     return false;

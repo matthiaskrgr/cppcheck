@@ -28,19 +28,45 @@ class CppcheckLibraryData {
 public:
     CppcheckLibraryData();
 
+    struct Container {
+        Container() : access_arrayLike(false), size_templateParameter(-1) {}
+
+        QString id;
+        QString inherits;
+        QString startPattern;
+        QString endPattern;
+
+        bool access_arrayLike;
+        int  size_templateParameter;
+
+        struct {
+            QString templateParameter;
+            QString string;
+        } type;
+
+        struct Function {
+            QString name;
+            QString yields;
+            QString action;
+        };
+        QList<struct Function> accessFunctions;
+        QList<struct Function> otherFunctions;
+        QList<struct Function> sizeFunctions;
+    };
+
     struct Define {
         QString name;
         QString value;
     };
 
     struct Function {
-        Function() : noreturn(true), gccPure(false), gccConst(false),
+        Function() : noreturn(Unknown), gccPure(false), gccConst(false),
             leakignore(false), useretval(false) {
         }
 
-        QStringList comments;
+        QString comments;
         QString name;
-        bool noreturn;
+        enum TrueFalseUnknown { False, True, Unknown } noreturn;
         bool gccPure;
         bool gccConst;
         bool leakignore;
@@ -101,6 +127,7 @@ public:
     bool open(QIODevice &file);
     QString toString() const;
 
+    QList<struct Container> containers;
     QList<struct Define> defines;
     QList<struct Function> functions;
     QList<struct MemoryResource> memoryresource;

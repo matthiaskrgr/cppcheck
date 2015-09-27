@@ -58,6 +58,9 @@ void CheckOther::checkCastIntToCharAndBack()
         const Scope * scope = symbolDatabase->functionScopes[i];
         std::map<unsigned int, std::string> vars;
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+            // Quick check to see if any of the matches below have any chances
+            if (!tok->isName() || !Token::Match(tok, "%var%|EOF %comp%|="))
+                continue;
             if (Token::Match(tok, "%var% = fclose|fflush|fputc|fputs|fscanf|getchar|getc|fgetc|putchar|putc|puts|scanf|sscanf|ungetc (")) {
                 const Variable *var = tok->variable();
                 if (var && var->typeEndToken()->str() == "char" && !var->typeEndToken()->isSigned()) {
@@ -80,8 +83,7 @@ void CheckOther::checkCastIntToCharAndBack()
                 if (var && var->typeEndToken()->str() == "char" && !var->typeEndToken()->isSigned()) {
                     vars[tok->varId()] = "cin.get";
                 }
-            }
-            if (Token::Match(tok, "%var% %comp% EOF")) {
+            } else if (Token::Match(tok, "%var% %comp% EOF")) {
                 if (vars.find(tok->varId()) != vars.end()) {
                     checkCastIntToCharAndBackError(tok, vars[tok->varId()]);
                 }
@@ -848,10 +850,10 @@ void CheckOther::checkSuspiciousCaseInSwitch()
                         break;
                     if (Token::Match(tok2, "[;}{]"))
                         break;
+
                     if (tok2->str() == "?")
                         finding = nullptr;
-
-                    if (Token::Match(tok2, "&&|%oror%"))
+                    else if (Token::Match(tok2, "&&|%oror%"))
                         finding = tok2;
                 }
                 if (finding)
@@ -931,7 +933,7 @@ void CheckOther::invalidFunctionUsage()
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-            if (!Token::Match(tok, "%name% ( !!)"))
+            if (!tok->isName() || !Token::Match(tok, "%name% ( !!)"))
                 continue;
             const Token * const functionToken = tok;
             int argnr = 1;
@@ -2156,6 +2158,9 @@ void CheckOther::checkSignOfUnsignedVariable()
         const Scope * scope = symbolDatabase->functionScopes[i];
         // check all the code in the function
         for (const Token *tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+            // Quick check to see if any of the matches below have any chances
+            if (!tok->varId() && tok->str() != "0")
+                continue;
             if (Token::Match(tok, "%name% <|<= 0") && tok->varId() && !Token::Match(tok->tokAt(3), "+|-")) {
                 // TODO: handle a[10].b , a::b , (unsigned int)x , etc
                 const Token *prev = tok->previous();
@@ -2600,7 +2605,7 @@ void CheckOther::checkInterlockedDecrement()
     }
 
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
-        if (Token::Match(tok, "InterlockedDecrement ( & %name% ) ; if ( %name%|!|0")) {
+        if (tok->isName() && Token::Match(tok, "InterlockedDecrement ( & %name% ) ; if ( %name%|!|0")) {
             const Token* interlockedVarTok = tok->tokAt(3);
             const Token* checkStartTok =  interlockedVarTok->tokAt(5);
             if ((Token::Match(checkStartTok, "0 %comp% %name% )") && checkStartTok->strAt(2) == interlockedVarTok->str()) ||

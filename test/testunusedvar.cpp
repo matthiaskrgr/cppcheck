@@ -208,9 +208,63 @@ private:
                                "    int b;\n"
                                "    int c;\n"
                                "};");
-        ASSERT_EQUALS("[test.cpp:3]: (style) struct or union member 'abc::a' is never used.\n"
-                      "[test.cpp:4]: (style) struct or union member 'abc::b' is never used.\n"
-                      "[test.cpp:5]: (style) struct or union member 'abc::c' is never used.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (style) struct member 'abc::a' is never used.\n"
+                      "[test.cpp:4]: (style) struct member 'abc::b' is never used.\n"
+                      "[test.cpp:5]: (style) struct member 'abc::c' is never used.\n", errout.str());
+
+        checkStructMemberUsage("union abc\n"
+                               "{\n"
+                               "    int a;\n"
+                               "    int b;\n"
+                               "    int c;\n"
+                               "};");
+        ASSERT_EQUALS("[test.cpp:3]: (style) union member 'abc::a' is never used.\n"
+                      "[test.cpp:4]: (style) union member 'abc::b' is never used.\n"
+                      "[test.cpp:5]: (style) union member 'abc::c' is never used.\n", errout.str());
+
+        checkStructMemberUsage("struct A\n"
+                               "{\n"
+                               "    int a;\n"
+                               "};\n"
+                               "struct B\n"
+                               "{\n"
+                               "    int a;\n"
+                               "};\n"
+                               "void foo()\n"
+                               "{\n"
+                               "    A a;\n"
+                               "    a.a;\n"
+                               "}");
+        ASSERT_EQUALS("[test.cpp:7]: (style) struct member 'B::a' is never used.\n", errout.str());
+
+        checkStructMemberUsage("struct A\n"
+                               "{\n"
+                               "    int a;\n"
+                               "};\n"
+                               "struct B\n"
+                               "{\n"
+                               "    int a;\n"
+                               "};\n"
+                               "void foo(A* a)\n"
+                               "{\n"
+                               "    a->a;\n"
+                               "}");
+        ASSERT_EQUALS("[test.cpp:7]: (style) struct member 'B::a' is never used.\n", errout.str());
+
+        checkStructMemberUsage("struct A\n"
+                               "{\n"
+                               "    int a;\n"
+                               "};\n"
+                               "struct B\n"
+                               "{\n"
+                               "    int a;\n"
+                               "};\n"
+                               "A& bar();\n"
+                               "void foo()\n"
+                               "{\n"
+                               "    bar().a;\n"
+                               "}");
+        ASSERT_EQUALS("[test.cpp:7]: (style) struct member 'B::a' is never used.\n", errout.str());
     }
 
     void structmember2() {
@@ -418,7 +472,7 @@ private:
                                "{\n"
                                "    ab.b = 0;\n"
                                "}");
-        ASSERT_EQUALS("[test.cpp:3]: (style) struct or union member 'AB::a' is never used.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (style) struct member 'AB::a' is never used.\n", errout.str());
     }
 
     void functionVariableUsage(const char code[], const char filename[]="test.cpp") {

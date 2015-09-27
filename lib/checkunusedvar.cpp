@@ -1183,12 +1183,14 @@ void CheckUnusedVar::checkStructMemberUsage()
             }
 
             // bail out if struct is inherited
-            if (!structname.empty() && Token::findmatch(tok, (",|private|protected|public " + structname).c_str()))
+            if (!structname.empty() && Token::findmatch(tok, (",|private|protected|public " + structname).c_str())) {
                 structname.clear();
+                continue;
+            }
 
             // Bail out if some data is casted to struct..
-            const std::string s("( struct| " + tok->next()->str() + " * ) & %name% [");
-            if (Token::findmatch(tok, s.c_str()))
+            const std::string castPattern("( struct| " + tok->next()->str() + " * ) & %name% [");
+            if (Token::findmatch(tok, castPattern.c_str()))
                 structname.clear();
 
             // Bail out if instance is initialized with {}..
@@ -1203,10 +1205,14 @@ void CheckUnusedVar::checkStructMemberUsage()
                 }
             }
 
+            if (structname.empty())
+                continue;
+
             // bail out for extern/global struct
-            for (const Token *tok2 = Token::findmatch(tok, (structname + " %name%").c_str());
+            const std::string definitionPattern(structname + " %name%");
+            for (const Token *tok2 = Token::findmatch(tok, definitionPattern.c_str());
                  tok2 && tok2->next();
-                 tok2 = Token::findmatch(tok2->next(), (structname + " %name%").c_str())) {
+                 tok2 = Token::findmatch(tok2->next(), definitionPattern.c_str())) {
 
                 const Variable *var = tok2->next()->variable();
                 if (var && (var->isExtern() || (var->isGlobal() && !var->isStatic()))) {
@@ -1226,42 +1232,57 @@ void CheckUnusedVar::checkStructMemberUsage()
             structname.clear();
 
         if (!structname.empty() && Token::Match(tok, "[{;]")) {
-            // declaring a POD variable?
+            // declaring a POD member variable?
             if (!tok->next()->isStandardType())
                 continue;
 
-            // Declaring struct variable..
-            const std::string* varname;
+            // Declaring struct member variable..
+            const std::string* memberVarName;
 
             if (Token::Match(tok->next(), "%type% %name% [;[]"))
-                varname = &tok->strAt(2);
+                memberVarName = &tok->strAt(2);
             else if (Token::Match(tok->next(), "%type% %type%|* %name% [;[]"))
-                varname = &tok->strAt(3);
+                memberVarName = &tok->strAt(3);
             else if (Token::Match(tok->next(), "%type% %type% * %name% [;[]"))
-                varname = &tok->strAt(4);
+                memberVarName = &tok->strAt(4);
             else
                 continue;
 
-            // Check if the struct variable is used anywhere in the file
-            const std::string usagePattern(". " + *varname);
+            // Check if the struct member variable is used anywhere in the file
+            const std::string usagePattern(". " + *memberVarName);
             bool used = false;
-            for (const Token *tok2 = _tokenizer->tokens(); tok2; tok2 = tok2->next()) {
-                if (Token::simpleMatch(tok2, usagePattern.c_str())) {
+            const Token* usageTok = _tokenizer->tokens();
+            while ((usageTok = Token::findsimplematch(usageTok->next(), usagePattern.c_str())) != nullptr) {
+                // Locate the containing struct variable and ensure it's of the same type, not a random struct
+                const Token* structVarTok = usageTok->previous();
+                // Walk backwards over array accesses
+                while (structVarTok && structVarTok->link())
+                    structVarTok = structVarTok->link()->previous();
+                if (!structVarTok)
+                    continue;
+                const Variable* structVar = structVarTok->variable();
+                if (structVar && structVar->type() && structVar->type()->name() == structname) {
+                    used = true;
+                    break;
+                }
+                const Function* function = structVarTok->function();
+                if (function && function->retType && function->retType->name() == structname) {
                     used = true;
                     break;
                 }
             }
 
-            if (! used) {
-                unusedStructMemberError(tok->next(), structname, *varname);
+            if (!used) {
+                unusedStructMemberError(tok->next(), structname, *memberVarName, tok->scope()->type == Scope::eUnion);
             }
         }
     }
 }
 
-void CheckUnusedVar::unusedStructMemberError(const Token *tok, const std::string &structname, const std::string &varname)
+void CheckUnusedVar::unusedStructMemberError(const Token *tok, const std::string &structname, const std::string &varname, bool isUnion)
 {
-    reportError(tok, Severity::style, "unusedStructMember", "struct or union member '" + structname + "::" + varname + "' is never used.");
+    const char* prefix = isUnion ? "union member '" : "struct member '";
+    reportError(tok, Severity::style, "unusedStructMember", std::string(prefix) + structname + "::" + varname + "' is never used.");
 }
 
 bool CheckUnusedVar::isRecordTypeWithoutSideEffects(const Type* type)

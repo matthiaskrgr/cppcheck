@@ -148,12 +148,15 @@ void uninitvar(int fd)
     char buf[2];
     int decimal, sign;
     double d;
+    void *p;
     // cppcheck-suppress uninitvar
     write(x,"ab",2);
     // cppcheck-suppress uninitvar
-    write(fd,buf,2);
+    write(fd,buf,2); // #6325
     // cppcheck-suppress uninitvar
     write(fd,"ab",x);
+    // cppcheck-suppress uninitvar
+    write(fd,p,2);
 
 
     /* int regcomp(regex_t *restrict preg, const char *restrict pattern, int cflags); */
@@ -193,11 +196,22 @@ void uninitvar_types(void)
     d.d_ino + 1;
 }
 
-void timet_h()
+void timet_h(struct timespec* ptp1)
 {
+    clockid_t clk_id;
     struct timespec* ptp;
     // cppcheck-suppress uninitvar
     clock_settime(CLOCK_REALTIME, ptp);
+    // cppcheck-suppress uninitvar
+    clock_settime(clk_id, ptp);
+    // cppcheck-suppress uninitvar
+    clock_settime(clk_id, ptp1);
+
+    struct timespec tp;
+    // cppcheck-suppress uninitvar
+    clock_settime(CLOCK_REALTIME, &tp); // #6577 - false negative
+    // cppcheck-suppress uninitvar
+    clock_settime(clk_id, &tp);
 
     time_t clock = time(0);
     char buf[26];
