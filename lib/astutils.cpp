@@ -24,30 +24,9 @@
 #include "tokenize.h"
 #include <set>
 
-static bool isChar(const Variable* var)
-{
-    return (var && !var->isPointer() && !var->isArray() && var->typeStartToken()->str() == "char");
-}
-
-static bool isSignedChar(const Variable* var)
-{
-    return (isChar(var) && !var->typeStartToken()->isUnsigned());
-}
-
 bool astIsSignedChar(const Token *tok)
 {
-    if (!tok)
-        return false;
-    if (tok->str() == "*" && tok->astOperand1() && !tok->astOperand2()) {
-        const Variable *var = tok->astOperand1()->variable();
-        if (!var || !var->isPointer())
-            return false;
-        const Token *type = var->typeStartToken();
-        while (type && type->str() == "const")
-            type = type->next();
-        return (type && type->str() == "char" && !type->isUnsigned());
-    }
-    return isSignedChar(tok->variable());
+    return tok && tok->valueType() && tok->valueType()->sign == ValueType::Sign::SIGNED && tok->valueType()->type == ValueType::Type::CHAR && tok->valueType()->pointer == 0U;
 }
 
 bool astIsIntegral(const Token *tok, bool unknown)
@@ -68,7 +47,7 @@ bool astIsIntegral(const Token *tok, bool unknown)
             return false;
 
         // Function call
-        if (tok->previous()->function()) {
+        if (tok->previous() && tok->previous()->function()) {
             if (Token::Match(tok->previous()->function()->retDef, "float|double"))
                 return false;
             else if (Token::Match(tok->previous()->function()->retDef, "bool|char|short|int|long"))
@@ -266,6 +245,13 @@ bool isSameExpression(bool cpp, const Token *tok1, const Token *tok2, const std:
                              isSameExpression(cpp, tok1->astOperand2(), tok2->astOperand1(), constFunctions);
     commuative_equals = commuative_equals &&
                         isSameExpression(cpp, tok1->astOperand1(), tok2->astOperand2(), constFunctions);
+
+    // in c++, "a"+b might be different to b+"a"
+    if (cpp && commuative_equals && tok1->str() == "+" &&
+        (tok1->astOperand1()->tokType() == Token::eString || tok1->astOperand2()->tokType() == Token::eString)) {
+        const Token * const other = tok1->astOperand1()->tokType() != Token::eString ? tok1->astOperand1() : tok1->astOperand2();
+        return other && astIsIntegral(other,false);
+    }
 
     return commuative_equals;
 }

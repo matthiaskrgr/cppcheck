@@ -262,6 +262,8 @@ private:
 
         TEST_CASE(lambda); // ticket #5867
         TEST_CASE(circularDependencies); // 6298
+
+        TEST_CASE(valuetype);
     }
 
     void array() const {
@@ -732,8 +734,7 @@ private:
                             "    foo[1].x = 123;\n"  // <- x should get a variable() pointer
                             "}";
 
-        Settings localsettings;
-        Tokenizer tokenizer(&localsettings, this);
+        Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
         tokenizer.tokenize(istr, "test.cpp");
 
@@ -752,8 +753,7 @@ private:
                             "    foo[1][2].x = 123;\n"  // <- x should get a variable() pointer
                             "}";
 
-        Settings localsettings;
-        Tokenizer tokenizer(&localsettings, this);
+        Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
         tokenizer.tokenize(istr, "test.cpp");
 
@@ -772,8 +772,7 @@ private:
                             "    (foo[1]).x = 123;\n"  // <- x should get a variable() pointer
                             "}";
 
-        Settings localsettings;
-        Tokenizer tokenizer(&localsettings, this);
+        Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
         tokenizer.tokenize(istr, "test.cpp");
 
@@ -1347,17 +1346,18 @@ private:
         errout.str("");
 
         // Check..
-        Settings localsettings;
-        localsettings.debugwarnings = debug;
+        settings.debugwarnings = debug;
 
         // Tokenize..
-        Tokenizer tokenizer(&localsettings, this);
+        Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
         tokenizer.tokenize(istr, "test.cpp");
         tokenizer.simplifyTokenList2();
 
         // force symbol database creation
         tokenizer.createSymbolDatabase();
+
+        settings.debugwarnings = false;
     }
 
     void functionArgs1() {
@@ -2942,6 +2942,75 @@ private:
               "	E c;\n"
               "	c.f();\n"
               "}");
+    }
+
+    std::string typeOf(const char code[], const char str[]) {
+        Tokenizer tokenizer(&settings, this);
+        std::istringstream istr(code);
+        tokenizer.tokenize(istr, "test.cpp");
+        tokenizer.getSymbolDatabase();
+        const Token *tok = Token::findsimplematch(tokenizer.tokens(),str);
+        return tok->valueType()->str();
+    }
+
+    void valuetype() {
+        // numbers
+        ASSERT_EQUALS("signed int", typeOf("1", "1"));
+        ASSERT_EQUALS("unsigned int", typeOf("1U", "1U"));
+        ASSERT_EQUALS("signed long", typeOf("1L", "1L"));
+        ASSERT_EQUALS("unsigned long", typeOf("1UL", "1UL"));
+        ASSERT_EQUALS("signed long long", typeOf("1LL", "1LL"));
+        ASSERT_EQUALS("unsigned long long", typeOf("1ULL", "1ULL"));
+        ASSERT_EQUALS("float", typeOf("1.0f", "1.0f"));
+        ASSERT_EQUALS("double", typeOf("1.0", "1.0"));
+
+        // Constant calculations
+        ASSERT_EQUALS("signed int", typeOf("1 + 2", "+"));
+        ASSERT_EQUALS("signed long", typeOf("1L + 2", "+"));
+        ASSERT_EQUALS("signed long long", typeOf("1LL + 2", "+"));
+        ASSERT_EQUALS("float", typeOf("1.2f + 3", "+"));
+        ASSERT_EQUALS("float", typeOf("1 + 2.3f", "+"));
+
+        // promotions
+        ASSERT_EQUALS("signed int", typeOf("(char)1 +  (char)2", "+"));
+        ASSERT_EQUALS("signed int", typeOf("(short)1 + (short)2", "+"));
+        ASSERT_EQUALS("signed int", typeOf("(signed int)1 + (signed char)2", "+"));
+        ASSERT_EQUALS("signed int", typeOf("(signed int)1 + (unsigned char)2", "+"));
+        ASSERT_EQUALS("unsigned int", typeOf("(unsigned int)1 + (signed char)2", "+"));
+        ASSERT_EQUALS("unsigned int", typeOf("(unsigned int)1 + (unsigned char)2", "+"));
+        ASSERT_EQUALS("unsigned int", typeOf("(unsigned int)1 + (signed int)2", "+"));
+        ASSERT_EQUALS("unsigned int", typeOf("(unsigned int)1 + (unsigned int)2", "+"));
+        ASSERT_EQUALS("signed long", typeOf("(signed long)1 + (unsigned int)2", "+"));
+        ASSERT_EQUALS("unsigned long", typeOf("(unsigned long)1 + (signed int)2", "+"));
+
+        // char *
+        ASSERT_EQUALS("const char *", typeOf("\"hello\" + 1", "+"));
+        ASSERT_EQUALS("char",  typeOf("\"hello\"[1]", "["));
+        ASSERT_EQUALS("char",  typeOf("*\"hello\"", "*"));
+
+        // Variable calculations
+        ASSERT_EQUALS("int", typeOf("int x; a = x + 1;", "+"));
+        ASSERT_EQUALS("float", typeOf("float x; a = x + 1;", "+"));
+        ASSERT_EQUALS("signed int", typeOf("signed x; a = x + 1;", "x +"));
+        ASSERT_EQUALS("unsigned int", typeOf("unsigned x; a = x + 1;", "x +"));
+        ASSERT_EQUALS("unsigned int", typeOf("unsigned int u1, u2; a = u1 + 1;",  "u1 +"));
+        ASSERT_EQUALS("unsigned int", typeOf("unsigned int u1, u2; a = u1 + 1U;", "u1 +"));
+        ASSERT_EQUALS("unsigned int", typeOf("unsigned int u1, u2; a = u1 + u2;", "u1 +"));
+        ASSERT_EQUALS("unsigned int", typeOf("unsigned int u1, u2; a = u1 * 2;",  "u1 *"));
+        ASSERT_EQUALS("unsigned int", typeOf("unsigned int u1, u2; a = u1 * u2;", "u1 *"));
+
+        // array..
+        ASSERT_EQUALS("int *", typeOf("int x[10]; a = x + 1;", "+"));
+        ASSERT_EQUALS("int",  typeOf("int x[10]; a = x[0] + 1;", "+"));
+
+        // cast..
+        ASSERT_EQUALS("char", typeOf("a = (char)32;", "("));
+        ASSERT_EQUALS("long", typeOf("a = (long)32;", "("));
+        ASSERT_EQUALS("long", typeOf("a = (long int)32;", "("));
+        ASSERT_EQUALS("long long", typeOf("a = (long long)32;", "("));
+
+        // const..
+        ASSERT_EQUALS("const char *", typeOf("a = \"123\";", "\"123\""));
     }
 };
 

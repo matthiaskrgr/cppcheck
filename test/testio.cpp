@@ -58,6 +58,8 @@ private:
 
         TEST_CASE(testTernary); // ticket #6182
         TEST_CASE(testUnsignedConst); // ticket #6132
+
+        TEST_CASE(testAstType); // #7014
     }
 
     void check(const char code[], bool inconclusive = false, bool portability = false, Settings::PlatformType platform = Settings::Unspecified) {
@@ -2315,11 +2317,11 @@ private:
 
     void testPrintfArgument() {
         check("void foo() {\n"
-              "    printf(\"%u\");\n"
-              "    printf(\"%u%s\", 123);\n"
-              "    printf(\"%u%s%d\", 0, bar());\n"
-              "    printf(\"%u%%%s%d\", 0, bar());\n"
-              "    printf(\"%udfd%%dfa%s%d\", 0, bar());\n"
+              "    printf(\"%i\");\n"
+              "    printf(\"%i%s\", 123);\n"
+              "    printf(\"%i%s%d\", 0, bar());\n"
+              "    printf(\"%i%%%s%d\", 0, bar());\n"
+              "    printf(\"%idfd%%dfa%s%d\", 0, bar());\n"
               "    fprintf(stderr,\"%u%s\");\n"
               "    snprintf(str,10,\"%u%s\");\n"
               "    sprintf(string1, \"%-*.*s\", 32, string2);\n" // #3364
@@ -2337,28 +2339,28 @@ private:
 
         check("void foo(char *str) {\n"
               "    printf(\"\", 0);\n"
-              "    printf(\"%u\", 123, bar());\n"
-              "    printf(\"%u%s\", 0, bar(), 43123);\n"
+              "    printf(\"%i\", 123, bar());\n"
+              "    printf(\"%i%s\", 0, bar(), 43123);\n"
               "}");
         ASSERT_EQUALS("[test.cpp:2]: (warning) printf format string requires 0 parameters but 1 is given.\n"
                       "[test.cpp:3]: (warning) printf format string requires 1 parameter but 2 are given.\n"
                       "[test.cpp:4]: (warning) printf format string requires 2 parameters but 3 are given.\n", errout.str());
 
         check("void foo() {\n" // swprintf exists as MSVC extension and as standard function: #4790
-              "    swprintf(string1, L\"%u\", 32, string2);\n" // MSVC implementation
+              "    swprintf(string1, L\"%i\", 32, string2);\n" // MSVC implementation
               "    swprintf(string1, L\"%s%s\", L\"a\", string2);\n" // MSVC implementation
-              "    swprintf(string1, 6, L\"%u\", 32, string2);\n" // Standard implementation
-              "    swprintf(string1, 6, L\"%u%s\", 32, string2);\n" // Standard implementation
+              "    swprintf(string1, 6, L\"%i\", 32, string2);\n" // Standard implementation
+              "    swprintf(string1, 6, L\"%i%s\", 32, string2);\n" // Standard implementation
               "}");
         ASSERT_EQUALS("[test.cpp:2]: (warning) swprintf format string requires 1 parameter but 2 are given.\n"
                       "[test.cpp:4]: (warning) swprintf format string requires 1 parameter but 2 are given.\n", errout.str());
 
         check("void foo(char *str) {\n"
-              "    printf(\"%u\", 0);\n"
-              "    printf(\"%u%s\", 123, bar());\n"
-              "    printf(\"%u%s%d\", 0, bar(), 43123);\n"
-              "    printf(\"%u%%%s%d\", 0, bar(), 43123);\n"
-              "    printf(\"%udfd%%dfa%s%d\", 0, bar(), 43123);\n"
+              "    printf(\"%i\", 0);\n"
+              "    printf(\"%i%s\", 123, bar());\n"
+              "    printf(\"%i%s%d\", 0, bar(), 43123);\n"
+              "    printf(\"%i%%%s%d\", 0, bar(), 43123);\n"
+              "    printf(\"%idfd%%dfa%s%d\", 0, bar(), 43123);\n"
               "    printf(\"%\"PRId64\"\n\", 123);\n"
               "    fprintf(stderr,\"%\"PRId64\"\n\", 123);\n"
               "    snprintf(str,10,\"%\"PRId64\"\n\", 123);\n"
@@ -2781,7 +2783,7 @@ private:
               "    printf(\"%s\", newline ? a : str + len);\n"
               "    printf(\"%s\", newline + newline);\n"
               "}\n");
-        ASSERT_EQUALS("", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) %s in format string (no. 1) requires 'char *' but the argument type is 'int'.\n", errout.str());
 
         check("struct Fred { int i; } f;\n"
               "struct Fred & bar() { };\n"
@@ -3723,6 +3725,22 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void testAstType() { // ticket #7014
+        check("void test() {\n"
+              "    printf(\"%c\", \"hello\"[0]);\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void test() {\n"
+              "    printf(\"%lld\", (long long)1);\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void test() {\n"
+              "    printf(\"%i\", (short *)x);\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) %i in format string (no. 1) requires 'int' but the argument type is 'short *'.\n", errout.str());
+    }
 };
 
 REGISTER_TEST(TestIO)

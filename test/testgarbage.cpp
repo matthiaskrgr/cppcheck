@@ -30,8 +30,18 @@ public:
     }
 
 private:
+    Settings settings;
 
     void run() {
+        settings.debugwarnings = true;
+        settings.addEnabled("style");
+        settings.addEnabled("warning");
+        settings.addEnabled("portability");
+        settings.addEnabled("performance");
+        settings.addEnabled("information");
+        settings.inconclusive = true;
+        settings.experimental = true;
+
         // don't freak out when the syntax is wrong
         TEST_CASE(wrong_syntax1);
         TEST_CASE(wrong_syntax2);
@@ -166,6 +176,14 @@ private:
         TEST_CASE(garbageCode124); // 6948
         TEST_CASE(garbageCode125); // 6782, 6834
         TEST_CASE(garbageCode126); // #6997
+        TEST_CASE(garbageCode127); // #6667
+        TEST_CASE(garbageCode128); // #7018
+        TEST_CASE(garbageCode129); // #7020
+        TEST_CASE(garbageCode130); // #7021
+        TEST_CASE(garbageCode131); // #7023
+        TEST_CASE(garbageCode132); // #7022
+        TEST_CASE(garbageCode133);
+        TEST_CASE(garbageCode134);
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -189,15 +207,6 @@ private:
 
     std::string checkCodeInternal(const char code[], const char* filename) {
         errout.str("");
-
-        Settings settings;
-        settings.debugwarnings = true;
-        settings.addEnabled("style");
-        settings.addEnabled("warning");
-        settings.addEnabled("portability");
-        settings.addEnabled("performance");
-        settings.inconclusive = true;
-        settings.experimental = true;
 
         // tokenize..
         Tokenizer tokenizer(&settings, this);
@@ -257,7 +266,6 @@ private:
                             " )\n"
                             "}";
 
-        Settings settings;
         Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
         try {
@@ -290,9 +298,6 @@ private:
     void wrong_syntax_class_x_y() {
         // #3585
         const char code[] = "class x y { };";
-
-        Settings settings;
-        settings.addEnabled("information");
 
         {
             errout.str("");
@@ -951,6 +956,114 @@ private:
         ASSERT_THROW(checkCode("{ } float __ieee754_sinhf ( float x ) { float t , , do { gf_u ( jx ) { } ( 0 ) return ; ( ) { } t } ( 0x42b17180 ) { } }"),
                      InternalError);
     }
+
+    void garbageCode127() { // #6667
+        checkCode("extern \"C\" int printf(const char* fmt, ...);\n"
+                  "class A {\n"
+                  "public:\n"
+                  "  int Var;\n"
+                  "  A(int arg) { Var = arg; }\n"
+                  "  ~A() { printf(\"A d'tor\\n\"); }\n"
+                  "};\n"
+                  " const A& foo(const A& arg) { return arg; }\n"
+                  " foo(A(12)).Var\n");
+    }
+
+    void garbageCode128() {
+        ASSERT_THROW(checkCode("enum { FOO = ( , ) } {{ }} enum {{ FOO << = } ( ) } {{ }} ;"),
+                     InternalError);
+    }
+
+    void garbageCode129() {
+        ASSERT_THROW(checkCode("operator - ( { } typedef typename x ; ( ) ) { ( { { ( ( ) ) } ( { } ) } ) }"),
+                     InternalError);
+    }
+
+    void garbageCode130() {
+        ASSERT_THROW(checkCode("enum { FOO = ( , ){ } { { } } { { FOO} = } ( ) } { { } } enumL\" ( enumL\" { { FOO } ( ) } { { } } ;"),
+                     InternalError);
+    }
+
+    void garbageCode131() {
+        checkCode("( void ) { ( ) } ( ) / { ( ) }");
+        // actually the invalid code should trigger an syntax error...
+    }
+
+    void garbageCode132() { // #7022
+        checkCode("() () { } { () () ({}) i() } void i(void(*ptr) ()) { ptr(!) () }");
+    }
+
+    void garbageCode133() {
+        ASSERT_THROW(checkCode("void f() {{}"), InternalError);
+
+        ASSERT_THROW(checkCode("void f()) {}"), InternalError);
+
+        ASSERT_THROW(checkCode("void f()\n"
+                               "{\n"
+                               " foo(;\n"
+                               "}\n"), InternalError);
+
+        ASSERT_THROW(checkCode("void f()\n"
+                               "{\n"
+                               " for(;;){ foo();\n"
+                               "}\n"), InternalError);
+
+        ASSERT_THROW(checkCode("void f()\n"
+                               "{\n"
+                               " a[10;\n"
+                               "}\n"), InternalError);
+
+        {
+            errout.str("");
+            const char code[] = "{\n"
+                                "   a(\n"
+                                "}\n"
+                                "{\n"
+                                "   b());\n"
+                                "}\n";
+            Tokenizer tokenizer(&settings, this);
+            std::istringstream istr(code);
+            try {
+                tokenizer.tokenize(istr, "test.cpp");
+                assertThrowFail(__FILE__, __LINE__);
+            } catch (InternalError& e) {
+                ASSERT_EQUALS("Invalid number of character '(' when these macros are defined: ''.", e.errorMessage);
+                ASSERT_EQUALS("syntaxError", e.id);
+                ASSERT_EQUALS(2, e.token->linenr());
+            }
+        }
+    }
+
+    void garbageCode134() {
+        // Ticket #5605, #5759, #5762, #5774, #5823, #6059
+        checkCode("template<>\n");
+        checkCode("foo() template<typename T1 = T2 = typename = unused, T5 = = unused> struct tuple Args> tuple<Args...> { } main() { foo<int,int,int,int,int,int>(); }");
+        checkCode("( ) template < T1 = typename = unused> struct Args { } main ( ) { foo < int > ( ) ; }");
+        checkCode("() template < T = typename = x > struct a {} { f <int> () }");
+        checkCode("template < T = typename = > struct a { f <int> }");
+        checkCode("struct S { int i, j; }; "
+                  "template<int S::*p, typename U> struct X {}; "
+                  "X<&S::i, int> x = X<&S::i, int>(); "
+                  "X<&S::j, int> y = X<&S::j, int>(); ");
+        checkCode("template <typename T> struct A {}; "
+                  "template <> struct A<void> {}; "
+                  "void foo(const void* f = 0) {}");
+        checkCode("template<typename... T> struct A { "
+                  "  static const int s = 0; "
+                  "}; "
+                  "A<int> a;");
+        checkCode("template<class T, class U> class A {}; "
+                  "template<class T = A<int, int> > class B {}; "
+                  "template<class T = B<int> > class C { "
+                  "    C() : _a(0), _b(0) {} "
+                  "    int _a, _b; "
+                  "};");
+        checkCode("template<class... T> struct A { "
+                  "  static int i; "
+                  "}; "
+                  "void f() { A<int>::i = 0; }");
+    }
+
 
     void garbageValueFlow() {
         // #6089

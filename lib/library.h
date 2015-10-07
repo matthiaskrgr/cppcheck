@@ -212,15 +212,8 @@ public:
         return arg && arg->notbool;
     }
 
-    bool isnullargbad(const Token *ftok, int argnr) const {
-        const ArgumentChecks *arg = getarg(ftok, argnr);
-        return arg && arg->notnull;
-    }
-
-    bool isuninitargbad(const Token *ftok, int argnr) const {
-        const ArgumentChecks *arg = getarg(ftok, argnr);
-        return arg && arg->notuninit;
-    }
+    bool isnullargbad(const Token *ftok, int argnr) const;
+    bool isuninitargbad(const Token *ftok, int argnr) const;
 
     bool isargformatstr(const Token *ftok, int argnr) const {
         const ArgumentChecks *arg = getarg(ftok, argnr);

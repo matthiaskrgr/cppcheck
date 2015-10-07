@@ -1008,6 +1008,9 @@ public:
 
     bool isCPP() const;
 
+    /** Set valuetype in provided tokenlist */
+    static void setValueTypeInTokenList(Token *tokens);
+
 private:
     friend class Scope;
     friend class Function;
@@ -1024,7 +1027,6 @@ private:
     /** Whether iName is a keyword as defined in http://en.cppreference.com/w/c/keyword and http://en.cppreference.com/w/cpp/keyword*/
     bool isReservedName(const std::string& iName) const;
 
-
     const Tokenizer *_tokenizer;
     const Settings *_settings;
     ErrorLogger *_errorLogger;
@@ -1035,6 +1037,29 @@ private:
     /** list for missing types */
     std::list<Type> _blankTypes;
 };
+
+/** Value type */
+class CPPCHECKLIB ValueType {
+public:
+    enum Sign {UNKNOWN_SIGN, SIGNED, UNSIGNED} sign;
+    enum Type {UNKNOWN_TYPE, NONSTD, BOOL, CHAR, SHORT, INT, LONG, LONGLONG, FLOAT, DOUBLE} type;
+    unsigned int pointer; // 0=>not pointer, 1=>*, 2=>**, 3=>***, etc
+    unsigned int constness;  // bit 0=data, bit 1=*, bit 2=**
+    std::string originalTypeName;
+
+    ValueType() : sign(UNKNOWN_SIGN), type(UNKNOWN_TYPE), pointer(0U), constness(0U) {}
+    ValueType(const ValueType &vt) : sign(vt.sign), type(vt.type), pointer(vt.pointer), constness(vt.constness), originalTypeName(vt.originalTypeName) {}
+    ValueType(enum Sign s, enum Type t, unsigned int p) : sign(s), type(t), pointer(p), constness(0U) {}
+    ValueType(enum Sign s, enum Type t, unsigned int p, unsigned int c) : sign(s), type(t), pointer(p), constness(c) {}
+    ValueType(enum Sign s, enum Type t, unsigned int p, unsigned int c, const std::string &otn) : sign(s), type(t), pointer(p), constness(c), originalTypeName(otn) {}
+
+    bool isIntegral() const {
+        return (type >= ValueType::Type::BOOL && type <= ValueType::Type::LONGLONG);
+    }
+
+    std::string str() const;
+};
+
 
 //---------------------------------------------------------------------------
 #endif // symboldatabaseH

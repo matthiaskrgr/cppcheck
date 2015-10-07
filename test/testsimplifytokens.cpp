@@ -29,12 +29,17 @@ public:
 
 
 private:
+    Settings settings0;
+    Settings settings1;
     Settings settings_std;
     Settings settings_windows;
 
     void run() {
         LOAD_LIB_2(settings_std.library, "std.cfg");
         LOAD_LIB_2(settings_windows.library, "windows.cfg");
+        settings0.addEnabled("portability");
+        settings1.addEnabled("style");
+        settings_windows.addEnabled("portability");
 
         // Make sure the Tokenizer::simplifyTokenList works.
         // The order of the simplifications is important. So this test
@@ -281,10 +286,8 @@ private:
     std::string tok(const char code[], bool simplify = true, Settings::PlatformType type = Settings::Unspecified) {
         errout.str("");
 
-        Settings settings;
-        settings.addEnabled("portability");
-        settings.platform(type);
-        Tokenizer tokenizer(&settings, this);
+        settings0.platform(type);
+        Tokenizer tokenizer(&settings0, this);
 
         std::istringstream istr(code);
         tokenizer.tokenize(istr, "test.cpp");
@@ -298,7 +301,6 @@ private:
     std::string tokWithWindows(const char code[], bool simplify = true, Settings::PlatformType type = Settings::Unspecified) {
         errout.str("");
 
-        settings_windows.addEnabled("portability");
         settings_windows.platform(type);
         Tokenizer tokenizer(&settings_windows, this);
 
@@ -314,8 +316,7 @@ private:
     std::string tok(const char code[], const char filename[], bool simplify = true) {
         errout.str("");
 
-        Settings settings;
-        Tokenizer tokenizer(&settings, this);
+        Tokenizer tokenizer(&settings0, this);
 
         std::istringstream istr(code);
         tokenizer.tokenize(istr, filename);
@@ -340,9 +341,7 @@ private:
     std::string tokenizeDebugListing(const char code[], bool simplify = false, const char filename[] = "test.cpp") {
         errout.str("");
 
-        Settings settings;
-
-        Tokenizer tokenizer(&settings, this);
+        Tokenizer tokenizer(&settings0, this);
         std::istringstream istr(code);
         tokenizer.tokenize(istr, filename);
 
@@ -370,6 +369,7 @@ private:
         ASSERT_EQUALS("class A { A operator* ( int ) ; } ;", tok("class A { A operator *(int); };"));
         ASSERT_EQUALS("class A { A operator* ( int ) const ; } ;", tok("class A { A operator *(int) const; };"));
         ASSERT_EQUALS("if ( p == 0 ) { ; }", tok("if (p == (char *)(char *)0);"));
+        ASSERT_EQUALS("if ( p == 0 ) { ; }", tok("if (p == (char **)0);"));
 
         // no simplification as the cast may be important here. see #2897 for example
         ASSERT_EQUALS("; * ( ( char * ) p + 1 ) = 0 ;", tok("; *((char *)p + 1) = 0;"));
@@ -491,9 +491,7 @@ private:
                               "};\n"
                               "}\n";
 
-        Settings settings;
-        settings.platform(Settings::Unspecified);
-        Tokenizer tokenizer(&settings, this);
+        Tokenizer tokenizer(&settings0, this);
         std::istringstream istr(code1);
         tokenizer.tokenize(istr, "test.cpp");
 
@@ -786,11 +784,7 @@ private:
 
 
     std::string elseif(const char code[]) {
-        errout.str("");
-
-        Settings settings;
-
-        Tokenizer tokenizer(&settings, this);
+        Tokenizer tokenizer(&settings0, this);
         std::istringstream istr(code);
         tokenizer.tokenize(istr, "test.cpp");
         tokenizer.elseif();
@@ -854,11 +848,7 @@ private:
 
 
     unsigned int sizeofFromTokenizer(const char type[]) {
-        errout.str("");
-
-        Settings settings;
-
-        Tokenizer tokenizer(&settings, this);
+        Tokenizer tokenizer(&settings0, this);
         std::istringstream istr("");
         tokenizer.tokenize(istr, "test.cpp");
         Token tok1(0);
@@ -1562,10 +1552,8 @@ private:
 
 
     std::string simplifyIfAndWhileAssign(const char code[]) {
-        errout.str("");
-        Settings settings;
         // tokenize..
-        Tokenizer tokenizer(&settings, this);
+        Tokenizer tokenizer(&settings0, this);
         std::istringstream istr(code);
         tokenizer.tokenize(istr, "test.cpp");
 
@@ -1650,8 +1638,7 @@ private:
     void whileAssign4() {
         errout.str("");
 
-        Settings settings;
-        Tokenizer tokenizer(&settings, this);
+        Tokenizer tokenizer(&settings0, this);
         std::istringstream istr("; while (!(m = q->push<Message>(x))) {}");
         tokenizer.tokenize(istr, "test.cpp");
         tokenizer.simplifyTokenList2();
@@ -2999,9 +2986,7 @@ private:
     std::string checkSimplifyEnum(const char code[], bool cpp = true) {
         errout.str("");
         // Tokenize..
-        Settings settings;
-        settings.addEnabled("style");
-        Tokenizer tokenizer(&settings, this);
+        Tokenizer tokenizer(&settings1, this);
         std::istringstream istr(code);
         tokenizer.tokenize(istr, cpp?"test.cpp":"test.c");
         return tokenizer.tokens()->stringifyList(0, true);
@@ -3432,8 +3417,7 @@ private:
     }
 
     void duplicateDefinition() { // #3565 - wrongly detects duplicate definition
-        const Settings settings;
-        Tokenizer tokenizer(&settings, this);
+        Tokenizer tokenizer(&settings0, this);
         std::istringstream istr("x ; return a not_eq x;");
         tokenizer.tokenize(istr, "test.c");
         Token *x_token = tokenizer.list.front()->tokAt(5);

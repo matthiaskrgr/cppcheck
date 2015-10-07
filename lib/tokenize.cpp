@@ -1098,6 +1098,8 @@ void Tokenizer::simplifyTypedef()
                         if (func->previous()->str() == "operator")
                             func = func->previous();
 
+                        if (!func->previous()) // #7020
+                            syntaxError(func);
                         // check for qualifier
                         if (func->previous()->str() == "::") {
                             // check for available and matching class name
@@ -1724,6 +1726,7 @@ bool Tokenizer::tokenize(std::istream &code,
             }
 
             list.createAst();
+            SymbolDatabase::setValueTypeInTokenList(list.front());
             ValueFlow::setValues(&list, _symbolDatabase, _errorLogger, _settings);
         }
 
@@ -4927,7 +4930,7 @@ void Tokenizer::simplifyCasts()
         }
 
         // Replace pointer casts of 0.. "(char *)0" => "0"
-        while (Token::Match(tok->next(), "( %type% %type%| * ) 0")) {
+        while (Token::Match(tok->next(), "( %type% %type%| * *| ) 0")) {
             tok->linkAt(1)->next()->isCast(true);
             Token::eraseTokens(tok, tok->next()->link()->next());
             if (tok->str() == ")" && tok->link()->previous()) {
@@ -7434,7 +7437,7 @@ void Tokenizer::simplifyEnum()
                         enumName = tok1;
                         lastValue = 0;
                         tok1 = tok1->tokAt(2);
-                        if (Token::Match(tok1, ",|{|}"))
+                        if (!tok1 || Token::Match(tok1, ",|{|}"))
                             syntaxError(tok1);
 
                         enumValueStart = tok1;
@@ -7442,6 +7445,8 @@ void Tokenizer::simplifyEnum()
                         while (enumValueEnd->next() && (!Token::Match(enumValueEnd->next(), "[},]"))) {
                             if (Token::Match(enumValueEnd, "(|[")) {
                                 enumValueEnd = enumValueEnd->link();
+                                if (!enumValueEnd) // #7018 invalid code
+                                    syntaxError(nullptr);
                                 continue;
                             } else if (isCPP() && Token::Match(enumValueEnd, "%type% <") && TemplateSimplifier::templateParameters(enumValueEnd->next()) >= 1U) {
                                 Token *endtoken = enumValueEnd->next()->findClosingBracket();
@@ -7452,8 +7457,9 @@ void Tokenizer::simplifyEnum()
                                 } else
                                     syntaxError(enumValueEnd);
                             }
-
                             enumValueEnd = enumValueEnd->next();
+                            if (!enumValueEnd) // #7018 invalid code
+                                syntaxError(nullptr);
                         }
                         // remember this expression in case it needs to be incremented
                         lastEnumValueStart = enumValueStart;
@@ -7630,6 +7636,8 @@ void Tokenizer::simplifyEnum()
                                     if (enumtok == ev->end)
                                         break;
                                 }
+                                if (!enumtok) // #7021
+                                    syntaxError(nullptr);
                                 if (enumtok->isOp()) {
                                     hasOp = true;
                                     break;
@@ -9216,7 +9224,7 @@ void Tokenizer::simplifyAsm()
 
         else if (Token::Match(tok, "_asm|__asm")) {
             const Token *tok2 = tok;
-            while (tok2 && tok2->linenr() == tok->linenr() && (tok2->isNumber() || tok2->isName() || tok2->str() == ","))
+            while (tok2 && (tok2->isNumber() || tok2->isName() || tok2->str() == "," || tok2->str() == ":"))
                 tok2 = tok2->next();
             if (!tok2 || tok2->str() == ";" || tok2->linenr() != tok->linenr()) {
                 instruction = tok->next()->stringifyList(tok2);

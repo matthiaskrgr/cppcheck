@@ -4006,8 +4006,6 @@ private:
     }
 
     void duplicateBranch2() {
-        Preprocessor::macroChar = '$';
-
         check("void f(int x) {\n" // #4329
               "  if (x)\n"
               "    $;\n"
@@ -4193,6 +4191,11 @@ private:
               "    if ((b + a) | (a + b)) {}\n"
               "}");
         ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '|'.\n", errout.str());
+
+        check("void foo(std::string a, std::string b) {\n"
+              "  return a.find(b+\"&\") || a.find(\"&\"+b);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
 
         check("void foo() {\n"
               "    if ((b > a) | (a > b)) {}\n" // > is not commutative
@@ -4423,7 +4426,6 @@ private:
     }
 
     void duplicateExpression5() {  // #3749 - macros with same values
-        Preprocessor::macroChar = '$';
         check("void f() {\n"
               "    if ($a == $a) { }\n"
               "}");
