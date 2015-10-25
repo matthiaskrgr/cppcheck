@@ -19,6 +19,7 @@ env:
     - CXXFLAGS="${CXXFLAGS} -DCHECK_INTERNAL"
     - SRCDIR=build CHECK_CLANG=yes VERIFY=1
     - CXXFLAGS="${CXXFLAGS} -DCHECK_INTERNAL" MAKEFLAGS="HAVE_RULES=yes" SRCDIR=build VERIFY=1
+    - CXXFLAGS="${CXXFLAGS} -fsanitize=address,undefined -g3 -DCHECK_INTERNAL"
 
 matrix:
 # do notify immediately about it when a job of a build fails.
@@ -27,6 +28,9 @@ matrix:
   exclude:
     - compiler: clang
       env: SRCDIR=build CHECK_CLANG=yes VERIFY=1
+    - compiler: gcc
+      env: CXXFLAGS="${CXXFLAGS} -fsanitize=address,undefined -g3 -DCHECK_INTERNAL"
+
 
 before_install:
 # install needed deps
