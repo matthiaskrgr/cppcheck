@@ -1,5 +1,10 @@
 language: cpp
 
+# ubuntu 14.04
+sudo: required
+dist: trusty
+
+
 compiler:
   - clang
   - gcc
