@@ -104,8 +104,9 @@ public:
     * @param saveFullPath Save full path of files in reports
     * @param saveAllErrors Save all visible errors
     * @param showErrorId Show error id
+    * @param showInconclusive Show inconclusive column
     */
-    void UpdateSettings(bool showFullPath, bool saveFullPath, bool saveAllErrors, bool showErrorId);
+    void UpdateSettings(bool showFullPath, bool saveFullPath, bool saveAllErrors, bool showErrorId, bool showInconclusive);
 
     /**
     * @brief Set the directory we are checking
@@ -143,6 +144,11 @@ public:
     * @brief Show optional column "Id"
     */
     void ShowIdColumn(bool show);
+
+    /**
+    * @brief Show optional column "Inconclusve"
+    */
+    void ShowInconclusiveColumn(bool show);
 
     /**
     * @brief Returns true if column "Id" is shown
@@ -314,12 +320,14 @@ protected:
     * @param item Error line data
     * @param hide Should this be hidden (true) or shown (false)
     * @param icon Should a default backtrace item icon be added
+    * @param childOfMessage Is this a child element of a message?
     * @return newly created QStandardItem *
     */
     QStandardItem *AddBacktraceFiles(QStandardItem *parent,
                                      const ErrorLine &item,
                                      const bool hide,
-                                     const QString &icon);
+                                     const QString &icon,
+                                     bool childOfMessage);
 
 
     /**
@@ -359,6 +367,15 @@ protected:
     static QStandardItem *CreateNormalItem(const QString &name);
 
     /**
+    * @brief Create new normal item.
+    *
+    * Normal item has left alignment and text set also as tooltip.
+    * @param checked checked
+    * @return new QStandardItem
+    */
+    static QStandardItem *CreateCheckboxItem(bool checked);
+
+    /**
     * @brief Create new line number item.
     *
     * Line number item has right align and text set as tooltip.
@@ -385,13 +402,6 @@ protected:
     * @return QStandardItem to be used as a parent for all errors for specified file
     */
     QStandardItem *EnsureFileItem(const QString &fullpath, const QString &file0, bool hide);
-
-    /**
-    * @brief Show a file item
-    *
-    * @param name Filename of the fileitem
-    */
-    void ShowFileItem(const QString &name);
 
     /**
     * @brief Item model for tree

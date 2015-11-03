@@ -191,43 +191,17 @@ void Token::deleteNext(unsigned long index)
 void Token::swapWithNext()
 {
     if (_next) {
-        Token temp(0);
-
-        temp._str = _next->_str;
-        temp._tokType = _next->_tokType;
-        temp._flags = _next->_flags;
-        temp._varId = _next->_varId;
-        temp._fileIndex = _next->_fileIndex;
-        temp._link = _next->_link;
-        temp._scope = _next->_scope;
-        temp._function = _next->_function;
-        temp._originalName = _next->_originalName;
-        temp.values = _next->values;
-        temp._progressValue = _next->_progressValue;
-
-        _next->_str = _str;
-        _next->_tokType = _tokType;
-        _next->_flags = _flags;
-        _next->_varId = _varId;
-        _next->_fileIndex = _fileIndex;
-        _next->_link = _link;
-        _next->_scope = _scope;
-        _next->_function = _function;
-        _next->_originalName = _originalName;
-        _next->values = values;
-        _next->_progressValue = _progressValue;
-
-        _str = temp._str;
-        _tokType = temp._tokType;
-        _flags = temp._flags;
-        _varId = temp._varId;
-        _fileIndex = temp._fileIndex;
-        _link = temp._link;
-        _scope = temp._scope;
-        _function = temp._function;
-        _originalName = temp._originalName;
-        values = temp.values;
-        _progressValue = temp._progressValue;
+        std::swap(_str, _next->_str);
+        std::swap(_tokType, _next->_tokType);
+        std::swap(_flags, _next->_flags);
+        std::swap(_varId, _next->_varId);
+        std::swap(_fileIndex, _next->_fileIndex);
+        std::swap(_link, _next->_link);
+        std::swap(_scope, _next->_scope);
+        std::swap(_function, _next->_function);
+        std::swap(_originalName, _next->_originalName);
+        std::swap(values, _next->values);
+        std::swap(_progressValue, _next->_progressValue);
     }
 }
 
@@ -552,7 +526,7 @@ bool Token::simpleMatch(const Token *tok, const char pattern[])
         next = pattern + std::strlen(pattern);
 
     while (*current) {
-        std::size_t length = static_cast<std::size_t>(next - current);
+        std::size_t length = next - current;
 
         if (!tok || length != tok->_str.length() || std::strncmp(current, tok->_str.c_str(), length))
             return false;
@@ -729,23 +703,25 @@ std::string Token::getCharAt(const Token *tok, std::size_t index)
 {
     assert(tok != nullptr);
 
-    const std::string strValue(tok->strValue());
-    const char *str = strValue.c_str();
+    std::string::const_iterator it = tok->str().begin() + 1U;
+    const std::string::const_iterator end = tok->str().end() - 1U;
 
-    while (*str) {
+    while (it != end) {
         if (index == 0) {
-            std::string ret;
-            if (*str == '\\') {
-                ret = *str;
-                ++str;
+            if (*it == '\0')
+                return "\\0";
+
+            std::string ret(1, *it);
+            if (*it == '\\') {
+                ++it;
+                ret += *it;
             }
-            ret += *str;
             return ret;
         }
 
-        if (*str == '\\')
-            ++str;
-        ++str;
+        if (*it == '\\')
+            ++it;
+        ++it;
         --index;
     }
     assert(index == 0);
@@ -1043,16 +1019,16 @@ std::string Token::stringifyList(bool varid, bool attributes, bool linenumbers, 
     std::ostringstream ret;
 
     unsigned int lineNumber = _linenr;
-    int fileInd = files ? -1 : static_cast<int>(_fileIndex);
+    unsigned int fileInd = files ? ~0U : _fileIndex;
     std::map<int, unsigned int> lineNumbers;
     for (const Token *tok = this; tok != end; tok = tok->next()) {
         bool fileChange = false;
-        if (static_cast<int>(tok->_fileIndex) != fileInd) {
-            if (fileInd != -1) {
+        if (tok->_fileIndex != fileInd) {
+            if (fileInd != ~0U) {
                 lineNumbers[fileInd] = tok->_fileIndex;
             }
 
-            fileInd = static_cast<int>(tok->_fileIndex);
+            fileInd = tok->_fileIndex;
             if (files) {
                 ret << "\n\n##file ";
                 if (fileNames && fileNames->size() > tok->_fileIndex)
@@ -1066,7 +1042,7 @@ std::string Token::stringifyList(bool varid, bool attributes, bool linenumbers, 
         }
 
         if (linebreaks && (lineNumber != tok->linenr() || fileChange)) {
-            if (lineNumber+4 < tok->linenr() && fileInd == static_cast<int>(tok->_fileIndex)) {
+            if (lineNumber+4 < tok->linenr() && fileInd == tok->_fileIndex) {
                 ret << '\n' << lineNumber+1 << ":\n|\n";
                 ret << tok->linenr()-1 << ":\n";
                 ret << tok->linenr() << ": ";
@@ -1182,7 +1158,7 @@ bool Token::isUnaryPreOp() const
         return true;
     const Token *tokbefore = _previous;
     const Token *tokafter = _next;
-    for (int distance = 1; distance < 10; distance++) {
+    for (int distance = 1; distance < 10 && tokbefore; distance++) {
         if (tokbefore == _astOperand1)
             return false;
         if (tokafter == _astOperand1)

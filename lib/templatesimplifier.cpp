@@ -470,9 +470,14 @@ std::list<Token *> TemplateSimplifier::getTemplateDeclarations(Token *tokens, bo
             tok = tok->linkAt(2);
 
         if (Token::simpleMatch(tok, "template <")) {
-            Token *parmEnd = tok->next()->findClosingBracket();
+            // Some syntax checks, see #6865
+            if (!tok->tokAt(2))
+                syntaxError(tok->next());
+            if (tok->strAt(2)=="typename" &&
+                (!tok->tokAt(3) || !Token::Match(tok->tokAt(3), "%name%|.|,|>")))
+                syntaxError(tok->next());
             codeWithTemplates = true;
-
+            Token *parmEnd = tok->next()->findClosingBracket();
             int indentlevel = 0;
             for (const Token *tok2 = parmEnd; tok2; tok2 = tok2->next()) {
                 if (tok2->str() == "(")
@@ -1006,7 +1011,7 @@ bool TemplateSimplifier::simplifyCalculations(Token *_tokens)
         // keep parentheses here: Functor()(a ... )
         // keep parentheses here: ) ( var ) ;
         if ((Token::Match(tok->next(), "( %name% ) ;|)|,|]") ||
-             (Token::Match(tok->next(), "( %name% ) %cop%") && (tok->tokAt(2)->varId()>0 || !Token::Match(tok->tokAt(4), "[*&+-]")))) &&
+             (Token::Match(tok->next(), "( %name% ) %cop%") && (tok->tokAt(2)->varId()>0 || !Token::Match(tok->tokAt(4), "[*&+-~]")))) &&
             !tok->isName() &&
             tok->str() != ">" &&
             tok->str() != ")" &&

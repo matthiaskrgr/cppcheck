@@ -1,4 +1,3 @@
-
 /*
  * Cppcheck - A tool for static C/C++ code analysis
  * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
@@ -184,6 +183,19 @@ private:
         TEST_CASE(garbageCode132); // #7022
         TEST_CASE(garbageCode133);
         TEST_CASE(garbageCode134);
+        TEST_CASE(garbageCode135); // #4994
+        TEST_CASE(garbageCode136); // #7033
+        TEST_CASE(garbageCode137); // #7034
+        TEST_CASE(garbageCode138); // #6660
+        TEST_CASE(garbageCode139); // #6659
+        TEST_CASE(garbageCode140); // #7035
+        TEST_CASE(garbageCode141); // #7043
+        TEST_CASE(garbageCode142); // #7050
+        TEST_CASE(garbageCode143); // #6922
+        TEST_CASE(garbageCode144); // #6865
+        TEST_CASE(garbageCode145); // #7074
+        TEST_CASE(garbageCode146); // #7081
+        TEST_CASE(garbageCode147); // #7082
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -358,8 +370,8 @@ private:
     }
 
     void garbageCode6() { // #5214
-        checkCode("int b = ( 0 ? ? ) 1 : 0 ;");
-        checkCode("int a = int b = ( 0 ? ? ) 1 : 0 ;");
+        ASSERT_THROW(checkCode("int b = ( 0 ? ? ) 1 : 0 ;"), InternalError);
+        ASSERT_THROW(checkCode("int a = int b = ( 0 ? ? ) 1 : 0 ;"), InternalError);
     }
 
     void garbageCode7() {
@@ -637,7 +649,7 @@ private:
     }
 
     void garbageCode56() { // #6713
-        checkCode("void foo() { int a = 0; int b = ???; }");
+        ASSERT_THROW(checkCode("void foo() { int a = 0; int b = ???; }"), InternalError);
     }
 
     void garbageCode57() { // #6731
@@ -645,8 +657,8 @@ private:
     }
 
     void garbageCode58() { // #6732, #6762
-        ASSERT_THROW(checkCode("{ }> {= ~A()^{} }P { }"), InternalError);
-        ASSERT_THROW(checkCode("{= ~A()^{} }P { } { }> is"), InternalError);
+        checkCode("{ }> {= ~A()^{} }P { }");
+        checkCode("{= ~A()^{} }P { } { }> is");
     }
 
     void garbageCode59() { // #6735
@@ -770,7 +782,7 @@ private:
     }
 
     void garbageCode89() { // #6772
-        ASSERT_THROW(checkCode("{ { ( ) } P ( ) ^ { } { } { } ( ) } 0"), InternalError); // do not crash
+        checkCode("{ { ( ) } P ( ) ^ { } { } { } ( ) } 0"); // do not crash
     }
 
     void garbageCode90() { // #6790
@@ -920,10 +932,9 @@ private:
     }
 
     void garbageCode121() { // #2585
-        checkCode("abcdef?""?<"
-                  "123456?""?>"
-                  "+?""?=");
-        ASSERT_EQUALS("", errout.str());
+        ASSERT_THROW(checkCode("abcdef?""?<"
+                               "123456?""?>"
+                               "+?""?="), InternalError);
     }
 
     void garbageCode122() { // #6303
@@ -1064,6 +1075,98 @@ private:
                   "void f() { A<int>::i = 0; }");
     }
 
+    void garbageCode135() { // #4994
+        checkCode("long f () {\n"
+                  "  return a >> extern\n"
+                  "}\n"
+                  "long a = 1 ;\n"
+                  "long b = 2 ;");
+    }
+
+    void garbageCode136() { // #7033
+        checkCode("{ } () { void f() { node_t * n; for (; -n) {} } } { }");
+    }
+
+    void garbageCode137() { // #7034
+        checkCode("\" \" typedef signed char f; \" \"; void a() { f * s = () &[]; (; ) (; ) }");
+    }
+
+    void garbageCode138() { // #6660
+        checkCode("CS_PLUGIN_NAMESPACE_BEGIN(csparser)\n"
+                  "{\n"
+                  "    struct foo\n"
+                  "    {\n"
+                  "      union\n"
+                  "      {};\n"
+                  "    } halo;\n"
+                  "}\n"
+                  "CS_PLUGIN_NAMESPACE_END(csparser)");
+    }
+
+    void garbageCode139() { // #6659 heap user after free: kernel: sm750_accel.c
+        ASSERT_THROW(checkCode("void hw_copyarea() {\n"
+                               "   de_ctrl = (nDirection == RIGHT_TO_LEFT) ?\n"
+                               "    ( (0 & ~(((1 << (1 - (0 ? DE_CONTROL_DIRECTION))) - 1) << (0 ? DE_CONTROL_DIRECTION))) )\n"
+                               "    : 42;\n"
+                               "}"), InternalError);
+    }
+
+    void garbageCode140() { // #7035
+        ASSERT_THROW(checkCode("int foo(int align) { int off(= 0 % align;  return off) ? \\ align - off  :  0;  \\ }"), InternalError);
+    }
+
+    void garbageCode141() { // #7043
+        ASSERT_THROW(checkCode("enum { X = << { X } } enum { X = X } = X ;"), InternalError);
+    }
+
+    void garbageCode142() { // #7050
+        checkCode("{ } (  ) { void mapGraphs ( ) { node_t * n ; for (!oid n ) { } } } { }");
+    }
+
+    void garbageCode143() { // #6922
+        ASSERT_THROW(checkCode("void neoProgramShadowRegs() {\n"
+                               "    int i;\n"
+                               "    Bool noProgramShadowRegs;\n"
+                               "    if (noProgramShadowRegs) {\n"
+                               "    } else {\n"
+                               "        switch (nPtr->NeoPanelWidth) {\n"
+                               "        case 1280:\n"
+                               "            VGAwCR(0x64,0x?? );\n"
+                               "        }\n"
+                               "    }\n"
+                               "}"), InternalError);
+    }
+
+    void garbageCode144() { // #6865
+        //ASSERT_THROW(checkCode("template < typename > struct A { } ; template < typename > struct A < INVALID > : A < int[ > { }] ;"), InternalError);
+    }
+
+    void garbageCode145() { // #7074
+        checkCode("++4++ +  + E++++++++++ + ch " "tp.oed5[.]");
+    }
+
+    void garbageCode146() { // #7081
+        ASSERT_THROW(checkCode("void foo() {\n"
+                               "    ? std::cout << pow((, 1) << std::endl;\n"
+                               "    double <ip = NUO ip) << std::end;\n"
+                               "}"), InternalError);
+    }
+
+    void garbageCode147() { // #7082
+        checkCode("free(3();\n"
+                  "$  vWrongAllocp1) test1<int, -!>() ^ {\n"
+                  "    int *p<ynew int[n];\n"
+                  "    delete[]p;\n"
+                  "    int *p1 = (int*)malloc(n*sizeof(int));\n"
+                  "    free(p1);\n"
+                  "}\n"
+                  "void est2() {\n"
+                  "    for (int ui = 0; ui < 1z; ui++)\n"
+                  "        ;\n"
+                  "}");
+
+        checkCode("; void f ^ { return } int main ( ) { }"); // #4941
+    }
 
     void garbageValueFlow() {
         // #6089

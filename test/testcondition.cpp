@@ -375,6 +375,7 @@ private:
         tokenizer.simplifyTokenList2();
         checkCondition.runSimplifiedChecks(&tokenizer, &settings1, this);
     }
+
     void duplicateIf() {
         check("void f(int a, int &b) {\n"
               "    if (a) { b = 1; }\n"
@@ -1534,11 +1535,7 @@ private:
               "    if (init == 0x89504e470d0a1a0a || init == 0x8a4d4e470d0a1a0a)\n"
               "        ;\n"
               "}");
-#ifdef _MSC_VER
         ASSERT_EQUALS("", errout.str());
-#else
-        TODO_ASSERT_EQUALS("", "[test.cpp:2]: (style) Redundant condition: If 'init == 9894494448401390090', the comparison 'init == 9965707617509186058' is always true.\n", errout.str());
-#endif
     }
 
     void testBug5309() {

@@ -23,18 +23,12 @@
 #include <stdexcept>
 
 #define GET_SYMBOL_DB(code) \
-    errout.str(""); \
     Tokenizer tokenizer(&settings, this); \
-    std::istringstream istr(code); \
-    tokenizer.tokenize(istr, "test.cpp"); \
-    const SymbolDatabase *db = tokenizer.getSymbolDatabase();
+    const SymbolDatabase *db = getSymbolDB_inner(tokenizer, code, "test.cpp");
 
 #define GET_SYMBOL_DB_C(code) \
-    errout.str(""); \
     Tokenizer tokenizer(&settings, this); \
-    std::istringstream istr(code); \
-    tokenizer.tokenize(istr, "test.c"); \
-    const SymbolDatabase *db = tokenizer.getSymbolDatabase();
+    const SymbolDatabase *db = getSymbolDB_inner(tokenizer, code, "test.c");
 
 class TestSymbolDatabase: public TestFixture {
 public:
@@ -60,6 +54,13 @@ private:
         typetok = nullptr;
         t = nullptr;
         found = false;
+    }
+
+    const SymbolDatabase* getSymbolDB_inner(Tokenizer& tokenizer, const char* code, const char* filename) {
+        errout.str("");
+        std::istringstream istr(code);
+        tokenizer.tokenize(istr, filename);
+        return tokenizer.getSymbolDatabase();
     }
 
     static const Scope *findFunctionScopeByToken(const SymbolDatabase * db, const Token *tok) {
@@ -127,6 +128,8 @@ private:
         TEST_CASE(isVariableDeclarationPointerConst);
         TEST_CASE(isVariableDeclarationRValueRef);
         TEST_CASE(isVariableStlType);
+
+        TEST_CASE(rangeBasedFor);
 
         TEST_CASE(arrayMemberVar1);
         TEST_CASE(arrayMemberVar2);
@@ -673,6 +676,22 @@ private:
         ASSERT(var.tokens()->tokAt(2)->scope() != 0);
     }
 
+    void rangeBasedFor() {
+        GET_SYMBOL_DB("void reset() {\n"
+                      "    for(auto& e : array)\n"
+                      "        foo(e);\n"
+                      "}");
+
+        ASSERT(db != nullptr);
+        if (!db)
+            return;
+        ASSERT(db->scopeList.back().type == Scope::eFor);
+        ASSERT_EQUALS(2, db->getVariableListSize());
+        if (db->getVariableListSize() < 2)
+            return;
+        const Variable* e = db->getVariableFromVarId(1);
+        ASSERT(e && e->isReference() && e->isLocal());
+    }
     void isVariableStlType() {
         {
             reset();
@@ -726,58 +745,49 @@ private:
     }
 
     void arrayMemberVar1() {
-        const char code[] = "struct Foo {\n"
-                            "    int x;\n"
-                            "};\n"
-                            "void f() {\n"
-                            "    struct Foo foo[10];\n"
-                            "    foo[1].x = 123;\n"  // <- x should get a variable() pointer
-                            "}";
-
-        Tokenizer tokenizer(&settings, this);
-        std::istringstream istr(code);
-        tokenizer.tokenize(istr, "test.cpp");
+        GET_SYMBOL_DB("struct Foo {\n"
+                      "    int x;\n"
+                      "};\n"
+                      "void f() {\n"
+                      "    struct Foo foo[10];\n"
+                      "    foo[1].x = 123;\n"  // <- x should get a variable() pointer
+                      "}");
 
         const Token *tok = Token::findsimplematch(tokenizer.tokens(), ". x");
         tok = tok ? tok->next() : nullptr;
+        ASSERT(db != nullptr);
         ASSERT(tok && tok->variable() && Token::simpleMatch(tok->variable()->typeStartToken(), "int x ;"));
         ASSERT(tok && tok->varId() == 0U); // It's possible to set a varId
     }
 
     void arrayMemberVar2() {
-        const char code[] = "struct Foo {\n"
-                            "    int x;\n"
-                            "};\n"
-                            "void f() {\n"
-                            "    struct Foo foo[10][10];\n"
-                            "    foo[1][2].x = 123;\n"  // <- x should get a variable() pointer
-                            "}";
-
-        Tokenizer tokenizer(&settings, this);
-        std::istringstream istr(code);
-        tokenizer.tokenize(istr, "test.cpp");
+        GET_SYMBOL_DB("struct Foo {\n"
+                      "    int x;\n"
+                      "};\n"
+                      "void f() {\n"
+                      "    struct Foo foo[10][10];\n"
+                      "    foo[1][2].x = 123;\n"  // <- x should get a variable() pointer
+                      "}");
 
         const Token *tok = Token::findsimplematch(tokenizer.tokens(), ". x");
         tok = tok ? tok->next() : nullptr;
+        ASSERT(db != nullptr);
         ASSERT(tok && tok->variable() && Token::simpleMatch(tok->variable()->typeStartToken(), "int x ;"));
         ASSERT(tok && tok->varId() == 0U); // It's possible to set a varId
     }
 
     void arrayMemberVar3() {
-        const char code[] = "struct Foo {\n"
-                            "    int x;\n"
-                            "};\n"
-                            "void f() {\n"
-                            "    struct Foo foo[10];\n"
-                            "    (foo[1]).x = 123;\n"  // <- x should get a variable() pointer
-                            "}";
-
-        Tokenizer tokenizer(&settings, this);
-        std::istringstream istr(code);
-        tokenizer.tokenize(istr, "test.cpp");
+        GET_SYMBOL_DB("struct Foo {\n"
+                      "    int x;\n"
+                      "};\n"
+                      "void f() {\n"
+                      "    struct Foo foo[10];\n"
+                      "    (foo[1]).x = 123;\n"  // <- x should get a variable() pointer
+                      "}");
 
         const Token *tok = Token::findsimplematch(tokenizer.tokens(), ". x");
         tok = tok ? tok->next() : nullptr;
+        ASSERT(db != nullptr);
         ASSERT(tok && tok->variable() && Token::simpleMatch(tok->variable()->typeStartToken(), "int x ;"));
         ASSERT(tok && tok->varId() == 0U); // It's possible to set a varId
     }
@@ -1516,7 +1526,6 @@ private:
                            "    catch (X::Error4 x) { }\n"
                            "}";
         GET_SYMBOL_DB(str);
-        check(str, false);
         ASSERT_EQUALS("", errout.str());
         ASSERT(db && db->getVariableListSize() == 5); // index 0 + 4 variables
         ASSERT(db && db->scopeList.size() == 7); // global + function + try + 4 catch
@@ -1747,14 +1756,14 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
-    // #ticket 3437 (segmentation fault)
+    // ticket 3437 (segmentation fault)
     void symboldatabase22() {
         check("template <class C> struct A {};\n"
               "A<int> a;\n");
         ASSERT_EQUALS("", errout.str());
     }
 
-    // #ticket 3435 (std::vector)
+    // ticket 3435 (std::vector)
     void symboldatabase23() {
         GET_SYMBOL_DB("class A { std::vector<int*> ints; };");
         ASSERT_EQUALS(2U, db->scopeList.size());
@@ -1765,7 +1774,7 @@ private:
         ASSERT_EQUALS(true, var.isClass());
     }
 
-    // #ticket 3508 (constructor, destructor)
+    // ticket 3508 (constructor, destructor)
     void symboldatabase24() {
         GET_SYMBOL_DB("struct Fred {\n"
                       "    ~Fred();\n"
@@ -1807,30 +1816,28 @@ private:
 
     }
 
-    // #ticket #3561 (throw C++)
+    // ticket #3561 (throw C++)
     void symboldatabase25() {
         const char str[] = "int main() {\n"
                            "    foo bar;\n"
                            "    throw bar;\n"
                            "}";
         GET_SYMBOL_DB(str);
-        check(str, false);
         ASSERT_EQUALS("", errout.str());
         ASSERT(db && db->getVariableListSize() == 2); // index 0 + 1 variable
     }
 
-    // #ticket #3561 (throw C)
+    // ticket #3561 (throw C)
     void symboldatabase26() {
         const char str[] = "int main() {\n"
                            "    throw bar;\n"
                            "}";
         GET_SYMBOL_DB_C(str);
-        check(str, false);
         ASSERT_EQUALS("", errout.str());
         ASSERT(db && db->getVariableListSize() == 2); // index 0 + 1 variable
     }
 
-    // #ticket #3543 (segmentation fault)
+    // ticket #3543 (segmentation fault)
     void symboldatabase27() {
         check("class C : public B1\n"
               "{\n"
@@ -1846,7 +1853,7 @@ private:
         ASSERT(db && db->getVariableFromVarId(1) && db->getVariableFromVarId(1)->typeScope() && db->getVariableFromVarId(1)->typeScope()->className == "S");
     }
 
-    // #ticket #4442 (segmentation fault)
+    // ticket #4442 (segmentation fault)
     void symboldatabase29() {
         check("struct B : A {\n"
               "    B() : A {}\n"
@@ -2987,9 +2994,11 @@ private:
         ASSERT_EQUALS("const char *", typeOf("\"hello\" + 1", "+"));
         ASSERT_EQUALS("char",  typeOf("\"hello\"[1]", "["));
         ASSERT_EQUALS("char",  typeOf("*\"hello\"", "*"));
+        ASSERT_EQUALS("const short *", typeOf("L\"hello\" + 1", "+"));
 
         // Variable calculations
         ASSERT_EQUALS("int", typeOf("int x; a = x + 1;", "+"));
+        ASSERT_EQUALS("int", typeOf("int x; a = x | 1;", "|"));
         ASSERT_EQUALS("float", typeOf("float x; a = x + 1;", "+"));
         ASSERT_EQUALS("signed int", typeOf("signed x; a = x + 1;", "x +"));
         ASSERT_EQUALS("unsigned int", typeOf("unsigned x; a = x + 1;", "x +"));
@@ -2998,6 +3007,11 @@ private:
         ASSERT_EQUALS("unsigned int", typeOf("unsigned int u1, u2; a = u1 + u2;", "u1 +"));
         ASSERT_EQUALS("unsigned int", typeOf("unsigned int u1, u2; a = u1 * 2;",  "u1 *"));
         ASSERT_EQUALS("unsigned int", typeOf("unsigned int u1, u2; a = u1 * u2;", "u1 *"));
+        ASSERT_EQUALS("int *", typeOf("int x; a = &x;", "&"));
+        ASSERT_EQUALS("int *", typeOf("int x; a = &x;", "&"));
+        ASSERT_EQUALS("long double", typeOf("long double x; dostuff(x,1);", "x ,"));
+        ASSERT_EQUALS("long double *", typeOf("long double x; dostuff(&x,1);", "& x ,"));
+        ASSERT_EQUALS("int", typeOf("struct X {int i;}; void f(struct X x) { x.i }", "."));
 
         // array..
         ASSERT_EQUALS("int *", typeOf("int x[10]; a = x + 1;", "+"));
@@ -3008,9 +3022,17 @@ private:
         ASSERT_EQUALS("long", typeOf("a = (long)32;", "("));
         ASSERT_EQUALS("long", typeOf("a = (long int)32;", "("));
         ASSERT_EQUALS("long long", typeOf("a = (long long)32;", "("));
+        ASSERT_EQUALS("long double", typeOf("a = (long double)32;", "("));
 
         // const..
         ASSERT_EQUALS("const char *", typeOf("a = \"123\";", "\"123\""));
+        ASSERT_EQUALS("const int *", typeOf("const int *a; x = a + 1;", "a +"));
+        ASSERT_EQUALS("int * const", typeOf("int * const a; x = a + 1;", "+"));
+        ASSERT_EQUALS("const int *", typeOf("const int a[20]; x = a + 1;", "+"));
+
+        // function call..
+        ASSERT_EQUALS("int", typeOf("int a(int); a(5);", "( 5"));
+        ASSERT_EQUALS("unsigned long", typeOf("sizeof(x);", "("));
     }
 };
 

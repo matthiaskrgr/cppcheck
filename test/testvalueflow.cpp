@@ -829,10 +829,17 @@ private:
 
         code = "void f() {\n"
                "  X *x = getx();\n"
-               "  if(false) { x = 0; }\n"
+               "  if(0) { x = 0; }\n"
                "  else { x->y = 1; }\n"
                "}";
         ASSERT_EQUALS(false, testValueOfX(code, 4U, 0));
+
+        code = "void f() {\n" // #6239
+               "  int x = 4;\n"
+               "  if(1) { x = 0; }\n"
+               "  a = x;\n"
+               "}";
+        ASSERT_EQUALS(false, testValueOfX(code, 4U, 4));
 
         code = "void f() {\n"
                "    int x = 32;\n"
@@ -924,17 +931,19 @@ private:
                "    int x = 0;\n"
                "    x = x & 0x1;\n"
                "    if (x == 0) { x = 2; }\n"
-               "    y = 42 / x;\n" // <- x can't be 0
+               "    y = 42 / x;\n" // <- x is 2
                "}";
         ASSERT_EQUALS(false, testValueOfX(code, 5U, 0));
+        ASSERT_EQUALS(true, testValueOfX(code, 5U, 2));
 
         code = "void f() {\n" // #6118 - FN
                "    int x = 0;\n"
                "    x = x & 0x1;\n"
                "    if (x == 0) { x += 2; }\n"
-               "    y = 42 / x;\n" // <- x can be 2
+               "    y = 42 / x;\n" // <- x is 2
                "}";
-        ASSERT_EQUALS(true, testValueOfX(code, 5U, 2));
+        ASSERT_EQUALS(false, testValueOfX(code, 5U, 0));
+        TODO_ASSERT_EQUALS(true, false, testValueOfX(code, 5U, 2));
 
         code = "void f(int mode) {\n"
                "    struct ABC *x;\n"
@@ -1311,6 +1320,13 @@ private:
                "}";
         ASSERT_EQUALS(false, testValueOfX(code,3U,0));
         ASSERT_EQUALS(false, testValueOfX(code,3U,0x80));
+
+        code = "int f() {\n"
+               "  int x = (19 - 3) & 15;\n"
+               "  return x;\n"
+               "}";
+        ASSERT_EQUALS(true, testValueOfX(code,3U,0));
+        ASSERT_EQUALS(false, testValueOfX(code,3U,16));
     }
 
     void valueFlowSwitchVariable() {

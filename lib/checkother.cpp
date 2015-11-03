@@ -1021,7 +1021,7 @@ void CheckOther::checkUnreachableCode()
             } else if (Token::Match(tok, "goto %any% ;")) {
                 secondBreak = tok->tokAt(3);
                 labelName = tok->next();
-            } else if (Token::Match(tok, "%name% (") && _settings->library.isnoreturn(tok)) {
+            } else if (Token::Match(tok, "%name% (") && _settings->library.isnoreturn(tok) && !Token::Match(tok->next()->astParent(), "?|:")) {
                 if ((!tok->function() || (tok->function()->token != tok && tok->function()->tokenDef != tok)) && tok->linkAt(1)->strAt(1) != "{")
                     secondBreak = tok->linkAt(1)->tokAt(2);
             }
@@ -1482,7 +1482,7 @@ void CheckOther::checkCharVariable()
                 if (astIsSignedChar(index) && index->getValueGE(0x80, _settings))
                     charArrayIndexError(tok);
             }
-            if (Token::Match(tok, "[&|^]") && tok->astOperand2()) {
+            if (Token::Match(tok, "[&|^]") && tok->astOperand2() && tok->astOperand1()) {
                 bool warn = false;
                 if (astIsSignedChar(tok->astOperand1())) {
                     const ValueFlow::Value *v1 = tok->astOperand1()->getValueLE(-1, _settings);
@@ -1623,7 +1623,7 @@ void CheckOther::checkZeroDivision()
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
         if (!Token::Match(tok, "[/%]") || !tok->astOperand1() || !tok->astOperand2())
             continue;
-        if (!astIsIntegral(tok,false))
+        if (!tok->valueType() || !tok->valueType()->isIntegral())
             continue;
         if (tok->astOperand1()->isNumber()) {
             if (MathLib::isFloat(tok->astOperand1()->str()))
@@ -2584,6 +2584,9 @@ void CheckOther::checkLibraryMatchFunctions()
             !Token::Match(tok, "for|if|while|switch|sizeof|catch|asm|return") &&
             !tok->function() &&
             !tok->varId() &&
+            !tok->type() &&
+            !tok->isStandardType() &&
+            tok->linkAt(1)->strAt(1) != "(" &&
             tok->astParent() == tok->next() &&
             _settings->library.isNotLibraryFunction(tok)) {
             reportError(tok,

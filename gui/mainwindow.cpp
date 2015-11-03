@@ -58,6 +58,7 @@ MainWindow::MainWindow(TranslationHandler* th, QSettings* settings) :
     mPlatformActions(new QActionGroup(this)),
     mCStandardActions(new QActionGroup(this)),
     mCppStandardActions(new QActionGroup(this)),
+    mSelectLanguageActions(new QActionGroup(this)),
     mExiting(false)
 {
     mUI.setupUi(this);
@@ -102,7 +103,8 @@ MainWindow::MainWindow(TranslationHandler* th, QSettings* settings) :
     connect(mUI.mActionViewStats, SIGNAL(triggered()), this, SLOT(ShowStatistics()));
     connect(mUI.mActionLibraryEditor, SIGNAL(triggered()), this, SLOT(ShowLibraryEditor()));
 
-    connect(mUI.mActionRecheck, SIGNAL(triggered()), this, SLOT(ReCheck()));
+    connect(mUI.mActionRecheckModified, SIGNAL(triggered()), this, SLOT(ReCheckModified()));
+    connect(mUI.mActionRecheckAll, SIGNAL(triggered()), this, SLOT(ReCheckAll()));
 
     connect(mUI.mActionStop, SIGNAL(triggered()), this, SLOT(StopChecking()));
     connect(mUI.mActionSave, SIGNAL(triggered()), this, SLOT(Save()));
@@ -143,7 +145,8 @@ MainWindow::MainWindow(TranslationHandler* th, QSettings* settings) :
     mUI.mActionPrintPreview->setEnabled(false);
     mUI.mActionClearResults->setEnabled(false);
     mUI.mActionSave->setEnabled(false);
-    mUI.mActionRecheck->setEnabled(false);
+    mUI.mActionRecheckModified->setEnabled(false);
+    mUI.mActionRecheckAll->setEnabled(false);
     EnableProjectOpenActions(true);
     EnableProjectActions(false);
 
@@ -185,6 +188,10 @@ MainWindow::MainWindow(TranslationHandler* th, QSettings* settings) :
 
     mUI.mActionCpp03->setActionGroup(mCppStandardActions);
     mUI.mActionCpp11->setActionGroup(mCppStandardActions);
+
+    mUI.mActionEnforceC->setActionGroup(mSelectLanguageActions);
+    mUI.mActionEnforceCpp->setActionGroup(mSelectLanguageActions);
+    mUI.mActionAutoDetectLanguage->setActionGroup(mSelectLanguageActions);
 
     // For Windows platforms default to Win32 checked platform.
     // For other platforms default to unspecified/default which means the
@@ -275,6 +282,14 @@ void MainWindow::LoadSettings()
     mUI.mActionToolBarFilter->setChecked(showFilterToolbar);
     mUI.mToolBarFilter->setVisible(showFilterToolbar);
 
+    Settings::Language enforcedLanguage = (Settings::Language)mSettings->value(SETTINGS_ENFORCED_LANGUAGE, 0).toInt();
+    if (enforcedLanguage == Settings::CPP)
+        mUI.mActionEnforceCpp->setChecked(true);
+    else if (enforcedLanguage == Settings::C)
+        mUI.mActionEnforceC->setChecked(true);
+    else
+        mUI.mActionAutoDetectLanguage->setChecked(true);
+
     bool succeeded = mApplications->LoadSettings();
     if (!succeeded) {
         const QString msg = tr("There was a problem with loading the editor application settings.\n\n"
@@ -318,6 +333,13 @@ void MainWindow::SaveSettings() const
     mSettings->setValue(SETTINGS_TOOLBARS_MAIN_SHOW, mUI.mToolBarMain->isVisible());
     mSettings->setValue(SETTINGS_TOOLBARS_VIEW_SHOW, mUI.mToolBarView->isVisible());
     mSettings->setValue(SETTINGS_TOOLBARS_FILTER_SHOW, mUI.mToolBarFilter->isVisible());
+
+    if (mUI.mActionEnforceCpp->isChecked())
+        mSettings->setValue(SETTINGS_ENFORCED_LANGUAGE, Settings::CPP);
+    else if (mUI.mActionEnforceC->isChecked())
+        mSettings->setValue(SETTINGS_ENFORCED_LANGUAGE, Settings::C);
+    else
+        mSettings->setValue(SETTINGS_ENFORCED_LANGUAGE, Settings::None);
 
     mApplications->SaveSettings();
 
@@ -600,6 +622,8 @@ bool MainWindow::TryLoadLibrary(Library *library, QString filename)
 
 Settings MainWindow::GetCppcheckSettings()
 {
+    SaveSettings(); // Save settings
+
     Settings result;
 
     // If project file loaded, read settings from it
@@ -660,6 +684,7 @@ Settings MainWindow::GetCppcheckSettings()
     result.standards.cpp = mSettings->value(SETTINGS_STD_CPP11, true).toBool() ? Standards::CPP11 : Standards::CPP03;
     result.standards.c = mSettings->value(SETTINGS_STD_C99, true).toBool() ? Standards::C99 : (mSettings->value(SETTINGS_STD_C11, false).toBool() ? Standards::C11 : Standards::C89);
     result.standards.posix = mSettings->value(SETTINGS_STD_POSIX, false).toBool();
+    result.enforcedLang = (Settings::Language)mSettings->value(SETTINGS_ENFORCED_LANGUAGE, 0).toInt();
 
     const bool std = TryLoadLibrary(&result.library, "std.cfg");
     bool posix = true;
@@ -695,6 +720,7 @@ void MainWindow::CheckDone()
     mPlatformActions->setEnabled(true);
     mCStandardActions->setEnabled(true);
     mCppStandardActions->setEnabled(true);
+    mSelectLanguageActions->setEnabled(true);
     mUI.mActionPosix->setEnabled(true);
     if (mScratchPad)
         mScratchPad->setEnabled(true);
@@ -726,6 +752,7 @@ void MainWindow::CheckLockDownUI()
     mPlatformActions->setEnabled(false);
     mCStandardActions->setEnabled(false);
     mCppStandardActions->setEnabled(false);
+    mSelectLanguageActions->setEnabled(false);
     mUI.mActionPosix->setEnabled(false);
     if (mScratchPad)
         mScratchPad->setEnabled(false);
@@ -745,20 +772,31 @@ void MainWindow::ProgramSettings()
                                      dialog.SaveFullPath(),
                                      dialog.SaveAllErrors(),
                                      dialog.ShowNoErrorsMessage(),
-                                     dialog.ShowErrorId());
+                                     dialog.ShowErrorId(),
+                                     dialog.ShowInconclusive());
         const QString newLang = mSettings->value(SETTINGS_LANGUAGE, "en").toString();
         SetLanguage(newLang);
     }
 }
 
-void MainWindow::ReCheck()
+void MainWindow::ReCheckModified()
 {
-    const QStringList files = mThread->GetReCheckFiles();
+    ReCheck(false);
+}
+
+void MainWindow::ReCheckAll()
+{
+    ReCheck(true);
+}
+
+void MainWindow::ReCheck(bool all)
+{
+    const QStringList files = mThread->GetReCheckFiles(all);
     if (files.empty())
         return;
 
     // Clear details, statistics and progress
-    mUI.mResults->Clear(false);
+    mUI.mResults->Clear(all);
 
     // Clear results for changed files
     for (int i = 0; i < files.size(); ++i)
@@ -770,7 +808,7 @@ void MainWindow::ReCheck()
     if (mProject)
         qDebug() << "Rechecking project file" << mProject->GetProjectFile()->GetFilename();
 
-    mThread->Check(GetCppcheckSettings(), true);
+    mThread->Check(GetCppcheckSettings(), !all);
 }
 
 void MainWindow::ClearResults()
@@ -834,8 +872,10 @@ void MainWindow::EnableCheckButtons(bool enable)
     mUI.mActionStop->setEnabled(!enable);
     mUI.mActionCheckFiles->setEnabled(enable);
 
-    if (!enable || mThread->HasPreviousFiles())
-        mUI.mActionRecheck->setEnabled(enable);
+    if (!enable || mThread->HasPreviousFiles()) {
+        mUI.mActionRecheckModified->setEnabled(enable);
+        mUI.mActionRecheckAll->setEnabled(enable);
+    }
 
     mUI.mActionCheckDirectory->setEnabled(enable);
 }

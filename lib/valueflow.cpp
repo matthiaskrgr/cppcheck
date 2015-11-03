@@ -363,6 +363,11 @@ static bool addValue(Token *tok, const ValueFlow::Value &value)
         tok->values.clear();
     }
 
+    // Don't handle more than 10 values for performance reasons
+    // TODO: add setting?
+    if (tok->values.size() >= 10U)
+        return false;
+
     // if value already exists, don't add it again
     std::list<ValueFlow::Value>::iterator it;
     for (it = tok->values.begin(); it != tok->values.end(); ++it) {
@@ -449,7 +454,7 @@ static void setTokenValue(Token* tok, const ValueFlow::Value &value)
     }
 
     // Calculations..
-    else if ((parent->isArithmeticalOp() || parent->isComparisonOp()) &&
+    else if ((parent->isArithmeticalOp() || parent->isComparisonOp() || (parent->tokType() == Token::eBitOp)) &&
              parent->astOperand1() &&
              parent->astOperand2()) {
         const bool known = ((parent->astOperand1()->values.size() == 1U &&
@@ -535,6 +540,18 @@ static void setTokenValue(Token* tok, const ValueFlow::Value &value)
                             result.intvalue = value1->intvalue <= value2->intvalue;
                         else
                             break;
+                        setTokenValue(parent, result);
+                        break;
+                    case '&':
+                        result.intvalue = value1->intvalue & value2->intvalue;
+                        setTokenValue(parent, result);
+                        break;
+                    case '|':
+                        result.intvalue = value1->intvalue | value2->intvalue;
+                        setTokenValue(parent, result);
+                        break;
+                    case '^':
+                        result.intvalue = value1->intvalue ^ value2->intvalue;
                         setTokenValue(parent, result);
                         break;
                     default:
@@ -912,7 +929,7 @@ static void valueFlowBeforeCondition(TokenList *tokenlist, SymbolDatabase *symbo
 
                 // Variable changed in 3rd for-expression
                 if (Token::simpleMatch(tok2->previous(), "for (")) {
-                    if (tok2->astOperand2() && isVariableChanged(tok2->astOperand2()->astOperand2(), tok2->link(), varid)) {
+                    if (tok2->astOperand2() && tok2->astOperand2()->astOperand2() && isVariableChanged(tok2->astOperand2()->astOperand2(), tok2->link(), varid)) {
                         varid = 0U;
                         if (settings->debugwarnings)
                             bailout(tokenlist, errorLogger, tok, "variable " + var->name() + " used in loop");
@@ -1129,13 +1146,16 @@ static bool valueFlowForward(Token * const               startToken,
                 }
             }
 
+            const Token * const condTok = tok2->next()->astOperand2();
+            const bool condAlwaysTrue = (condTok && condTok->values.size() == 1U && condTok->values.front().isKnown() && condTok->values.front().intvalue != 0);
+
             // Should scope be skipped because variable value is checked?
             std::list<ValueFlow::Value> truevalues;
             for (std::list<ValueFlow::Value>::const_iterator it = values.begin(); it != values.end(); ++it) {
-                if (!conditionIsFalse(tok2->next()->astOperand2(), getProgramMemory(tok2, varid, *it)))
+                if (condAlwaysTrue || !conditionIsFalse(condTok, getProgramMemory(tok2, varid, *it)))
                     truevalues.push_back(*it);
             }
-            if (truevalues.size() != values.size()) {
+            if (truevalues.size() != values.size() || condAlwaysTrue) {
                 // '{'
                 Token * const startToken1 = tok2->linkAt(1)->next();
 
@@ -1154,6 +1174,10 @@ static bool valueFlowForward(Token * const               startToken,
 
                 // goto '}'
                 tok2 = startToken1->link();
+
+                if (condAlwaysTrue && isReturn(tok2))
+                    return false;
+
                 continue;
             }
 

@@ -139,6 +139,7 @@ private:
         TEST_CASE(varid_cpp11initialization); // #4344
         TEST_CASE(varid_inheritedMembers); // #4101
         TEST_CASE(varid_header); // #6386
+        TEST_CASE(varid_rangeBasedFor);
 
         TEST_CASE(varidclass1);
         TEST_CASE(varidclass2);
@@ -663,8 +664,7 @@ private:
     }
 
     void varid28() { // ticket #2630 (segmentation fault)
-        tokenize("template <typedef A>\n");
-        ASSERT_EQUALS("", errout.str());
+        ASSERT_THROW(tokenize("template <typedef A>\n"), InternalError);
     }
 
     void varid29() {
@@ -2153,6 +2153,49 @@ private:
                                "struct B {\n"
                                "    void setData(const A & a);\n"
                                "}; ", false, "test.h"));
+    }
+
+    void varid_rangeBasedFor() {
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: void reset ( Foo array@1 ) {\n"
+                      "2: for ( auto & e@2 : array@1 ) {\n"
+                      "3: foo ( e@2 ) ; }\n"
+                      "4: } ;\n",
+                      tokenize("void reset(Foo array) {\n"
+                               "    for (auto& e : array)\n"
+                               "        foo(e);\n"
+                               "};"));
+
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: void reset ( Foo array@1 ) {\n"
+                      "2: for ( auto e@2 : array@1 ) {\n"
+                      "3: foo ( e@2 ) ; }\n"
+                      "4: } ;\n",
+                      tokenize("void reset(Foo array) {\n"
+                               "    for (auto e : array)\n"
+                               "        foo(e);\n"
+                               "};"));
+
+        // Labels are no variables
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: void foo ( ) {\n"
+                      "2: switch ( event . key . keysym . sym ) {\n"
+                      "3: case SDLK_LEFT : ;\n"
+                      "4: break ;\n"
+                      "5: case SDLK_RIGHT : ;\n"
+                      "6: delta = 1 ;\n"
+                      "7: break ;\n"
+                      "8: }\n"
+                      "9: }\n",
+                      tokenize("void foo() {\n"
+                               "    switch (event.key.keysym.sym) {\n"
+                               "    case SDLK_LEFT:\n"
+                               "        break;\n"
+                               "    case SDLK_RIGHT:\n"
+                               "        delta = 1;\n"
+                               "        break;\n"
+                               "    }\n"
+                               "}", false, "test.c"));
     }
 
     void varidclass1() {

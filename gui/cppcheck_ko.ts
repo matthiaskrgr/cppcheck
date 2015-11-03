@@ -197,6 +197,18 @@ Kate로 파일을 열고, 해당 행으로 이동하는 예제:
         <source>Open library file</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Sort</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Filter:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Comments</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>LibraryEditArgDialog</name>
@@ -749,65 +761,13 @@ Do you want to remove the file from the recently used projects -list?</source>
 최근 프로젝트 목록에서 파일을 제거하시겠습니까?</translation>
     </message>
     <message>
-        <source>Dutch</source>
-        <translation>네덜란드어</translation>
-    </message>
-    <message>
-        <source>English</source>
-        <translation>영어</translation>
-    </message>
-    <message>
-        <source>Finnish</source>
-        <translation>핀란드어</translation>
-    </message>
-    <message>
-        <source>French</source>
-        <translation>프랑스어</translation>
-    </message>
-    <message>
-        <source>German</source>
-        <translation>독일어</translation>
-    </message>
-    <message>
-        <source>Japanese</source>
-        <translation>일본어</translation>
-    </message>
-    <message>
-        <source>Korean</source>
-        <translation>한국어</translation>
-    </message>
-    <message>
-        <source>Russian</source>
-        <translation>러시아어</translation>
-    </message>
-    <message>
-        <source>Serbian</source>
-        <translation>세르비아어</translation>
-    </message>
-    <message>
-        <source>Spanish</source>
-        <translation>스페인어</translation>
-    </message>
-    <message>
-        <source>Swedish</source>
-        <translation>스웨덴어</translation>
-    </message>
-    <message>
         <source>Current results will be cleared.
 
 Opening a new XML file will clear current results.Do you want to proceed?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Italian</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Show S&amp;cratchpad...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Chinese (Simplified)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -921,6 +881,18 @@ Options:
     </message>
     <message>
         <source>Open library editor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auto-detect language</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enforce C++</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enforce C</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1104,6 +1076,25 @@ Options:
     <message>
         <source>Failed to load translation for language %1 from file %2</source>
         <translation>파일(%2)로부터 언어(%1) 불러오기 실패</translation>
+    </message>
+</context>
+<context>
+    <name>QPlatformTheme</name>
+    <message>
+        <source>OK</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation type="unfinished">닫기</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1291,6 +1282,10 @@ To toggle what kind of errors are shown, open view menu.</source>
     </message>
     <message>
         <source>No errors found, nothing to print.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>First included by</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

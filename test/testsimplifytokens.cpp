@@ -247,24 +247,6 @@ private:
         // void foo(void) -> void foo()
         TEST_CASE(removeVoidFromFunction);
 
-        TEST_CASE(removeUnnecessaryQualification1);
-        TEST_CASE(removeUnnecessaryQualification2);
-        TEST_CASE(removeUnnecessaryQualification3);
-        TEST_CASE(removeUnnecessaryQualification4);
-        TEST_CASE(removeUnnecessaryQualification5);
-        TEST_CASE(removeUnnecessaryQualification6);  // ticket #2859
-        TEST_CASE(removeUnnecessaryQualification7);  // ticket #2970
-        TEST_CASE(removeUnnecessaryQualification8);
-        TEST_CASE(removeUnnecessaryQualification9);  // ticket #3151
-        TEST_CASE(removeUnnecessaryQualification10); // ticket #3310 segmentation fault
-        TEST_CASE(removeUnnecessaryQualification11);
-        TEST_CASE(removeUnnecessaryQualification12);
-        TEST_CASE(removeUnnecessaryQualification13);
-        TEST_CASE(removeUnnecessaryQualification14);
-        TEST_CASE(removeUnnecessaryQualification15);
-        TEST_CASE(removeUnnecessaryQualification16);
-        TEST_CASE(removeUnnecessaryQualification17);
-
         TEST_CASE(simplifyVarDecl1); // ticket # 2682 segmentation fault
         TEST_CASE(simplifyVarDecl2); // ticket # 2834 segmentation fault
         TEST_CASE(return_strncat); // ticket # 2860 Returning value of strncat() reported as memory leak
@@ -782,21 +764,12 @@ private:
         }
     }
 
-
-    std::string elseif(const char code[]) {
-        Tokenizer tokenizer(&settings0, this);
-        std::istringstream istr(code);
-        tokenizer.tokenize(istr, "test.cpp");
-        tokenizer.elseif();
-        return tokenizer.tokens()->stringifyList(false);
-    }
-
     void elseif1() {
         const char code[] = "else if(ab) { cd } else { ef }gh";
-        ASSERT_EQUALS("\n\n##file 0\n1: else { if ( ab ) { cd } else { ef } } gh\n", elseif(code));
+        ASSERT_EQUALS("\n\n##file 0\n1: else { if ( ab ) { cd } else { ef } } gh\n", tokenizeDebugListing(code));
 
         // syntax error: assert there is no segmentation fault
-        ASSERT_EQUALS("\n\n##file 0\n1: else if ( x ) { }\n", elseif("else if (x) { }"));
+        ASSERT_EQUALS("\n\n##file 0\n1: else if ( x ) { }\n", tokenizeDebugListing("else if (x) { }"));
 
         {
             const char src[] =  "void f(int g,int f) {\n"
@@ -832,25 +805,24 @@ private:
         {
             const char src[] = "( []{if (ab) {cd}else if(ef) { gh } else { ij }kl}() )";
             const char expected[] = "\n\n##file 0\n1: ( [ ] { if ( ab ) { cd } else { if ( ef ) { gh } else { ij } } kl } ( ) )\n";
-            ASSERT_EQUALS(expected, elseif(src));
+            ASSERT_EQUALS(expected, tokenizeDebugListing(src));
         }
         {
             const char src[] = "[ []{if (ab) {cd}else if(ef) { gh } else { ij }kl}() ]";
             const char expected[] = "\n\n##file 0\n1: [ [ ] { if ( ab ) { cd } else { if ( ef ) { gh } else { ij } } kl } ( ) ]\n";
-            ASSERT_EQUALS(expected, elseif(src));
+            ASSERT_EQUALS(expected, tokenizeDebugListing(src));
         }
         {
             const char src[] = "= { []{if (ab) {cd}else if(ef) { gh } else { ij }kl}() }";
             const char expected[] = "\n\n##file 0\n1: = { [ ] { if ( ab ) { cd } else { if ( ef ) { gh } else { ij } } kl } ( ) }\n";
-            ASSERT_EQUALS(expected, elseif(src));
+            ASSERT_EQUALS(expected, tokenizeDebugListing(src));
         }
     }
 
 
     unsigned int sizeofFromTokenizer(const char type[]) {
         Tokenizer tokenizer(&settings0, this);
-        std::istringstream istr("");
-        tokenizer.tokenize(istr, "test.cpp");
+        tokenizer.fillTypeSizes();
         Token tok1(0);
         tok1.str(type);
         return tokenizer.sizeOfType(&tok1);
@@ -1891,13 +1863,11 @@ private:
         }
 
         {
-            const char code[] = "a ? b = c , d : e ;"; // do nothing
-            ASSERT_EQUALS(code, tok(code));
+            ASSERT_EQUALS("a ? ( b = c , d ) : e ;", tok("a ? b = c , d : e ;")); // Keep comma
         }
 
         {
-            const char code[] = "; return a ? b = c , d : e ;"; // do nothing
-            ASSERT_EQUALS(code, tok(code));
+            ASSERT_EQUALS("; return a ? ( b = c , d ) : e ;", tok("; return a ? b = c , d : e ;")); // Keep comma
         }
 
         {
@@ -1993,7 +1963,7 @@ private:
 
         {
             const char code[] = "void f () { switch(n) { case 1?0?1:0:foo(): break; }}";
-            ASSERT_EQUALS("void f ( ) { switch ( n ) { case 0 : ; break ; } }", tok(code));
+            TODO_ASSERT_EQUALS("void f ( ) { switch ( n ) { case 0 : ; break ; } }", "void f ( ) { switch ( n ) { case ( 0 ) : ; break ; } }", tok(code));
         }
 
         {
@@ -3932,206 +3902,6 @@ private:
         ASSERT_EQUALS("void foo ( ) ;", tok("void foo(void);"));
     }
 
-    void removeUnnecessaryQualification1() {
-        const char code[] = "class Fred { Fred::Fred() {} };";
-        const char expected[] = "class Fred { Fred ( ) { } } ;";
-        ASSERT_EQUALS(expected, tok(code, false));
-        ASSERT_EQUALS("[test.cpp:1]: (portability) The extra qualification 'Fred::' is unnecessary and is considered an error by many compilers.\n", errout.str());
-    }
-
-    void removeUnnecessaryQualification2() {
-        const char code[] = "template<typename Iter, typename Skip>\n"
-                            "struct grammar : qi::grammar<Iter, int(), Skip> {\n"
-                            "    grammar() : grammar::base_type(start) { }\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void removeUnnecessaryQualification3() {
-        const char code[] = "namespace one {\n"
-                            "   class c {\n"
-                            "   public:\n"
-                            "      void   function() {}\n"
-                            "   };\n"
-                            "}\n"
-                            "namespace two {\n"
-                            "   class c : public one::c {\n"
-                            "   public:\n"
-                            "      void   function() {\n"
-                            "         one::c::function();\n"
-                            "      }\n"
-                            "   };\n"
-                            "}\n";
-        tok(code, false);
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void removeUnnecessaryQualification4() {
-        const char code[] = "namespace one {\n"
-                            "   class c {\n"
-                            "   public:\n"
-                            "      void   function() {}\n"
-                            "   };\n"
-                            "}\n"
-                            "class c : public one::c {\n"
-                            "public:\n"
-                            "   void   function() {\n"
-                            "      one::c::function();\n"
-                            "   }\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void removeUnnecessaryQualification5() {
-        const char code[] = "namespace one {\n"
-                            "   class c {\n"
-                            "   public:\n"
-                            "      void   function() {}\n"
-                            "   };\n"
-                            "}\n"
-                            "namespace two {\n"
-                            "   class c : public one::c {\n"
-                            "   public:\n"
-                            "      void   function() {\n"
-                            "         two::c::function();\n"
-                            "      }\n"
-                            "   };\n"
-                            "}\n";
-        tok(code, false);
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void removeUnnecessaryQualification6() {
-        const char code[] = "namespace NS {\n"
-                            "    int HRDF_bit() { return 1; }\n"
-                            "    void HRDF_bit_set() { }\n"
-                            "    void func(int var) {\n"
-                            "        if (!NS::HRDF_bit())\n"
-                            "            return;\n"
-                            "        else\n"
-                            "            NS::HRDF_bit_set();\n"
-                            "    }\n"
-                            "}\n";
-        tok(code, false);
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void removeUnnecessaryQualification7() { // ticket #2970
-        const char code[] = "class TProcedure {\n"
-                            "public:\n"
-                            "    TProcedure::TProcedure(long endAddress) : m_lEndAddr(endAddress){}\n"
-                            "private:\n"
-                            "    long m_lEndAddr;\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("[test.cpp:3]: (portability) The extra qualification 'TProcedure::' is unnecessary and is considered an error by many compilers.\n", errout.str());
-    }
-
-    void removeUnnecessaryQualification8() {
-        const char code[] = "class Fred {\n"
-                            "public:\n"
-                            "    Fred & Fred::operator = (const Fred &);\n"
-                            "    void Fred::operator () (void);\n"
-                            "    void Fred::operator delete[](void* x);\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("[test.cpp:3]: (portability) The extra qualification 'Fred::' is unnecessary and is considered an error by many compilers.\n"
-                      "[test.cpp:4]: (portability) The extra qualification 'Fred::' is unnecessary and is considered an error by many compilers.\n"
-                      "[test.cpp:5]: (portability) The extra qualification 'Fred::' is unnecessary and is considered an error by many compilers.\n", errout.str());
-    }
-
-    void removeUnnecessaryQualification9() {
-        const char code[] = "class Fred {\n"
-                            "public:\n"
-                            "    Fred::~Fred();\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("[test.cpp:3]: (portability) The extra qualification 'Fred::' is unnecessary and is considered an error by many compilers.\n", errout.str());
-    }
-
-    void removeUnnecessaryQualification10() {
-        const char code[] = "template<typename T> class A\n"
-                            "{\n"
-                            "    operator T();\n"
-                            "    A() { T (A::*f)() = &A::operator T; }\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void removeUnnecessaryQualification11() {
-        const char code[] = "class Fred {\n"
-                            "public:\n"
-                            "    Fred& Fred::Magic();\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("[test.cpp:3]: (portability) The extra qualification 'Fred::' is unnecessary and is considered an error by many compilers.\n", errout.str());
-    }
-
-    void removeUnnecessaryQualification12() {
-        const char code[] = "class Fred {\n"
-                            "public:\n"
-                            "    Fred* Fred::Magic();\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("[test.cpp:3]: (portability) The extra qualification 'Fred::' is unnecessary and is considered an error by many compilers.\n", errout.str());
-    }
-
-    void removeUnnecessaryQualification13() {
-        const char code[] = "class Fred {\n"
-                            "public:\n"
-                            "    Fred** Fred::Magic();\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("[test.cpp:3]: (portability) The extra qualification 'Fred::' is unnecessary and is considered an error by many compilers.\n", errout.str());
-    }
-
-    void removeUnnecessaryQualification14() {
-        const char code[] = "class Fred {\n"
-                            "public:\n"
-                            "    Fred*& Fred::Magic();\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("[test.cpp:3]: (portability) The extra qualification 'Fred::' is unnecessary and is considered an error by many compilers.\n", errout.str());
-    }
-
-    void removeUnnecessaryQualification15() {
-        const char code[] = "class Fred {\n"
-                            "public:\n"
-                            "    Fred*& Magic() {\n"
-                            "        Fred::Magic(param);\n"
-                            "    }\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void removeUnnecessaryQualification16() {
-        const char code[] = "class Fred {\n"
-                            "public:\n"
-                            "    void Fred::Magic();\n"
-                            "};\n";
-        tok(code, false);
-        ASSERT_EQUALS("[test.cpp:3]: (portability) The extra qualification 'Fred::' is unnecessary and is considered an error by many compilers.\n", errout.str());
-    }
-
-    void removeUnnecessaryQualification17() { // #6628 False positive: The extra qualification 'namespace::' is unnecessary and is considered an error by many compilers.
-        const char code[] = "namespace my_application {\n"
-                            "  std::string version();\n"
-                            "}\n"
-                            "namespace my_application_test {\n"
-                            "  class my_application {\n"
-                            "    void version() {\n"
-                            "        std::string version = ::my_application::version();\n"
-                            "    }\n"
-                            "  };\n"
-                            "}";
-        tok(code, false);
-        ASSERT_EQUALS("", errout.str());
-    }
-
     void simplifyVarDecl1() { // ticket # 2682 segmentation fault
         const char code[] = "x a[0] =";
         tok(code, false);
@@ -4263,7 +4033,7 @@ private:
         ASSERT_EQUALS("'\\0' ;", tok("\"hello\"[5] ;"));
         ASSERT_EQUALS("'\\0' ;", tok("\"\"[0] ;"));
         ASSERT_EQUALS("'\\0' ;", tok("\"\\0\"[0] ;"));
-        ASSERT_EQUALS("'\n' ;", tok("\"hello\\nworld\"[5] ;"));
+        ASSERT_EQUALS("'\\n' ;", tok("\"hello\\nworld\"[5] ;"));
         ASSERT_EQUALS("'w' ;", tok("\"hello\nworld\"[6] ;"));
         ASSERT_EQUALS("\"hello\" [ 7 ] ;", tok("\"hello\"[7] ;"));
         ASSERT_EQUALS("\"hello\" [ -1 ] ;", tok("\"hello\"[-1] ;"));
