@@ -524,6 +524,24 @@ private:
               " memset(pIntArray, 0, sizeof(pIntArray));\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        check("void FreeFileName(const char *s) {\n"
+              "  CxString tbuf;\n"
+              "  const char *p;\n"
+              "  memcpy(s, siezof(s));\n" // non-standard memcpy
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("int f() {\n"
+              "  module_config_t *tab = module;\n"
+              "  memset(tab + confsize, 0, sizeof(tab[confsize]));\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("int f(char* aug) {\n"
+              "  memmove(aug + extra_string, aug, buf - (bfd_byte *)aug);\n" // #7100
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void checkPointerSizeofStruct() {
@@ -536,7 +554,7 @@ private:
         check("void f() {\n"
               "    struct foo {\n"
               "        char bar[10];\n"
-              "    };\n"
+              "    }* ptr;\n"
               "    memset( ptr->bar, 0, sizeof ptr->bar );\n"
               "}");
         ASSERT_EQUALS("", errout.str());
@@ -544,10 +562,10 @@ private:
         check("void f() {\n"
               "    struct foo {\n"
               "        char *bar;\n"
-              "    };\n"
+              "    }* ptr;\n"
               "    memset( ptr->bar, 0, sizeof ptr->bar );\n"
               "}");
-        TODO_ASSERT_EQUALS("[test.cpp:5]: (warning) Size of pointer 'bar' used instead of size of its data.\n", "", errout.str());
+        ASSERT_EQUALS("[test.cpp:5]: (warning) Size of pointer 'bar' used instead of size of its data.\n", errout.str());
     }
 
     void sizeofDivisionMemset() {

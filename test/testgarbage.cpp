@@ -196,6 +196,12 @@ private:
         TEST_CASE(garbageCode145); // #7074
         TEST_CASE(garbageCode146); // #7081
         TEST_CASE(garbageCode147); // #7082
+        TEST_CASE(garbageCode148); // #7090
+        TEST_CASE(garbageCode149); // #7085
+        TEST_CASE(garbageCode150); // #7089
+        TEST_CASE(garbageCode151); // #4175
+        TEST_CASE(garbageCode152); // travis after 9c7271a5
+
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -657,8 +663,8 @@ private:
     }
 
     void garbageCode58() { // #6732, #6762
-        checkCode("{ }> {= ~A()^{} }P { }");
-        checkCode("{= ~A()^{} }P { } { }> is");
+        ASSERT_THROW(checkCode("{ }> {= ~A()^{} }P { }"), InternalError);
+        ASSERT_THROW(checkCode("{= ~A()^{} }P { } { }> is"), InternalError);
     }
 
     void garbageCode59() { // #6735
@@ -1166,6 +1172,45 @@ private:
                   "}");
 
         checkCode("; void f ^ { return } int main ( ) { }"); // #4941
+    }
+
+    void garbageCode148() { // #7090
+        ASSERT_THROW(checkCode("void f_1() {\n"
+                               "    typedef S0 b[][1][1] != 0\n"
+                               "};\n"
+                               "b[K][0] S0 b[][1][1] != 4{ 0 };\n"
+                               "b[0][0]"), InternalError);
+    }
+
+    void garbageCode149() { // #7085
+        checkCode("int main() {\n"
+                  "    for (j = 0; j < 1; j)\n"
+                  "        j6;\n"
+                  "}");
+    }
+
+    void garbageCode150() { // #7089
+        ASSERT_THROW(checkCode("class A {\n"
+                               "    pl vFoo() {\n"
+                               "        A::\n"
+                               "    };\n"
+                               "    A::\n"
+                               "}\n"), InternalError);
+    }
+
+    void garbageCode151() { // #4175
+        checkCode(">{ x while (y) z int = }");
+        checkCode("void f() {\n" // #4911 - bad simplification => don't crash
+                  "    int a;\n"
+                  "    do { a=do_something() } while (a);\n"
+                  "}");
+    }
+
+    void garbageCode152() { // happened in travis, originaly from llvm clang code
+        const char* code = "template <bool foo = std::value &&>\n"
+                           "static std::string foo(char *Bla) {\n"
+                           "    while (Bla[1] && Bla[1] != ',') }\n";
+        checkCode(code);
     }
 
     void garbageValueFlow() {

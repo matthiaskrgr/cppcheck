@@ -662,6 +662,21 @@ static void valueFlowArray(TokenList *tokenlist)
             if (it != constantArrays.end()) {
                 ValueFlow::Value value;
                 value.tokvalue = it->second;
+                value.setKnown();
+                setTokenValue(tok, value);
+            }
+
+            // pointer = array
+            else if (tok->variable() &&
+                     tok->variable()->isArray() &&
+                     Token::simpleMatch(tok->astParent(), "=") &&
+                     tok == tok->astParent()->astOperand2() &&
+                     tok->astParent()->astOperand1() &&
+                     tok->astParent()->astOperand1()->variable() &&
+                     tok->astParent()->astOperand1()->variable()->isPointer()) {
+                ValueFlow::Value value;
+                value.tokvalue = tok;
+                value.setKnown();
                 setTokenValue(tok, value);
             }
             continue;
@@ -675,7 +690,7 @@ static void valueFlowArray(TokenList *tokenlist)
             continue;
         }
 
-        if (Token::Match(tok, "const char %var% [ %num%| ] = %str% ;")) {
+        else if (Token::Match(tok, "const char %var% [ %num%| ] = %str% ;")) {
             const Token *vartok = tok->tokAt(2);
             const Token *strtok = vartok->next()->link()->tokAt(2);
             constantArrays[vartok->varId()] = strtok;
@@ -744,6 +759,9 @@ static void valueFlowReverse(TokenList *tokenlist,
 {
     const MathLib::bigint    num        = val.intvalue;
     const Variable * const   var        = varToken->variable();
+    if (!var)
+        return;
+
     const unsigned int       varid      = varToken->varId();
     const Token * const      startToken = var->nameToken();
 
@@ -811,7 +829,7 @@ static void valueFlowReverse(TokenList *tokenlist,
             setTokenValue(tok2, val);
             if (val2.condition)
                 setTokenValue(tok2,val2);
-            if (var && tok2 == var->nameToken())
+            if (tok2 == var->nameToken())
                 break;
         }
 
@@ -833,8 +851,7 @@ static void valueFlowReverse(TokenList *tokenlist,
             if (vartok) {
                 if (settings->debugwarnings) {
                     std::string errmsg = "variable ";
-                    if (var)
-                        errmsg += var->name() + " ";
+                    errmsg += var->name() + " ";
                     errmsg += "stopping on }";
                     bailout(tokenlist, errorLogger, tok2, errmsg);
                 }

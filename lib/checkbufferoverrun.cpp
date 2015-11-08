@@ -1073,11 +1073,34 @@ void CheckBufferOverrun::checkGlobalAndLocalVariable()
 {
     // check string literals
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
-        if (Token::Match(tok, "%str% [ %num% ]")) {
-            const std::size_t strLen = tok->str().size() - 2; // Don't count enclosing quotes
-            const std::size_t index = (std::size_t)std::atoi(tok->strAt(2).c_str());
-            if (index > strLen)
+        if (Token::Match(tok, "%str% [")) {
+            const std::size_t strLen = Token::getStrLength(tok);
+            const ValueFlow::Value *value = tok->next()->astOperand2()->getMaxValue(false);
+            if (value && value->intvalue > strLen)
                 bufferOverrunError(tok, tok->str());
+        }
+
+        if (Token::Match(tok, "%var% [") && tok->next()->astOperand2() && tok->variable() && tok->variable()->isPointer()) {
+            const ValueFlow::Value *value = tok->next()->astOperand2()->getMaxValue(false);
+            if (!value)
+                continue;
+
+            for (std::list<ValueFlow::Value>::const_iterator it = tok->values.begin(); it != tok->values.end(); ++it) {
+                if (!it->tokvalue)
+                    continue;
+                const Variable *var = it->tokvalue->variable();
+                if (var && var->isArray() && var->dimensions().size() == 1U && var->dimensionKnown(0) && value->intvalue > var->dimension(0)) {
+                    std::list<const Token *> callstack;
+                    callstack.push_back(it->tokvalue);
+                    callstack.push_back(tok);
+
+                    std::vector<MathLib::bigint> index;
+                    index.push_back(value->intvalue);
+
+                    const ArrayInfo arrayInfo(var, _tokenizer, &_settings->library);
+                    arrayIndexOutOfBoundsError(callstack, arrayInfo, index);
+                }
+            }
         }
     }
 

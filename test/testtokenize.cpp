@@ -443,6 +443,8 @@ private:
 
         TEST_CASE(simplifyDeprecated);
 
+        TEST_CASE(simplifyCaseRange);
+
         TEST_CASE(compileLimits); // #5592 crash: gcc: testsuit: gcc.c-torture/compile/limits-declparen.c
 
         TEST_CASE(prepareTernaryOpForAST);
@@ -776,10 +778,11 @@ private:
     void tokenize28() {
         ASSERT_EQUALS("void f ( ) { asm ( \"^{}\" ) ; }", tokenizeAndStringify("void f() { ^{} }"));
         ASSERT_EQUALS("void f ( ) { asm ( \"x(^{});\" ) ; }", tokenizeAndStringify("void f() { x(^{}); }"));
+        ASSERT_EQUALS("void f ( ) { asm ( \"foo(A(),^{bar();});\" ) ; }", tokenizeAndStringify("void f() { foo(A(), ^{ bar(); }); }"));
         ASSERT_EQUALS("int f0 ( Args args ) {\n"
-                      "asm ( \"return^{returnsizeof...(Args);}()\" ) ;\n"
+                      "asm ( \"return^{returnsizeof...(Args);}()+\" ) ;\n"
                       "\n"
-                      "asm ( \"+^{returnsizeof...(args);}()\" ) ;\n"
+                      "asm ( \"^{returnsizeof...(args);}\" ) ;\n"
                       "\n"
                       "\n"
                       "} ;", tokenizeAndStringify("int f0(Args args) {\n"
@@ -4488,6 +4491,24 @@ private:
 
             ASSERT_EQUALS(true, tok->linkAt(3) == nullptr);
         }
+
+        {
+            // #6601
+            const char code[] = "template<class R> struct FuncType<R(&)()> : FuncType<R()> { };";
+            errout.str("");
+            Tokenizer tokenizer(&settings0, this);
+            std::istringstream istr(code);
+            tokenizer.tokenize(istr, "test.cpp");
+            const Token *tok = tokenizer.tokens();
+
+            ASSERT_EQUALS(true, tok->linkAt(1) == tok->tokAt(4)); // <class R>
+            ASSERT_EQUALS(true, tok->linkAt(7) == tok->tokAt(14)); // <R(&)()>
+            ASSERT_EQUALS(true, tok->linkAt(9) == tok->tokAt(11)); // (&)
+            ASSERT_EQUALS(true, tok->linkAt(12) == tok->tokAt(13)); // ()
+            ASSERT_EQUALS(true, tok->linkAt(17) == tok->tokAt(21)); // <R()>
+            ASSERT_EQUALS(true, tok->linkAt(19) == tok->tokAt(20)); // ()
+            ASSERT_EQUALS(true, tok->linkAt(22) == tok->tokAt(23)); // {}
+        }
     }
 
     void simplifyString() {
@@ -7972,6 +7993,15 @@ private:
                       tokenizeAndStringify("[[deprecated]] int f();", false, true, Settings::Unspecified, "test.c", true));
     }
 
+    void simplifyCaseRange() {
+        ASSERT_EQUALS("void f ( ) { case 1 : case 2 : case 3 : case 4 : ; }", tokenizeAndStringify("void f() { case 1 ... 4: }"));
+        ASSERT_EQUALS("void f ( ) { case 4 . . . 1 : ; }", tokenizeAndStringify("void f() { case 4 ... 1: }"));
+        tokenizeAndStringify("void f() { case 1 ... 1000000: }"); // Do not run out of memory
+
+        ASSERT_EQUALS("void f ( ) { case 'a' : case 'b' : case 'c' : ; }", tokenizeAndStringify("void f() { case 'a' ... 'c': }"));
+        ASSERT_EQUALS("void f ( ) { case 'c' . . . 'a' : ; }", tokenizeAndStringify("void f() { case 'c' ... 'a': }"));
+    }
+
     void prepareTernaryOpForAST() {
         ASSERT_EQUALS("a ? b : c ;", tokenizeAndStringify("a ? b : c;"));
 
@@ -8218,6 +8248,7 @@ private:
         ASSERT_EQUALS("abc{d:?=", testAst("a=b?c<X>{}:d;"));
         ASSERT_EQUALS("abc12,{d:?=", testAst("a=b?c<X>{1,2}:d;"));
         ASSERT_EQUALS("a::12,{", testAst("::a{1,2};")); // operator precedence
+        ASSERT_EQUALS("Abc({newreturn", testAst("return new A {b(c)};"));
     }
 
     void astbrackets() { // []

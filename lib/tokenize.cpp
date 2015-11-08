@@ -62,7 +62,7 @@ const Token * Tokenizer::isFunctionHead(const Token *tok, const std::string &end
             tok = tok->next();
         return (endsWith.find(tok->str()) != std::string::npos) ? tok : nullptr;
     }
-    if (isCPP() && Token::Match(tok, ") const| throw (")) {
+    if (isCPP() && Token::Match(tok, ") const| throw|noexcept (")) {
         tok = tok->next();
         while (tok->isName())
             tok = tok->next();
@@ -347,8 +347,8 @@ bool Tokenizer::duplicateTypedef(Token **tokPtr, const Token *name, const Token 
                                 return false;
                             }
                         }
-
-                        tok = tok->previous();
+                        if (tok)
+                            tok = tok->previous();
                     }
 
                     if ((*tokPtr)->strAt(1) != "(" || !Token::Match((*tokPtr)->linkAt(1), ") .|(|[")) {
@@ -2349,7 +2349,7 @@ void Tokenizer::simplifyLabelsCaseDefault()
         } else if (Token::Match(tok, "(|["))
             tok = tok->link();
 
-        if (Token::Match(tok, "[;{}] case")) {
+        if (Token::Match(tok, "[;{}:] case")) {
             while (nullptr != (tok = tok->next())) {
                 if (Token::Match(tok, "(|[")) {
                     tok = tok->link();
@@ -2367,8 +2367,10 @@ void Tokenizer::simplifyLabelsCaseDefault()
                 break;
             if (tok->str() != "case" && tok->next() && tok->next()->str() == ":") {
                 tok = tok->next();
-                if (tok->next()->str() != ";")
+                if (tok->next()->str() != ";" && tok->next()->str() != "case")
                     tok->insertToken(";");
+                else
+                    tok = tok->previous();
             } else {
                 syntaxError(tok);
             }
@@ -2379,6 +2381,42 @@ void Tokenizer::simplifyLabelsCaseDefault()
     }
 }
 
+
+void Tokenizer::simplifyCaseRange()
+{
+    for (Token* tok = list.front(); tok; tok = tok->next()) {
+        if (Token::Match(tok, "case %num% . . . %num% :")) {
+            MathLib::bigint start = MathLib::toLongNumber(tok->strAt(1));
+            MathLib::bigint end = MathLib::toLongNumber(tok->strAt(5));
+            end = std::min(start + 50, end); // Simplify it 50 times at maximum
+            if (start < end) {
+                tok = tok->tokAt(2);
+                tok->str(":");
+                tok->deleteNext();
+                tok->next()->str("case");
+                for (MathLib::bigint i = end-1; i > start; i--) {
+                    tok->insertToken(":");
+                    tok->insertToken(MathLib::toString(i));
+                    tok->insertToken("case");
+                }
+            }
+        } else if (Token::Match(tok, "case %char% . . . %char% :")) {
+            char start = tok->strAt(1)[1];
+            char end = tok->strAt(5)[1];
+            if (start < end) {
+                tok = tok->tokAt(2);
+                tok->str(":");
+                tok->deleteNext();
+                tok->next()->str("case");
+                for (char i = end - 1; i > start; i--) {
+                    tok->insertToken(":");
+                    tok->insertToken(std::string(1, '\'') + i + '\'');
+                    tok->insertToken("case");
+                }
+            }
+        }
+    }
+}
 
 
 
@@ -2493,7 +2531,7 @@ static bool setVarIdParseDeclaration(const Token **tok, const std::map<std::stri
 
 
 static void setVarIdStructMembers(Token **tok1,
-                                  std::map<unsigned int, std::map<std::string, unsigned int> > *structMembers,
+                                  std::map<unsigned int, std::map<std::string, unsigned int> >& structMembers,
                                   unsigned int *_varId)
 {
     Token *tok = *tok1;
@@ -2507,7 +2545,7 @@ static void setVarIdStructMembers(Token **tok1,
         if (TemplateSimplifier::templateParameters(tok->next()) > 0)
             break;
 
-        std::map<std::string, unsigned int>& members = (*structMembers)[struct_varid];
+        std::map<std::string, unsigned int>& members = structMembers[struct_varid];
         const std::map<std::string, unsigned int>::iterator it = members.find(tok->str());
         if (it == members.end()) {
             members[tok->str()] = ++(*_varId);
@@ -2521,11 +2559,10 @@ static void setVarIdStructMembers(Token **tok1,
 }
 
 
-static void setVarIdClassDeclaration(Token * const startToken,
-                                     const std::map<std::string, unsigned int> &variableId,
-                                     const unsigned int scopeStartVarId,
-                                     std::map<unsigned int, std::map<std::string,unsigned int> > *structMembers,
-                                     unsigned int *_varId)
+void Tokenizer::setVarIdClassDeclaration(Token * const startToken,
+        const std::map<std::string, unsigned int> &variableId,
+        const unsigned int scopeStartVarId,
+        std::map<unsigned int, std::map<std::string,unsigned int> >& structMembers)
 {
     // end of scope
     const Token * const endToken = startToken->link();
@@ -2546,6 +2583,8 @@ static void setVarIdClassDeclaration(Token * const startToken,
     bool initList = false;
     const Token *initListArgLastToken = nullptr;
     for (Token *tok = startToken->next(); tok != endToken; tok = tok->next()) {
+        if (!tok)
+            syntaxError(nullptr); // #7089 invalid code
         if (initList) {
             if (tok == initListArgLastToken)
                 initListArgLastToken = nullptr;
@@ -2579,7 +2618,7 @@ static void setVarIdClassDeclaration(Token * const startToken,
                 const std::map<std::string, unsigned int>::const_iterator it = variableId.find(tok->str());
                 if (it != variableId.end()) {
                     tok->varId(it->second);
-                    setVarIdStructMembers(&tok, structMembers, _varId);
+                    setVarIdStructMembers(&tok, structMembers, &_varId);
                 }
             }
         } else if (indentlevel == 0 && tok->str() == ":" && !initListArgLastToken)
@@ -2595,7 +2634,7 @@ static void setVarIdClassFunction(const std::string &classname,
                                   Token * const startToken,
                                   const Token * const endToken,
                                   const std::map<std::string, unsigned int> &varlist,
-                                  std::map<unsigned int, std::map<std::string, unsigned int> > *structMembers,
+                                  std::map<unsigned int, std::map<std::string, unsigned int> >& structMembers,
                                   unsigned int *_varId)
 {
     for (Token *tok2 = startToken; tok2 && tok2 != endToken; tok2 = tok2->next()) {
@@ -2699,8 +2738,7 @@ void Tokenizer::setVarId()
                     setVarIdClassDeclaration(tok->link(),
                                              variableId,
                                              scopeStack.top().startVarid,
-                                             &structMembers,
-                                             &_varId);
+                                             structMembers);
                 }
 
                 if (scopeInfo.empty()) {
@@ -2819,7 +2857,7 @@ void Tokenizer::setVarId()
             const std::map<std::string, unsigned int>::const_iterator it = variableId.find(tok->str());
             if (it != variableId.end()) {
                 tok->varId(it->second);
-                setVarIdStructMembers(&tok, &structMembers, &_varId);
+                setVarIdStructMembers(&tok, structMembers, &_varId);
             }
         } else if (Token::Match(tok, "::|. %name%")) {
             // Don't set varid after a :: or . token
@@ -2876,7 +2914,7 @@ void Tokenizer::setVarId()
                     if (tok2->link()) {
                         if (tok2->str() == "{") {
                             if (tok2->strAt(-1) == ")" || tok2->strAt(-2) == ")")
-                                setVarIdClassFunction(classname, tok2, tok2->link(), thisClassVars, &structMembers, &_varId);
+                                setVarIdClassFunction(classname, tok2, tok2->link(), thisClassVars, structMembers, &_varId);
                             tok2 = tok2->link();
                         } else if (tok2->str() == "(" && tok2->link()->strAt(1) != "(")
                             tok2 = tok2->link();
@@ -2920,7 +2958,7 @@ void Tokenizer::setVarId()
                     // If this is a function implementation.. add it to funclist
                     Token * start = startOfFunction(tok2);
                     if (start) {
-                        setVarIdClassFunction(classname, start, start->link(), thisClassVars, &structMembers, &_varId);
+                        setVarIdClassFunction(classname, start, start->link(), thisClassVars, structMembers, &_varId);
                     }
 
                     // constructor with initializer list
@@ -2934,7 +2972,7 @@ void Tokenizer::setVarId()
                             tok3 = vartok->linkAt(1);
                         } while (Token::Match(tok3, ")|} [:,] %name% (|{"));
                         if (Token::Match(tok3, ")|} {")) {
-                            setVarIdClassFunction(classname, tok2, tok3->next()->link(), thisClassVars, &structMembers, &_varId);
+                            setVarIdClassFunction(classname, tok2, tok3->next()->link(), thisClassVars, structMembers, &_varId);
                         }
                     }
                 }
@@ -3023,7 +3061,7 @@ void Tokenizer::createLinks2()
         else if (token->str() == ">") {
             if (type.empty() || type.top()->str() != "<") // < and > don't match.
                 continue;
-            if (token->next() && !Token::Match(token->next(), "%name%|>|&|*|::|,|(|)|{|;|["))
+            if (token->next() && !Token::Match(token->next(), "%name%|>|&|*|::|,|(|)|{|;|[|:"))
                 continue;
 
             // if > is followed by [ .. "new a<b>[" is expected
@@ -3372,6 +3410,9 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // Convert K&R function declarations to modern C
     simplifyVarDecl(true);
     simplifyFunctionParameters();
+
+    // simplify case ranges (gcc extension)
+    simplifyCaseRange();
 
     // simplify labels and 'case|default'-like syntaxes
     simplifyLabelsCaseDefault();
@@ -4304,6 +4345,8 @@ void Tokenizer::removeRedundantFor()
             const Token *vartok2 = tok->linkAt(2)->previous();
             if (vartok2->str() == "++")
                 vartok2 = vartok2->previous();
+            else if (vartok2->strAt(-1) != "++")
+                continue;
             if (varname != vartok2->str())
                 continue;
 
@@ -6180,6 +6223,7 @@ bool Tokenizer::simplifyKnownVariables()
 
     // variable id for float/double variables
     std::set<unsigned int> floatvars;
+    std::set<unsigned int> arrays;
 
     // auto variables..
     for (Token *tok = list.front(); tok; tok = tok->next()) {
@@ -6195,6 +6239,13 @@ bool Tokenizer::simplifyKnownVariables()
         for (; tok2; tok2 = tok2->next()) {
             if (Token::Match(tok2, "[;{}] float|double %name% ;")) {
                 floatvars.insert(tok2->tokAt(2)->varId());
+            }
+
+            if (Token::Match(tok2, "[;{}] %type% *| %name% [")) {
+                const Token *nameToken = tok2->tokAt(2);
+                if (nameToken->str() == "*")
+                    nameToken = nameToken->next();
+                arrays.insert(nameToken->varId());
             }
 
             if (tok2->str() == "{")
@@ -6264,6 +6315,9 @@ bool Tokenizer::simplifyKnownVariables()
                     return false;
 
                 if (!simplifyKnownVariablesGetData(varid, &tok2, &tok3, value, valueVarId, valueIsPointer, floatvars.find(tok2->varId()) != floatvars.end()))
+                    continue;
+
+                if (valueVarId > 0 && arrays.find(valueVarId) != arrays.end())
                     continue;
 
                 ret |= simplifyKnownVariablesSimplify(&tok2, tok3, varid, structname, value, valueVarId, valueIsPointer, valueToken, indentlevel);
@@ -8023,7 +8077,7 @@ void Tokenizer::eraseDeadCode(Token *begin, const Token *end)
                 else
                     indentcase = switchindents[indentswitch-1];
             }
-        } else if (Token::Match(tok, "[{};] case")) {
+        } else if (Token::Match(tok, "[{};:] case")) {
             const Token *tok2 = Token::findsimplematch(tok->next(), ": ;", end);
             if (!tok2) {
                 tok->deleteNext();
@@ -8065,7 +8119,7 @@ void Tokenizer::eraseDeadCode(Token *begin, const Token *end)
                     while (tok2->next() && tok2->next() != end) {
                         if (Token::Match(tok2->next(), "{|[|(")) {
                             tok2 = tok2->next()->link();
-                        } else if (Token::Match(tok2, "[{};] case")) {
+                        } else if (Token::Match(tok2, "[{};:] case")) {
                             const Token *tok3 = Token::findsimplematch(tok2->next(), ": ;", end);
                             if (!tok3) {
                                 tok2 = tok2->next();
@@ -9294,7 +9348,9 @@ void Tokenizer::simplifyAsm2()
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         if (Token::simpleMatch(tok, "^ {")) {
             Token * start = tok;
-            while (start && !Token::Match(start, "[;{})=]")) {
+            while (start && !Token::Match(start, "[;{}=]")) {
+                if (start->link() && start->str() == ")")
+                    start = start->link();
                 start = start->previous();
             }
             if (start)
@@ -9302,8 +9358,11 @@ void Tokenizer::simplifyAsm2()
             const Token *last = tok->next()->link();
             if (start != tok) {
                 last = last->next();
-                while (last && !Token::Match(last->next(), "[;{})]"))
+                while (last && !Token::Match(last, "[;{})]")) {
                     last = last->next();
+                    if (last && last->link() && last->str() == "(")
+                        last = last->link()->next();
+                }
                 if (last)
                     last = last->next();
             }
