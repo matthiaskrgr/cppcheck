@@ -9,11 +9,10 @@ compiler:
   - clang
   - gcc
 
-before_install:
- - sudo apt-get update -qq
- - sudo apt-get install -qq python-pygments python3-pygments
-# - sudo pip install Pygments
+
 
 script:
 #  - SITE_PKG_DIR=$VIRTUAL_ENV/lib/python$TRAVIS_PYTHON_VERSION/site-packages
   - python -c 'import pygments'
+
+install: pip install Pygments
