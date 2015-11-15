@@ -39,7 +39,7 @@ before_install:
  - sudo apt-get update -qq
  - sudo apt-get install -qq python-pygments python3-pygments
  - sudo apt-get install -qq libqt4-core libqt4-gui libqt4-dev qt4-dev-tools qt4-qmake libxml2-utils libpcre3 gdb unzip
- - pip install Pygments
+ - sudo pip install Pygments
 
 script:
 #  - SITE_PKG_DIR=$VIRTUAL_ENV/lib/python$TRAVIS_PYTHON_VERSION/site-packages
