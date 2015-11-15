@@ -258,9 +258,7 @@ void CheckOther::warningOldStylePointerCast()
             // skip first "const" in "const Type* const"
             if (tok->strAt(1) == "const")
                 tok = tok->next();
-            const Token* typeTok = tok ? tok->next() : nullptr;
-            if (!typeTok)
-                continue;
+            const Token* typeTok = tok->next();
             // skip second "const" in "const Type* const"
             if (tok->strAt(3) == "const")
                 tok = tok->next();
@@ -460,6 +458,28 @@ static void eraseMemberAssignments(const unsigned int varId, const std::map<unsi
     }
 }
 
+static bool checkExceptionHandling(const Token* tok)
+{
+    const Variable* var = tok->variable();
+    const Scope* upperScope = tok->scope();
+    if (var && upperScope == var->scope())
+        return true;
+    while (upperScope && upperScope->type != Scope::eTry && upperScope->type != Scope::eLambda && (!var || upperScope->nestedIn != var->scope()) && upperScope->isExecutable()) {
+        upperScope = upperScope->nestedIn;
+    }
+    if (upperScope && upperScope->type == Scope::eTry) {
+        // Check all exception han
+        const Token* tok2 = upperScope->classEnd;
+        while (Token::simpleMatch(tok2, "} catch (")) {
+            tok2 = tok2->linkAt(2)->next();
+            if (Token::findmatch(tok2, "%varid%", tok2->link(), var->declarationId()))
+                return false;
+            tok2 = tok2->link();
+        }
+    }
+    return true;
+}
+
 void CheckOther::checkRedundantAssignment()
 {
     const bool printPerformance = _settings->isEnabled("performance");
@@ -519,7 +539,7 @@ void CheckOther::checkRedundantAssignment()
                 }
 
                 std::map<unsigned int, const Token*>::iterator it = varAssignments.find(tok->varId());
-                if (tok->next()->isAssignmentOp() && Token::Match(startToken, "[;{}]")) { // Assignment
+                if (tok->next() && tok->next()->isAssignmentOp() && Token::Match(startToken, "[;{}]")) { // Assignment
                     if (it != varAssignments.end()) {
                         bool error = true; // Ensure that variable is not used on right side
                         for (const Token* tok2 = tok->tokAt(2); tok2; tok2 = tok2->next()) {
@@ -543,7 +563,8 @@ void CheckOther::checkRedundantAssignment()
                             else if (printPerformance) {
                                 const bool nonlocal = nonLocal(it->second->variable());
                                 if (printInconclusive || !nonlocal) // see #5089 - report inconclusive only when requested
-                                    redundantAssignmentError(it->second, tok, tok->str(), nonlocal); // Inconclusive for non-local variables
+                                    if (_tokenizer->isC() || checkExceptionHandling(tok)) // see #6555 to see how exception handling might have an impact
+                                        redundantAssignmentError(it->second, tok, tok->str(), nonlocal); // Inconclusive for non-local variables
                             }
                         }
                         it->second = tok;
@@ -552,7 +573,7 @@ void CheckOther::checkRedundantAssignment()
                         varAssignments[tok->varId()] = tok;
                     memAssignments.erase(tok->varId());
                     eraseMemberAssignments(tok->varId(), membervars, varAssignments);
-                } else if (tok->next()->tokType() == Token::eIncDecOp || (tok->previous()->tokType() == Token::eIncDecOp && tok->strAt(1) == ";")) { // Variable incremented/decremented; Prefix-Increment is only suspicious, if its return value is unused
+                } else if ((tok->next() && tok->next()->tokType() == Token::eIncDecOp) || (tok->previous()->tokType() == Token::eIncDecOp && tok->strAt(1) == ";")) { // Variable incremented/decremented; Prefix-Increment is only suspicious, if its return value is unused
                     varAssignments[tok->varId()] = tok;
                     memAssignments.erase(tok->varId());
                     eraseMemberAssignments(tok->varId(), membervars, varAssignments);
@@ -1021,7 +1042,7 @@ void CheckOther::checkUnreachableCode()
             } else if (Token::Match(tok, "goto %any% ;")) {
                 secondBreak = tok->tokAt(3);
                 labelName = tok->next();
-            } else if (Token::Match(tok, "%name% (") && _settings->library.isnoreturn(tok)) {
+            } else if (Token::Match(tok, "%name% (") && _settings->library.isnoreturn(tok) && !Token::Match(tok->next()->astParent(), "?|:")) {
                 if ((!tok->function() || (tok->function()->token != tok && tok->function()->tokenDef != tok)) && tok->linkAt(1)->strAt(1) != "{")
                     secondBreak = tok->linkAt(1)->tokAt(2);
             }
@@ -2584,6 +2605,9 @@ void CheckOther::checkLibraryMatchFunctions()
             !Token::Match(tok, "for|if|while|switch|sizeof|catch|asm|return") &&
             !tok->function() &&
             !tok->varId() &&
+            !tok->type() &&
+            !tok->isStandardType() &&
+            tok->linkAt(1)->strAt(1) != "(" &&
             tok->astParent() == tok->next() &&
             _settings->library.isNotLibraryFunction(tok)) {
             reportError(tok,

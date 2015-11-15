@@ -576,7 +576,9 @@ static void compileTerm(Token *&tok, AST_state& state)
             }
         }
     } else if (tok->str() == "{") {
-        if (!state.inArrayAssignment && tok->strAt(-1) != "=") {
+        if (tok->previous() && tok->previous()->isName()) {
+            compileBinOp(tok, state, compileExpression);
+        } else if (!state.inArrayAssignment && tok->strAt(-1) != "=") {
             state.op.push(tok);
             tok = tok->link()->next();
         } else {
@@ -746,7 +748,7 @@ static void compilePrecedence3(Token *&tok, AST_state& state)
                 state.op.push(tok->next());
                 tok = tok->link()->next();
                 compileBinOp(tok, state, compilePrecedence2);
-            } else if (tok && (tok->str() == "[" || tok->str() == "("))
+            } else if (tok && (tok->str() == "[" || tok->str() == "(" || tok->str() == "{"))
                 compilePrecedence2(tok, state);
             else if (innertype && Token::simpleMatch(tok, ") [")) {
                 tok = tok->next();
@@ -961,6 +963,8 @@ static Token * createAstAtToken(Token *tok, bool cpp)
                     break;
                 init1 = 0;
             }
+            if (!tok2) // #7109 invalid code
+                return nullptr;
             tok2 = tok2->next();
         }
         if (!tok2 || tok2->str() != ";") {
@@ -1021,7 +1025,7 @@ static Token * createAstAtToken(Token *tok, bool cpp)
             return tok1;
 
         // Compile inner expressions inside inner ({..}) and lambda bodies
-        for (tok = tok1->next(); tok && tok != endToken; tok = tok ? tok->next() : NULL) {
+        for (tok = tok1->next(); tok && tok != endToken; tok = tok ? tok->next() : nullptr) {
             if (tok->str() != "{")
                 continue;
 
@@ -1039,11 +1043,11 @@ static Token * createAstAtToken(Token *tok, bool cpp)
                 break;
 
             const Token * const endToken2 = tok->link();
-            for (; tok && tok != endToken && tok != endToken2; tok = tok ? tok->next() : NULL)
+            for (; tok && tok != endToken && tok != endToken2; tok = tok ? tok->next() : nullptr)
                 tok = createAstAtToken(tok, cpp);
         }
 
-        return endToken ? endToken->previous() : NULL;
+        return endToken ? endToken->previous() : nullptr;
     }
 
     return tok;

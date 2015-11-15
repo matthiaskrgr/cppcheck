@@ -83,6 +83,7 @@ private:
         TEST_CASE(sizeof19);    // #1891 - sizeof 'x'
         TEST_CASE(sizeof20);    // #2024 - sizeof a)
         TEST_CASE(sizeof21);    // #2232 - sizeof...(Args)
+        TEST_CASE(sizeof22);
         TEST_CASE(sizeofsizeof);
         TEST_CASE(casting);
 
@@ -145,7 +146,6 @@ private:
         TEST_CASE(pointeralias2);
         TEST_CASE(pointeralias3);
         TEST_CASE(pointeralias4);
-        TEST_CASE(pointeralias5);
 
         TEST_CASE(reduceConstness);
 
@@ -1395,6 +1395,12 @@ private:
 
         // don't segfault
         tok(code);
+    }
+
+    void sizeof22() {
+        // sizeof from library
+        const char code[] = "foo(sizeof(uint32_t), sizeof(std::uint32_t));";
+        TODO_ASSERT_EQUALS("foo ( 4 , 4 ) ;", "foo ( 4 , sizeof ( std :: uint32_t ) ) ;", tokWithStdLib(code));
     }
 
     void sizeofsizeof() {
@@ -2652,23 +2658,6 @@ private:
 
     void pointeralias1() {
         {
-            const char code[] = "void f()\n"
-                                "{\n"
-                                "    char buf[100];\n"
-                                "    char *p = buf;\n"
-                                "    free(p);\n"
-                                "}\n";
-
-            const char expected[] = "void f ( ) "
-                                    "{ "
-                                    "char buf [ 100 ] ; "
-                                    "free ( buf ) ; "
-                                    "}";
-
-            ASSERT_EQUALS(expected, tok(code));
-        }
-
-        {
             const char code[] = "void f(char *p1)\n"
                                 "{\n"
                                 "    char *p = p1;\n"
@@ -2697,38 +2686,6 @@ private:
                                     "{ "
                                     "Result * obj ; obj = ptr ; "
                                     "++ obj . total ; "
-                                    "}";
-
-            ASSERT_EQUALS(expected, tok(code));
-        }
-
-        {
-            const char code[] = "int *foo()\n"
-                                "{\n"
-                                "    int a[10];\n"
-                                "    int *b = a;\n"
-                                "    return b;\n"
-                                "}\n";
-
-            const char expected[] = "int * foo ( ) "
-                                    "{ "
-                                    "int a [ 10 ] ; "
-                                    "return a ; "
-                                    "}";
-
-            ASSERT_EQUALS(expected, tok(code));
-        }
-
-        {
-            const char code[] = "void f() {\n"
-                                "    int a[10];\n"
-                                "    int *b = a;\n"
-                                "    memset(b,0,sizeof(a));\n"
-                                "}";
-
-            const char expected[] = "void f ( ) {"
-                                    " int a [ 10 ] ;"
-                                    " memset ( a , 0 , 40 ) ; "
                                     "}";
 
             ASSERT_EQUALS(expected, tok(code));
@@ -2764,21 +2721,6 @@ private:
     }
 
     void pointeralias4() {
-        const char code[] = "void f()\n"
-                            "{\n"
-                            "    int a[10];\n"
-                            "    int *p = &a[0];\n"
-                            "    *p = 0;\n"
-                            "}\n";
-        const char expected[] = "void f ( ) "
-                                "{"
-                                " int a [ 10 ] ;"
-                                " * a = 0 ; "
-                                "}";
-        ASSERT_EQUALS(expected, tok(code));
-    }
-
-    void pointeralias5() {
         const char code[] = "int f()\n"
                             "{\n"
                             "    int i;\n"
@@ -4033,7 +3975,7 @@ private:
         ASSERT_EQUALS("'\\0' ;", tok("\"hello\"[5] ;"));
         ASSERT_EQUALS("'\\0' ;", tok("\"\"[0] ;"));
         ASSERT_EQUALS("'\\0' ;", tok("\"\\0\"[0] ;"));
-        ASSERT_EQUALS("'\n' ;", tok("\"hello\\nworld\"[5] ;"));
+        ASSERT_EQUALS("'\\n' ;", tok("\"hello\\nworld\"[5] ;"));
         ASSERT_EQUALS("'w' ;", tok("\"hello\nworld\"[6] ;"));
         ASSERT_EQUALS("\"hello\" [ 7 ] ;", tok("\"hello\"[7] ;"));
         ASSERT_EQUALS("\"hello\" [ -1 ] ;", tok("\"hello\"[-1] ;"));

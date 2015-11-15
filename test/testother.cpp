@@ -3147,6 +3147,19 @@ private:
               "    per_state_info() : enter(0), exit(0), events(0) {}\n"
               "};", nullptr, false, false, false);
         ASSERT_EQUALS("", errout.str());
+
+        // #6664
+        check("void foo() {\n"
+              "    (beat < 100) ? (void)0 : exit(0);\n"
+              "    bar();\n"
+              "}", nullptr, false, false, false, &settings);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n"
+              "    (beat < 100) ? exit(0) : (void)0;\n"
+              "    bar();\n"
+              "}", nullptr, false, false, false, &settings);
+        ASSERT_EQUALS("", errout.str());
     }
 
 
@@ -5555,6 +5568,56 @@ private:
               "    i = 1;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        // #6555
+        check("void foo() {\n"
+              "    char *p = 0;\n"
+              "    try {\n"
+              "        p = fred();\n"
+              "        p = wilma();\n"
+              "    }\n"
+              "    catch (...) {\n"
+              "        barney(p);\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n"
+              "    char *p = 0;\n"
+              "    try {\n"
+              "        p = fred();\n"
+              "        p = wilma();\n"
+              "    }\n"
+              "    catch (...) {\n"
+              "        barney(x);\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4] -> [test.cpp:5]: (performance) Variable 'p' is reassigned a value before the old one has been used.\n"
+                      "[test.cpp:2]: (style) The scope of the variable 'p' can be reduced.\n", errout.str());
+
+        check("void foo() {\n"
+              "    char *p = 0;\n"
+              "    try {\n"
+              "        if(z) {\n"
+              "            p = fred();\n"
+              "            p = wilma();\n"
+              "        }\n"
+              "    }\n"
+              "    catch (...) {\n"
+              "        barney(p);\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // Member variable pointers
+        check("void podMemPtrs() {\n"
+              "    int POD::*memptr;\n"
+              "    memptr = &POD::a;\n"
+              "    memptr = &POD::b;\n"
+              "    if (memptr)\n"
+              "        memptr = 0;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (performance, inconclusive) Variable 'memptr' is reassigned a value before the old one has been used if variable is no semaphore variable.\n", errout.str());
     }
 
     void redundantMemWrite() {
@@ -6108,6 +6171,12 @@ private:
               "    lambda(13.3);\n"
               "    return 0;\n"
               "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // #6669
+        check("void foo(size_t size) {\n"
+              "   void * res{malloc(size)};\n"
+              "}", "test.cpp", false, false, true, &settings);
         ASSERT_EQUALS("", errout.str());
     }
 

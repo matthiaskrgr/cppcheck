@@ -165,8 +165,10 @@ private:
 
     void valueFlowNumber() {
         ASSERT_EQUALS(123, valueOfTok("x=123;",   "123").intvalue);
-        ASSERT_EQUALS(0,   valueOfTok("x=false;", "false").intvalue);
-        ASSERT_EQUALS(1,   valueOfTok("x=true;",  "true").intvalue);
+        ASSERT_EQUALS(0, valueOfTok("x=false;", "false").intvalue);
+        ASSERT_EQUALS(1, valueOfTok("x=true;",  "true").intvalue);
+        ASSERT_EQUALS((int)('a'), valueOfTok("x='a';",  "'a'").intvalue);
+        ASSERT_EQUALS((int)('\n'), valueOfTok("x='\\n';", "'\\n'").intvalue);
     }
 
     void valueFlowString() {
@@ -229,6 +231,25 @@ private:
                 "    return x;\n"
                 "}";
         TODO_ASSERT_EQUALS(true, false, testValueOfX(code, 3U, "\"abcd\""));
+
+        code = "void f() {\n"
+               "  int a[10];\n"
+               "  int *x = a;\n" // <- a value is a
+               "  *x = 0;\n"     // .. => x value is a
+               "}";
+        ASSERT_EQUALS(true, testValueOfX(code, 4, "a"));
+
+        code  = "char f() {\n"
+                "    const char *x = \"abcd\";\n"
+                "    return x[0];\n"
+                "}";
+        ASSERT_EQUALS((int)('a'), valueOfTok(code, "[").intvalue);
+
+        code  = "char f() {\n"
+                "    const char *x = \"\";\n"
+                "    return x[0];\n"
+                "}";
+        ASSERT_EQUALS(0, valueOfTok(code, "[").intvalue);
     }
 
     void valueFlowCalculations() {
@@ -829,10 +850,17 @@ private:
 
         code = "void f() {\n"
                "  X *x = getx();\n"
-               "  if(false) { x = 0; }\n"
+               "  if(0) { x = 0; }\n"
                "  else { x->y = 1; }\n"
                "}";
         ASSERT_EQUALS(false, testValueOfX(code, 4U, 0));
+
+        code = "void f() {\n" // #6239
+               "  int x = 4;\n"
+               "  if(1) { x = 0; }\n"
+               "  a = x;\n"
+               "}";
+        ASSERT_EQUALS(false, testValueOfX(code, 4U, 4));
 
         code = "void f() {\n"
                "    int x = 32;\n"
@@ -1680,6 +1708,15 @@ private:
 
         code = "void f() {\n"
                "  int x = 0;\n"
+               "  do {\n"
+               "    if (x < 0) {}\n"
+               "    fred.dostuff(x);\n"
+               "  } while (abc);\n"
+               "}\n";
+        ASSERT(isNotKnownValues(code, "<"));
+
+        code = "void f() {\n"
+               "  int x = 0;\n"
                "  if (y) { dostuff(x); }\n"
                "  if (!x) {}\n"
                "}\n";
@@ -1712,6 +1749,17 @@ private:
                "    break;\n"
                "  }\n"
                "  if (!x) {}\n"  // <- possible value
+               "}";
+        ASSERT(isNotKnownValues(code, "!"));
+
+        code = "void f() {\n" // #7049
+               "  int x = 0;\n"
+               "  switch (a) {\n"
+               "  case 1:\n"
+               "    x = 1;\n"
+               "  case 2:\n"
+               "    if (!x) {}\n" // <- possible value
+               "  }\n"
                "}";
         ASSERT(isNotKnownValues(code, "!"));
 

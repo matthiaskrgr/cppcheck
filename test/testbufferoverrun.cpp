@@ -141,6 +141,7 @@ private:
         TEST_CASE(array_index_string_literal);
         TEST_CASE(array_index_same_struct_and_var_name); // #4751 - not handled well when struct name and var name is same
         TEST_CASE(array_index_valueflow);
+        TEST_CASE(array_index_valueflow_pointer);
         TEST_CASE(array_index_function_parameter);
 
         TEST_CASE(buffer_overrun_2_struct);
@@ -2058,6 +2059,47 @@ private:
         check("namespace { class X { static const int x[100]; };\n" // #6232
               "const int X::x[100] = {0}; }", false, "test.cpp");
         ASSERT_EQUALS("", errout.str());
+
+    }
+
+    void array_index_valueflow_pointer() {
+        check("void f() {\n"
+              "  int a[10];\n"
+              "  int *p = a;\n"
+              "  p[20] = 0;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (error) Array 'a[10]' accessed at index 20, which is out of bounds.\n", errout.str());
+
+        {
+            // address of
+            check("void f() {\n"
+                  "  int a[10];\n"
+                  "  int *p = a;\n"
+                  "  p[10] = 0;\n"
+                  "}");
+            ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (error) Array 'a[10]' accessed at index 10, which is out of bounds.\n", errout.str());
+
+            check("void f() {\n"
+                  "  int a[10];\n"
+                  "  int *p = a;\n"
+                  "  dostuff(&p[10]);\n"
+                  "}");
+            ASSERT_EQUALS("", errout.str());
+        }
+
+        check("void f() {\n"
+              "  int a[X];\n" // unknown size
+              "  int *p = a;\n"
+              "  p[20] = 0;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "  int a[2];\n"
+              "  char *p = (char *)a;\n" // cast
+              "  p[4] = 0;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void array_index_function_parameter() {
@@ -2422,6 +2464,12 @@ private:
     void buffer_overrun_28() {
         check("char c = \"abc\"[4];");
         ASSERT_EQUALS("[test.cpp:1]: (error) Buffer is accessed out of bounds: \"abc\"\n", errout.str());
+
+        check("p = &\"abc\"[4];");
+        ASSERT_EQUALS("", errout.str());
+
+        check("char c = \"\\0abc\"[2];");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void buffer_overrun_bailoutIfSwitch() {

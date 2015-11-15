@@ -68,6 +68,7 @@ private:
         TEST_CASE(uninitvar_ternaryexpression); // #4683
         TEST_CASE(uninitvar_pointertoarray);
         TEST_CASE(uninitvar_cpp11ArrayInit); // #7010
+        TEST_CASE(uninitvar_rangeBasedFor); // #7078
         TEST_CASE(trac_4871);
 
         TEST_CASE(syntax_error); // Ticket #5073
@@ -609,6 +610,16 @@ private:
                        "    i++;\n"
                        "exit:\n"
                        "}", "test.cpp", false);
+        ASSERT_EQUALS("", errout.str());
+
+        checkUninitVar("int foo() {\n"
+                       "    int x,y=0;\n"
+                       "again:\n"
+                       "    if (y) return x;\n"
+                       "    x = a;\n"
+                       "    y = 1;\n"
+                       "    goto again;\n"
+                       "}", "test.c", false);
         ASSERT_EQUALS("", errout.str());
 
         // Ticket #3873 (false positive)
@@ -2732,6 +2743,12 @@ private:
         TODO_ASSERT_EQUALS("[test.cpp:4]: (error) Uninitialized variable: x\n",
                            "", errout.str());
 
+        checkUninitVar("void f() {\n"
+                       "    int x[10];\n"
+                       "    int &x0(*x);\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+
         // ....
         checkUninitVar("struct ABC { int a; };\n"  // struct initialization
                        "void clear(struct ABC &abc);\n"
@@ -3327,12 +3344,6 @@ private:
                        "}");
         ASSERT_EQUALS("[test.cpp:2]: (error) Uninitialized variable: ptr3\n", errout.str());
 
-        checkUninitVar("void f() {\n" // #4911 - bad simplification => don't crash
-                       "    int a;\n"
-                       "    do { a=do_something() } while (a);\n"
-                       "}\n", "test.cpp", /*debugwarnings=*/true);
-        ASSERT_EQUALS("[test.cpp:3]: (debug) ValueFlow bailout: variable a stopping on }\n", errout.str());
-
         checkUninitVar("void f() {\n"
                        "    int x;\n"
                        "    while (a) {\n"
@@ -3379,8 +3390,6 @@ private:
                        "    i++;\n"
                        "}");
         ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar(">{ x while (y) z int = }"); // #4175 : don't crash
 
         checkUninitVar("int f(void) {\n"
                        "   int x;\n"
@@ -3579,12 +3588,6 @@ private:
         ASSERT_EQUALS("", errout.str());
 
         checkUninitVar("void f() {\n"
-                       "    char *s = malloc(100);\n"
-                       "    *s = x;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        checkUninitVar("void f() {\n"
                        "    char *p = malloc(100);\n"
                        "    p || assert_failed();\n"
                        "}");
@@ -3637,6 +3640,16 @@ private:
                        "        b = p;\n"
                        "    }\n"
                        "    return a ? b->asd : 0;\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void uninitvar_rangeBasedFor() { // #7078
+        checkUninitVar("void function(Entry& entry) {\n"
+                       "    for (auto* expr : entry.exprs) {\n"
+                       "        expr->operate();\n"
+                       "        expr->operate();\n"
+                       "    }\n"
                        "}");
         ASSERT_EQUALS("", errout.str());
     }

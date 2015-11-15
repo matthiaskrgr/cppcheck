@@ -473,7 +473,7 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                             else
                                 tok = end->tokAt(2);
 
-                            if (Token::Match(tok, "= %any% ;")) {
+                            if (Token::Match(tok, "= !!default ;")) {
                                 function.isPure(true);
                                 tok = tok->tokAt(2);
                             }
@@ -823,8 +823,10 @@ SymbolDatabase::SymbolDatabase(const Tokenizer *tokenizer, const Settings *setti
                     else if (scope->type == Scope::eCatch)
                         scope->checkVariable(tok->tokAt(2), Throw, &settings->library); // check for variable declaration and add it to new scope if found
                     tok = scopeStartTok;
-                } else if (tok->str() == "{" && !tok->previous()->varId()) {
-                    if (tok->strAt(-1) == ")" && tok->linkAt(-1)->strAt(-1) == "]") {
+                } else if (tok->str() == "{") {
+                    if (tok->previous()->varId())
+                        tok = tok->link();
+                    else if (tok->strAt(-1) == ")" && tok->linkAt(-1)->strAt(-1) == "]") {
                         scopeList.push_back(Scope(this, tok->linkAt(-1)->linkAt(-1), scope, Scope::eLambda, tok));
                         scope->nestedList.push_back(&scopeList.back());
                         scope = &scopeList.back();
@@ -1299,7 +1301,7 @@ SymbolDatabase::~SymbolDatabase()
     }
 }
 
-bool SymbolDatabase::isFunction(const Token *tok, const Scope* outerScope, const Token **funcStart, const Token **argStart)
+bool SymbolDatabase::isFunction(const Token *tok, const Scope* outerScope, const Token **funcStart, const Token **argStart) const
 {
     if (tok->varId())
         return false;
@@ -3038,16 +3040,19 @@ bool Scope::isVariableDeclaration(const Token* tok, const Token*& vartok, const 
         localVarTok = skipPointers(localTypeTok->strAt(1)=="const"?localTypeTok->tokAt(2):localTypeTok->next());
     }
 
-    if (localVarTok && localVarTok->str() == "const")
+    if (!localVarTok)
+        return false;
+
+    if (localVarTok->str() == "const")
         localVarTok = localVarTok->next();
 
-    if (Token::Match(localVarTok, "%name% ;|=")) {
+    if (Token::Match(localVarTok, "%name% ;|=") || (localVarTok->varId() && localVarTok->strAt(1) == ":")) {
         vartok = localVarTok;
         typetok = localTypeTok;
     } else if (Token::Match(localVarTok, "%name% )|[") && localVarTok->str() != "operator") {
         vartok = localVarTok;
         typetok = localTypeTok;
-    } else if (localVarTok && localVarTok->varId() && Token::Match(localVarTok, "%name% (|{") &&
+    } else if (localVarTok->varId() && Token::Match(localVarTok, "%name% (|{") &&
                Token::Match(localVarTok->next()->link(), ")|} ;")) {
         vartok = localVarTok;
         typetok = localTypeTok;

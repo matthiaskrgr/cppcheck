@@ -68,8 +68,6 @@ void CheckStl::iterators()
 {
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
 
-    // Using same iterator against different containers.
-    // for (it = foo.begin(); it != bar.end(); ++it)
     for (unsigned int iteratorId = 1; iteratorId < symbolDatabase->getVariableListSize(); iteratorId++) {
         const Variable* var = symbolDatabase->getVariableFromVarId(iteratorId);
 
@@ -77,8 +75,22 @@ void CheckStl::iterators()
         if (!var || !var->isLocal() || !Token::Match(var->typeEndToken(), "iterator|const_iterator|reverse_iterator|const_reverse_iterator|auto"))
             continue;
 
-        if (var->typeEndToken()->str() == "auto" && !Token::Match(var->typeEndToken(), "auto %name% ; %name% = %name% . begin|end ( )"))
-            continue;
+        if (var->typeEndToken()->str() == "auto") {
+            if (Token::Match(var->typeEndToken(), "auto %name% ; %name% = %var% . %name% ( )")) {
+                const Token* containertok = var->typeEndToken()->tokAt(5);
+                if (!containertok->variable())
+                    continue;
+
+                const Library::Container* container = _settings->library.detectContainer(containertok->variable()->typeStartToken());
+                if (!container)
+                    continue;
+
+                Library::Container::Yield yield = container->getYield(containertok->strAt(2));
+                if (yield != Library::Container::END_ITERATOR && yield != Library::Container::START_ITERATOR)
+                    continue;
+            } else
+                continue;
+        }
 
         if (var->type()) { // If it is defined, ensure that it is defined like an iterator
             // look for operator* and operator++
@@ -89,7 +101,7 @@ void CheckStl::iterators()
         }
 
         // the validIterator flag says if the iterator has a valid value or not
-        bool validIterator = Token::Match(var->nameToken()->next(), "[(=]");
+        bool validIterator = Token::Match(var->nameToken()->next(), "[(=:]");
         const Scope* invalidationScope = 0;
 
         // The container this iterator can be used with
@@ -437,18 +449,20 @@ void CheckStl::pushback()
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
             if (Token::Match(tok, "%var% = & %var% [")) {
+                // Skip it directly if it is a pointer or an array
+                const Token* containerTok = tok->tokAt(3);
+                if (containerTok->variable() && containerTok->variable()->isArrayOrPointer())
+                    continue;
+
                 // Variable id for pointer
                 const unsigned int pointerId(tok->varId());
-
-                // Variable id for the container variable
-                const unsigned int containerId(tok->tokAt(3)->varId());
 
                 bool invalidPointer = false;
                 const Token* function = nullptr;
                 const Token* end2 = tok->scope()->classEnd;
                 for (const Token *tok2 = tok; tok2 != end2; tok2 = tok2->next()) {
                     // push_back on vector..
-                    if (Token::Match(tok2, "%varid% . push_front|push_back|insert|reserve|resize|clear", containerId)) {
+                    if (Token::Match(tok2, "%varid% . push_front|push_back|insert|reserve|resize|clear", containerTok->varId())) {
                         invalidPointer = true;
                         function = tok2->tokAt(2);
                     }

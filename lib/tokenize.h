@@ -209,6 +209,10 @@ public:
       */
     void simplifyLabelsCaseDefault();
 
+    /** simplify case ranges (gcc extension)
+      */
+    void simplifyCaseRange();
+
     /** Remove macros in global scope */
     void removeMacrosInGlobalScope();
 
@@ -715,6 +719,11 @@ private:
     void duplicateDeclarationError(const Token *tok1, const Token *tok2, const std::string &type) const;
 
     void unsupportedTypedef(const Token *tok) const;
+
+    void setVarIdClassDeclaration(Token * const startToken,
+                                  const std::map<std::string, unsigned int> &variableId,
+                                  const unsigned int scopeStartVarId,
+                                  std::map<unsigned int, std::map<std::string,unsigned int> >& structMembers);
 
 public:
 

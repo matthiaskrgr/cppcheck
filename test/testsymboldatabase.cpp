@@ -129,6 +129,8 @@ private:
         TEST_CASE(isVariableDeclarationRValueRef);
         TEST_CASE(isVariableStlType);
 
+        TEST_CASE(rangeBasedFor);
+
         TEST_CASE(arrayMemberVar1);
         TEST_CASE(arrayMemberVar2);
         TEST_CASE(arrayMemberVar3);
@@ -231,8 +233,10 @@ private:
         TEST_CASE(symboldatabase49); // #6424
         TEST_CASE(symboldatabase50); // #6432
         TEST_CASE(symboldatabase51); // #6538
+        TEST_CASE(symboldatabase52); // #6581
 
         TEST_CASE(isImplicitlyVirtual);
+        TEST_CASE(isPure);
 
         TEST_CASE(isFunction); // UNKNOWN_MACRO(a,b) { .. }
 
@@ -674,6 +678,22 @@ private:
         ASSERT(var.tokens()->tokAt(2)->scope() != 0);
     }
 
+    void rangeBasedFor() {
+        GET_SYMBOL_DB("void reset() {\n"
+                      "    for(auto& e : array)\n"
+                      "        foo(e);\n"
+                      "}");
+
+        ASSERT(db != nullptr);
+        if (!db)
+            return;
+        ASSERT(db->scopeList.back().type == Scope::eFor);
+        ASSERT_EQUALS(2, db->getVariableListSize());
+        if (db->getVariableListSize() < 2)
+            return;
+        const Variable* e = db->getVariableFromVarId(1);
+        ASSERT(e && e->isReference() && e->isLocal());
+    }
     void isVariableStlType() {
         {
             reset();
@@ -2156,6 +2176,21 @@ private:
         }
     }
 
+    void symboldatabase52() { // #6581
+        GET_SYMBOL_DB("void foo() {\n"
+                      "    int i = 0;\n"
+                      "    S s{ { i }, 0 };\n"
+                      "}");
+
+        ASSERT(db != nullptr);
+        if (db) {
+            ASSERT_EQUALS(2, db->scopeList.size());
+            ASSERT_EQUALS(2, db->getVariableListSize()-1);
+            ASSERT(db->getVariableFromVarId(1));
+            ASSERT(db->getVariableFromVarId(2));
+        }
+    }
+
     void isImplicitlyVirtual() {
         {
             GET_SYMBOL_DB("class Base {\n"
@@ -2271,6 +2306,22 @@ private:
         }
     }
 
+    void isPure() {
+        GET_SYMBOL_DB("class C {\n"
+                      "    void f() = 0;\n"
+                      "    C(B b) = 0;\n"
+                      "    C(C& c) = default;"
+                      "    void g();\n"
+                      "};");
+        ASSERT(db && db->scopeList.back().functionList.size() == 4);
+        if (db && db->scopeList.back().functionList.size() == 4) {
+            std::list<Function>::const_iterator it = db->scopeList.back().functionList.begin();
+            ASSERT((it++)->isPure());
+            ASSERT((it++)->isPure());
+            ASSERT(!(it++)->isPure());
+            ASSERT(!(it++)->isPure());
+        }
+    }
     void isFunction() { // #5602 - UNKNOWN_MACRO(a,b) { .. }
         GET_SYMBOL_DB("TEST(a,b) {\n"
                       "  std::vector<int> messages;\n"

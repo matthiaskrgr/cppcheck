@@ -60,7 +60,7 @@ void CheckUninitVar::checkScope(const Scope* scope)
         if (i->isThrow())
             continue;
 
-        if (i->nameToken()->strAt(1) == "(" || i->nameToken()->strAt(1) == "{")
+        if (i->nameToken()->strAt(1) == "(" || i->nameToken()->strAt(1) == "{"  || i->nameToken()->strAt(1) == ":")
             continue;
 
         if (Token::Match(i->nameToken(), "%name% =")) { // Variable is initialized, but Rhs might be not
@@ -484,6 +484,11 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
             return true;
         }
 
+        // bailout if there is a goto label
+        if (Token::Match(tok, "[;{}] %name% :")) {
+            return true;
+        }
+
         if (tok->str() == "?") {
             if (!tok->astOperand2())
                 return true;
@@ -791,6 +796,9 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, Alloc al
     }
 
     if (Token::Match(vartok->previous(), "++|--|%cop%")) {
+        if (_tokenizer->isCPP() && alloc == ARRAY && Token::Match(vartok->tokAt(-4), "& %var% =|( *"))
+            return false;
+
         if (_tokenizer->isCPP() && Token::Match(vartok->previous(), ">>|<<")) {
             const Token* tok2 = vartok->previous();
             if (Token::simpleMatch(tok2->astOperand1(), ">>"))

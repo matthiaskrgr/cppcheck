@@ -89,6 +89,7 @@ private:
         TEST_CASE(pushback10);
         TEST_CASE(pushback11);
         TEST_CASE(pushback12);
+        TEST_CASE(pushback13);
         TEST_CASE(insert1);
         TEST_CASE(insert2);
 
@@ -97,6 +98,7 @@ private:
         TEST_CASE(stlBoundaries3);
         TEST_CASE(stlBoundaries4); // #4364
         TEST_CASE(stlBoundaries5); // #4352
+        TEST_CASE(stlBoundaries6); // #7106
 
         // if (str.find("ab"))
         TEST_CASE(if_find);
@@ -464,6 +466,18 @@ private:
               "    std::cout << (*iter) << std::endl;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:7] -> [test.cpp:6]: (error) Iterator 'iter' used after element has been erased.\n", errout.str());
+
+        // #6554 "False positive eraseDereference - erase in while() loop"
+        check("typedef std::map<Packet> packetMap;\n"
+              "packetMap waitingPackets;\n"
+              "void ProcessRawPacket() {\n"
+              "    packetMap::iterator wpi;\n"
+              "    while ((wpi = waitingPackets.find(lastInOrder + 1)) != waitingPackets.end()) {\n"
+              "        waitingPackets.erase(wpi);\n"
+              "        for (unsigned pos = 0; pos < buf.size(); ) {     }\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void dereference_break() {  // #3644
@@ -520,6 +534,14 @@ private:
               "    auto x = *myList.begin();\n"
               "    myList.erase(x);\n"
               "    auto b = x.first;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("const CXXRecordDecl *CXXRecordDecl::getTemplateInstantiationPattern() const {\n"
+              "    if (auto *TD = dyn_cast<ClassTemplateSpecializationDecl>(this)) {\n"
+              "        auto From = TD->getInstantiatedFrom();\n"
+              "    }\n"
+              "    return nullptr;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }
@@ -1277,6 +1299,16 @@ private:
                       "[test.cpp:9]: (error) After insert(), the iterator 'it' may be invalid.\n", errout.str());
     }
 
+    void pushback13() {
+        check("bool Preprocessor::ConcatenateIncludeName(SmallString<128> &FilenameBuffer, SourceLocation &End) {\n"
+              "    unsigned PreAppendSize = FilenameBuffer.size();\n"
+              "    FilenameBuffer.resize(PreAppendSize + CurTok.getLength());\n"
+              "    const char *BufPtr = &FilenameBuffer[PreAppendSize];\n"
+              "    return true;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void insert1() {
         check("void f(std::vector<int> &ints)\n"
               "{\n"
@@ -1476,6 +1508,17 @@ private:
               "    return i.foo();;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:8]: (error) Invalid iterator 'i' used.\n", errout.str());
+    }
+
+    void stlBoundaries6() { // #7106
+        check("void foo(std::vector<int>& vec) {\n"
+              "    for (Function::iterator BB : vec) {\n"
+              "        for (int Inst : *BB)\n"
+              "        {\n"
+              "        }\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
 

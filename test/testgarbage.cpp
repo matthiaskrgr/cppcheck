@@ -193,6 +193,19 @@ private:
         TEST_CASE(garbageCode142); // #7050
         TEST_CASE(garbageCode143); // #6922
         TEST_CASE(garbageCode144); // #6865
+        TEST_CASE(garbageCode145); // #7074
+        TEST_CASE(garbageCode146); // #7081
+        TEST_CASE(garbageCode147); // #7082
+        TEST_CASE(garbageCode148); // #7090
+        TEST_CASE(garbageCode149); // #7085
+        TEST_CASE(garbageCode150); // #7089
+        TEST_CASE(garbageCode151); // #4175
+        TEST_CASE(garbageCode152); // travis after 9c7271a5
+        TEST_CASE(garbageCode153);
+        TEST_CASE(garbageCode154); // #7112
+        TEST_CASE(garbageCode155); // #7118
+        TEST_CASE(garbageCode156); // #7120
+        TEST_CASE(garbageCode157); // #7131
 
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
@@ -779,7 +792,7 @@ private:
     }
 
     void garbageCode89() { // #6772
-        ASSERT_THROW(checkCode("{ { ( ) } P ( ) ^ { } { } { } ( ) } 0"), InternalError); // do not crash
+        checkCode("{ { ( ) } P ( ) ^ { } { } { } ( ) } 0"); // do not crash
     }
 
     void garbageCode90() { // #6790
@@ -1136,6 +1149,96 @@ private:
 
     void garbageCode144() { // #6865
         //ASSERT_THROW(checkCode("template < typename > struct A { } ; template < typename > struct A < INVALID > : A < int[ > { }] ;"), InternalError);
+    }
+
+    void garbageCode145() { // #7074
+        checkCode("++4++ +  + E++++++++++ + ch " "tp.oed5[.]");
+    }
+
+    void garbageCode146() { // #7081
+        ASSERT_THROW(checkCode("void foo() {\n"
+                               "    ? std::cout << pow((, 1) << std::endl;\n"
+                               "    double <ip = NUO ip) << std::end;\n"
+                               "}"), InternalError);
+    }
+
+    void garbageCode147() { // #7082
+        checkCode("free(3();\n"
+                  "$  vWrongAllocp1) test1<int, -!>() ^ {\n"
+                  "    int *p<ynew int[n];\n"
+                  "    delete[]p;\n"
+                  "    int *p1 = (int*)malloc(n*sizeof(int));\n"
+                  "    free(p1);\n"
+                  "}\n"
+                  "void est2() {\n"
+                  "    for (int ui = 0; ui < 1z; ui++)\n"
+                  "        ;\n"
+                  "}");
+
+        checkCode("; void f ^ { return } int main ( ) { }"); // #4941
+    }
+
+    void garbageCode148() { // #7090
+        ASSERT_THROW(checkCode("void f_1() {\n"
+                               "    typedef S0 b[][1][1] != 0\n"
+                               "};\n"
+                               "b[K][0] S0 b[][1][1] != 4{ 0 };\n"
+                               "b[0][0]"), InternalError);
+    }
+
+    void garbageCode149() { // #7085
+        checkCode("int main() {\n"
+                  "    for (j = 0; j < 1; j)\n"
+                  "        j6;\n"
+                  "}");
+    }
+
+    void garbageCode150() { // #7089
+        ASSERT_THROW(checkCode("class A {\n"
+                               "    pl vFoo() {\n"
+                               "        A::\n"
+                               "    };\n"
+                               "    A::\n"
+                               "}\n"), InternalError);
+    }
+
+    void garbageCode151() { // #4175
+        checkCode(">{ x while (y) z int = }");
+        checkCode("void f() {\n" // #4911 - bad simplification => don't crash
+                  "    int a;\n"
+                  "    do { a=do_something() } while (a);\n"
+                  "}");
+    }
+
+    void garbageCode152() { // happened in travis, originaly from llvm clang code
+        const char* code = "template <bool foo = std::value &&>\n"
+                           "static std::string foo(char *Bla) {\n"
+                           "    while (Bla[1] && Bla[1] != ',') }\n";
+        checkCode(code);
+    }
+
+    void garbageCode153() {
+        ASSERT_THROW(checkCode("enum { X = << { X } } { X X } enum { X = << { ( X ) } } { } X */"), InternalError);
+    }
+
+    void garbageCode154() {
+        checkCode("\"abc\"[];");
+    }
+
+    void garbageCode155() { // #7118
+        checkCode("&p(!{}e x){({(0?:?){({})}()})}");
+    }
+
+    void garbageCode156() { // #7120
+        checkCode("struct {}a; d f() { c ? : } {}a.p");
+    }
+
+    void garbageCode157() { // #7131
+        ASSERT_THROW(checkCode("namespace std {\n"
+                               "  template < typename >\n"
+                               "  void swap(); \n"
+                               "}"
+                               "template std::swap\n"), InternalError);
     }
 
     void garbageValueFlow() {

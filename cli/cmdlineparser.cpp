@@ -34,21 +34,13 @@
 #include <cstdlib> // EXIT_FAILURE
 
 #ifdef HAVE_RULES
-// xml is used in rules
+// xml is used for rules
 #include <tinyxml2.h>
 #endif
 
 static void AddFilesToList(const std::string& FileList, std::vector<std::string>& PathNames)
 {
-    // to keep things initially simple, if the file can't be opened, just be
-    // silent and move on
-    // ideas : we could also require this should be an xml file, with the filenames
-    // specified in an xml structure
-    // we could elaborate this then, to also include the I-paths, ...
-    // basically for everything that makes the command line very long
-    // xml is a bonus then, since we can easily extend it
-    // we need a good parser then -> suggestion : TinyXml
-    // drawback : creates a dependency
+    // To keep things initially simple, if the file can't be opened, just be silent and move on.
     std::istream *Files;
     std::ifstream Infile;
     if (FileList.compare("-") == 0) { // read from stdin
@@ -57,7 +49,7 @@ static void AddFilesToList(const std::string& FileList, std::vector<std::string>
         Infile.open(FileList.c_str());
         Files = &Infile;
     }
-    if (Files) {
+    if (Files && *Files) {
         std::string FileName;
         while (std::getline(*Files, FileName)) { // next line
             if (!FileName.empty()) {
@@ -69,8 +61,7 @@ static void AddFilesToList(const std::string& FileList, std::vector<std::string>
 
 static void AddInclPathsToList(const std::string& FileList, std::list<std::string>* PathNames)
 {
-    // to keep things initially simple, if the file can't be opened, just be
-    // silent and move on
+    // To keep things initially simple, if the file can't be opened, just be silent and move on.
     std::ifstream Files(FileList.c_str());
     if (Files) {
         std::string PathName;
@@ -180,18 +171,9 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
         }
 
         // Filter errors
-        else if (std::strncmp(argv[i], "--exitcode-suppressions", 23) == 0) {
-            std::string filename;
-
-            // exitcode-suppressions filename.txt
-            if (std::strcmp(argv[i], "--exitcode-suppressions") == 0) {
-                // Error message to be removed in 1.72
-                PrintMessage("cppcheck: '--exitcode-suppressions <file>' has been removed, use '--exitcode-suppressions=<file>' instead.");
-                return false;
-            }
-
+        else if (std::strncmp(argv[i], "--exitcode-suppressions=", 24) == 0) {
             // exitcode-suppressions=filename.txt
-            filename = 24 + argv[i];
+            std::string filename = 24 + argv[i];
 
             std::ifstream f(filename.c_str());
             if (!f.is_open()) {
@@ -230,12 +212,6 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
                 PrintMessage(errmsg);
                 return false;
             }
-        }
-
-        else if (std::strcmp(argv[i], "--suppressions") == 0) {
-            // Error message to be removed in 1.72
-            PrintMessage("cppcheck: '--suppressions' has been removed, use '--suppressions-list=<file>' instead.");
-            return false;
         }
 
         else if (std::strncmp(argv[i], "--suppress=", 11) == 0) {
