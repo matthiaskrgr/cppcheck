@@ -15,4 +15,4 @@ script:
 #  - SITE_PKG_DIR=$VIRTUAL_ENV/lib/python$TRAVIS_PYTHON_VERSION/site-packages
   - python -c 'import pygments'
 
-install: pip install Pygments
+install: sudo pip install Pygments
