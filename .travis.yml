@@ -6,7 +6,8 @@ compiler:
 
 env:
   global:
-    - DEFAULT_CXXFLAGS="-include lib/cxx11emu.h -pedantic -Wall -Wextra -Wabi -Wcast-qual -Wfloat-equal -Winline -Wmissing-declarations -Wmissing-format-attribute -Wno-long-long -Wpacked -Wredundant-decls -Wshadow -Wsign-promo -Wno-missing-field-initializers -Wno-missing-braces -Wno-sign-compare -D_GLIBCXX_DEBUG -g -std=c++0x"
+# skipping -Winline, too much noise with clang
+    - DEFAULT_CXXFLAGS="-include lib/cxx11emu.h -pedantic -Wall -Wextra -Wabi -Wcast-qual -Wfloat-equal -Wmissing-declarations -Wmissing-format-attribute -Wno-long-long -Wpacked -Wredundant-decls -Wshadow -Wsign-promo -Wno-missing-field-initializers -Wno-missing-braces -Wno-sign-compare -D_GLIBCXX_DEBUG -g -std=c++0x"
 # we need to be a bit faster to stay inside travis' timelimit
     - CXXFLAGS="-O2 -march=native -mtune=native -Wunreachable-code ${DEFAULT_CXXFLAGS}"
   matrix:
