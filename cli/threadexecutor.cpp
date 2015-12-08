@@ -515,12 +515,12 @@ void ThreadExecutor::report(const ErrorLogger::ErrorMessage &msg, MessageType ms
 
 #else
 
-void ThreadExecutor::addFileContent(const std::string &/*path*/, const std::string &/*content*/)
+static void ThreadExecutor::addFileContent(const std::string &/*path*/, const std::string &/*content*/)
 {
 
 }
 
-unsigned int ThreadExecutor::check()
+static unsigned int ThreadExecutor::check()
 {
     return 0;
 }

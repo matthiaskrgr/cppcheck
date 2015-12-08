@@ -1400,7 +1400,7 @@ private:
     }
 
     template<size_t n, typename T>
-    size_t getArraylength(const T(&)[n]) {
+    static size_t getArraylength(const T(&)[n]) {
         return n;
     }
 
