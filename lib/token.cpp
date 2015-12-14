@@ -464,7 +464,7 @@ int Token::multiCompare(const Token *tok, const char *haystack, unsigned int var
     const char *needlePointer = needle;
     for (;;) {
         if (needlePointer == needle && haystack[0] == '%' && haystack[1] != '|' && haystack[1] != '\0' && haystack[1] != ' ') {
-            int ret = multiComparePercent(tok, haystack, emptyStringFound, varid);
+            const int ret = multiComparePercent(tok, haystack, emptyStringFound, varid); // can this really be const?
             if (ret < 2)
                 return ret;
         } else if (*haystack == '|') {
@@ -526,7 +526,7 @@ bool Token::simpleMatch(const Token *tok, const char pattern[])
         next = pattern + std::strlen(pattern);
 
     while (*current) {
-        std::size_t length = next - current;
+        const std::size_t length = next - current; // save?
 
         if (!tok || length != tok->_str.length() || std::strncmp(current, tok->_str.c_str(), length))
             return false;

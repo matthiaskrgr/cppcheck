@@ -2193,7 +2193,7 @@ void Tokenizer::arraySize()
 
         if (addlength || Token::Match(tok, "%var% [ ] = %str% ;")) {
             tok = tok->next();
-            std::size_t sz = Token::getStrSize(tok->tokAt(3));
+            const std::size_t sz = Token::getStrSize(tok->tokAt(3));
             tok->insertToken(MathLib::toString(sz));
             tok = tok->tokAt(5);
         }
@@ -2395,7 +2395,7 @@ void Tokenizer::simplifyCaseRange()
 {
     for (Token* tok = list.front(); tok; tok = tok->next()) {
         if (Token::Match(tok, "case %num% . . . %num% :")) {
-            MathLib::bigint start = MathLib::toLongNumber(tok->strAt(1));
+            const MathLib::bigint start = MathLib::toLongNumber(tok->strAt(1));
             MathLib::bigint end = MathLib::toLongNumber(tok->strAt(5));
             end = std::min(start + 50, end); // Simplify it 50 times at maximum
             if (start < end) {
@@ -2410,8 +2410,8 @@ void Tokenizer::simplifyCaseRange()
                 }
             }
         } else if (Token::Match(tok, "case %char% . . . %char% :")) {
-            char start = tok->strAt(1)[1];
-            char end = tok->strAt(5)[1];
+            const char start = tok->strAt(1)[1];
+            const char end = tok->strAt(5)[1];
             if (start < end) {
                 tok = tok->tokAt(2);
                 tok->str(":");
@@ -3873,25 +3873,28 @@ void Tokenizer::printDebugOutput(unsigned int simplification) const
     const bool debug = (simplification != 1U && _settings->debug) ||
                        (simplification != 2U && _settings->debugnormal);
 
+    const bool settingVerbose = _settings->_verbose;
+    const bool settingXml = _settings->_xml;
+
     if (debug && list.front()) {
         list.front()->printOut(0, list.getFiles());
 
-        if (_settings->_xml)
+        if (settingXml)
             std::cout << "<debug>" << std::endl;
 
         if (_symbolDatabase) {
-            if (_settings->_xml)
+            if (settingXml)
                 _symbolDatabase->printXml(std::cout);
-            else if (_settings->_verbose)
+            else if (settingVerbose)
                 _symbolDatabase->printOut("Symbol database");
         }
 
-        if (_settings->_verbose)
-            list.front()->printAst(_settings->_verbose, _settings->_xml, std::cout);
+        if (settingVerbose)
+            list.front()->printAst(settingVerbose, settingXml, std::cout);
 
-        list.front()->printValueFlow(_settings->_xml, std::cout);
+        list.front()->printValueFlow(settingXml, std::cout);
 
-        if (_settings->_xml)
+        if (settingXml)
             std::cout << "</debug>" << std::endl;
     }
 
@@ -4095,7 +4098,7 @@ void Tokenizer::removeRedundantAssignment()
         if (tok->str() == "{")
             tok = tok->link();
 
-        Token * start = startOfExecutableScope(tok);
+        const Token * start = startOfExecutableScope(tok);
         if (start) {
             tok = start->previous();
             // parse in this function..
