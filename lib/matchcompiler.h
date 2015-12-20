@@ -53,19 +53,19 @@ namespace MatchCompiler {
     }
 
     template <unsigned int n>
-    inline bool operator==(const std::string & s1, ConstString<n> const & s2)
+    bool operator==(const std::string & s1, ConstString<n> const & s2)
     {
         return equalN<n>(s1.c_str(), s2);
     }
 
     template <unsigned int n>
-    inline bool operator!=(const std::string & s1, ConstString<n> const & s2)
+    bool operator!=(const std::string & s1, ConstString<n> const & s2)
     {
         return !operator==(s1,s2);
     }
 
     template <unsigned int n>
-    inline ConstString<n> makeConstString(const char(&s)[n])
+     ConstString<n> makeConstString(const char(&s)[n])
     {
         return ConstString<n>(s);
     }

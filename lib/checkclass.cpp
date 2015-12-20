@@ -54,7 +54,7 @@ namespace {
         return "";
     }
 
-    inline bool isPureWithoutBody(Function const & func)
+    bool isPureWithoutBody(Function const & func)
     {
         return func.isPure() && !func.hasBody();
     }
