@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,7 +48,8 @@ private:
         TEST_CASE(calculate);
         TEST_CASE(calculate1);
         TEST_CASE(typesuffix);
-        TEST_CASE(convert);
+        TEST_CASE(toLongNumber);
+        TEST_CASE(toDoubleNumber);
         TEST_CASE(naninf);
         TEST_CASE(isNullValue);
         TEST_CASE(incdec);
@@ -226,11 +227,7 @@ private:
         ASSERT_EQUALS("2ULL",  MathLib::add("1ULL", "1LLU"));
     }
 
-    void convert() const {
-        // ------------------
-        // tolong conversion:
-        // ------------------
-
+    void toLongNumber() const {
         // from hex
         ASSERT_EQUALS(0     , MathLib::toLongNumber("0x0"));
         ASSERT_EQUALS(0     , MathLib::toLongNumber("-0x0"));
@@ -272,6 +269,38 @@ private:
         ASSERT_EQUALS(100   , MathLib::toLongNumber("+10.0E+1"));
         ASSERT_EQUALS(-1    , MathLib::toLongNumber("-10.0E-1"));
 
+        // from char
+        ASSERT_EQUALS((int)('A'),    MathLib::toLongNumber("'A'"));
+#ifdef __GNUC__
+        // BEGIN Implementation-specific results
+        ASSERT_EQUALS((int)('AB'),    MathLib::toLongNumber("'AB'"));
+        ASSERT_EQUALS((int)('ABC'),    MathLib::toLongNumber("'ABC'"));
+        ASSERT_EQUALS((int)('ABCD'),    MathLib::toLongNumber("'ABCD'"));
+        ASSERT_EQUALS((int)('ABCDE'),    MathLib::toLongNumber("'ABCDE'"));
+        // END Implementation-specific results
+#endif
+        ASSERT_EQUALS((int)('\0'),   MathLib::toLongNumber("'\\0'"));
+        ASSERT_EQUALS(0x1B,   MathLib::toLongNumber("'\\e'"));
+        ASSERT_EQUALS((int)('\r'),   MathLib::toLongNumber("'\\r'"));
+        ASSERT_EQUALS((int)('\x12'), MathLib::toLongNumber("'\\x12'"));
+        // may cause some compile problems: ASSERT_EQUALS((int)('\x123'), MathLib::toLongNumber("'\\x123'"));
+        // may cause some compile problems: ASSERT_EQUALS((int)('\x1234'), MathLib::toLongNumber("'\\x1234'"));
+        ASSERT_EQUALS((int)('\3'),  MathLib::toLongNumber("'\\3'"));
+        ASSERT_EQUALS((int)('\34'),  MathLib::toLongNumber("'\\34'"));
+        ASSERT_EQUALS((int)('\034'), MathLib::toLongNumber("'\\034'"));
+        ASSERT_EQUALS((int)('\134'), MathLib::toLongNumber("'\\134'"));
+        ASSERT_THROW(MathLib::toLongNumber("'\\9'"), InternalError);
+        ASSERT_THROW(MathLib::toLongNumber("'\\934'"), InternalError);
+        // that is not gcc/clang encoding
+        ASSERT_EQUALS(959657011, MathLib::toLongNumber("'\\u9343'"));
+        ASSERT_EQUALS(1714631779, MathLib::toLongNumber("'\\U0001f34c'"));
+        {
+            // some unit-testing for a utility function
+            ASSERT_EQUALS(0, MathLib::characterLiteralToLongNumber(std::string("")));
+            ASSERT_EQUALS(32, MathLib::characterLiteralToLongNumber(std::string(" ")));
+            ASSERT_EQUALS(538976288, MathLib::characterLiteralToLongNumber(std::string("          ")));
+        }
+
         ASSERT_EQUALS(-8552249625308161526, MathLib::toLongNumber("0x89504e470d0a1a0a"));
         ASSERT_EQUALS(-8481036456200365558, MathLib::toLongNumber("0x8a4d4e470d0a1a0a"));
         ASSERT_EQUALS(9894494448401390090ULL, MathLib::toULongNumber("0x89504e470d0a1a0a"));
@@ -294,16 +323,15 @@ private:
 
         // from long long
         /*
-        * ASSERT_EQUALS(0xFF00000000000000LL, MathLib::toLongNumber("0xFF00000000000000LL"));
+         * ASSERT_EQUALS(0xFF00000000000000LL, MathLib::toLongNumber("0xFF00000000000000LL"));
          * This does not work in a portable way!
          * While it succeeds on 32bit Visual Studio it fails on Linux 64bit because it is greater than 0x7FFFFFFFFFFFFFFF (=LLONG_MAX)
-               */
+         */
 
         ASSERT_EQUALS(0x0A00000000000000LL, MathLib::toLongNumber("0x0A00000000000000LL"));
+    }
 
-        // -----------------
-        // to double number:
-        // -----------------
+    void toDoubleNumber() {
         ASSERT_EQUALS_DOUBLE(10.0  , MathLib::toDoubleNumber("10"));
         ASSERT_EQUALS_DOUBLE(1000.0, MathLib::toDoubleNumber("10E+2"));
         ASSERT_EQUALS_DOUBLE(100.0 , MathLib::toDoubleNumber("1.0E+2"));

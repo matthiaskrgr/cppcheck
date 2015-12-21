@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -81,20 +81,6 @@ public:
       * @return true if path points to file and the file exists.
       */
     static bool fileExists(const std::string &path);
-
-#ifndef _WIN32
-    static std::string getAbsolutePath(const std::string& path);
-
-private:
-
-    static void addFiles2(std::set<std::string> &seen_paths,
-                          std::map<std::string, std::size_t> &files,
-                          const std::string &path,
-                          const std::set<std::string> &extra,
-                          bool recursive,
-                          const PathMatch& ignored);
-#endif
-
 };
 
 /// @}

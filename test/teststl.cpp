@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,6 +89,7 @@ private:
         TEST_CASE(pushback10);
         TEST_CASE(pushback11);
         TEST_CASE(pushback12);
+        TEST_CASE(pushback13);
         TEST_CASE(insert1);
         TEST_CASE(insert2);
 
@@ -465,6 +466,18 @@ private:
               "    std::cout << (*iter) << std::endl;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:7] -> [test.cpp:6]: (error) Iterator 'iter' used after element has been erased.\n", errout.str());
+
+        // #6554 "False positive eraseDereference - erase in while() loop"
+        check("typedef std::map<Packet> packetMap;\n"
+              "packetMap waitingPackets;\n"
+              "void ProcessRawPacket() {\n"
+              "    packetMap::iterator wpi;\n"
+              "    while ((wpi = waitingPackets.find(lastInOrder + 1)) != waitingPackets.end()) {\n"
+              "        waitingPackets.erase(wpi);\n"
+              "        for (unsigned pos = 0; pos < buf.size(); ) {     }\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void dereference_break() {  // #3644
@@ -521,6 +534,14 @@ private:
               "    auto x = *myList.begin();\n"
               "    myList.erase(x);\n"
               "    auto b = x.first;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("const CXXRecordDecl *CXXRecordDecl::getTemplateInstantiationPattern() const {\n"
+              "    if (auto *TD = dyn_cast<ClassTemplateSpecializationDecl>(this)) {\n"
+              "        auto From = TD->getInstantiatedFrom();\n"
+              "    }\n"
+              "    return nullptr;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }
@@ -1278,6 +1299,16 @@ private:
                       "[test.cpp:9]: (error) After insert(), the iterator 'it' may be invalid.\n", errout.str());
     }
 
+    void pushback13() {
+        check("bool Preprocessor::ConcatenateIncludeName(SmallString<128> &FilenameBuffer, SourceLocation &End) {\n"
+              "    unsigned PreAppendSize = FilenameBuffer.size();\n"
+              "    FilenameBuffer.resize(PreAppendSize + CurTok.getLength());\n"
+              "    const char *BufPtr = &FilenameBuffer[PreAppendSize];\n"
+              "    return true;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void insert1() {
         check("void f(std::vector<int> &ints)\n"
               "{\n"
@@ -1375,8 +1406,7 @@ private:
 
     void stlBoundaries1() {
         const std::string stlCont[] = {
-            "list", "set", "multiset", "map",
-            "multimap", "hash_map", "hash_multimap", "hash_set"
+            "list", "set", "multiset", "map", "multimap"
         };
 
         for (size_t i = 0; i < getArraylength(stlCont); ++i) {
@@ -1387,16 +1417,16 @@ private:
                   "        ;\n"
                   "}");
 
-            ASSERT_EQUALS("[test.cpp:4]: (error) Dangerous iterator comparison using operator< on 'std::" + stlCont[i] + "'.\n", errout.str());
+            ASSERT_EQUALS("[test.cpp:4]: (error) Dangerous comparison using operator< on iterator.\n", errout.str());
         }
 
         check("void f() {\n"
               "    std::forward_list<int>::iterator it;\n"
               "    for (it = ab.begin(); ab.end() > it; ++it) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Dangerous iterator comparison using operator< on 'std::forward_list'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Dangerous comparison using operator< on iterator.\n", errout.str());
 
-        // #5926 no FP Dangerous iterator comparison using operator< on 'std::deque'.
+        // #5926 no FP Dangerous comparison using operator< on iterator on std::deque
         check("void f() {\n"
               "    std::deque<int>::iterator it;\n"
               "    for (it = ab.begin(); ab.end() > it; ++it) {}\n"
@@ -1442,7 +1472,7 @@ private:
               "    std::forward_list<std::vector<std::vector<int>>>::iterator it;\n"
               "    for (it = ab.begin(); ab.end() > it; ++it) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (error) Dangerous iterator comparison using operator< on 'std::forward_list'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Dangerous comparison using operator< on iterator.\n", errout.str());
 
         // don't crash
         check("void f() {\n"
@@ -1456,7 +1486,7 @@ private:
               "        for (it = ab.begin(); ab.end() > it; ++it) {}\n"
               "    }\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:4]: (error) Dangerous iterator comparison using operator< on 'std::forward_list'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:4]: (error) Dangerous comparison using operator< on iterator.\n", errout.str());
     }
 
     void stlBoundaries5() {
@@ -1689,6 +1719,11 @@ private:
 
         check("void f(std::string a, std::string b) {\n"  // #4480
               "    if (a.find(\"<\") < b.find(\">\")) {}\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f(const std::string &s) {\n"
+              "    if (foo(s.find(\"abc\"))) { }\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }
@@ -2756,11 +2791,37 @@ private:
               "}", true);
         ASSERT_EQUALS("", errout.str());
 
-        check("void f(std::vector<int> v) {\n"
+        check("void f(std::set<int> v) {\n"
               "    v.clear();\n"
               "    int i = v.find(foobar);\n"
               "}", true);
         ASSERT_EQUALS("[test.cpp:3]: (style, inconclusive) Reading from empty STL container 'v'\n", errout.str());
+
+        check("void f(std::set<int> v) {\n"
+              "    v.clear();\n"
+              "    v.begin();\n"
+              "}", true);
+        ASSERT_EQUALS("[test.cpp:3]: (style, inconclusive) Reading from empty STL container 'v'\n", errout.str());
+
+        check("void f(std::set<int> v) {\n"
+              "    v.clear();\n"
+              "    *v.begin();\n"
+              "}", true);
+        ASSERT_EQUALS("[test.cpp:3]: (style, inconclusive) Reading from empty STL container 'v'\n", errout.str());
+
+        check("void f(std::set<int> v) {\n"
+              "    v.clear();\n"
+              "    for(auto i = v.cbegin();\n"
+              "        i != v.cend(); ++i) {}\n"
+              "}", true);
+        ASSERT_EQUALS("[test.cpp:3]: (style, inconclusive) Reading from empty STL container 'v'\n"
+                      "[test.cpp:4]: (style, inconclusive) Reading from empty STL container 'v'\n", errout.str());
+
+        check("void f(std::set<int> v) {\n"
+              "    v.clear();\n"
+              "    foo(v.begin());\n"
+              "}", true);
+        ASSERT_EQUALS("", errout.str());
 
         check("void f() {\n"
               "    std::map<int, std::string> CMap;\n"

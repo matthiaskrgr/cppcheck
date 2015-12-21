@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 #include "checknullpointer.h"
 #include "mathlib.h"
 #include "symboldatabase.h"
+#include "utils.h"
 #include <cctype>
 //---------------------------------------------------------------------------
 
@@ -137,7 +138,7 @@ void CheckNullPointer::parseFunctionCall(const Token &tok, std::list<const Token
 }
 
 namespace {
-    static const std::set<std::string> stl_stream = make_container< std::set<std::string> >() <<
+    const std::set<std::string> stl_stream = make_container< std::set<std::string> >() <<
             "fstream" << "ifstream" << "iostream" << "istream" <<
             "istringstream" << "ofstream" << "ostream" << "ostringstream" <<
             "stringstream" << "wistringstream" << "wostringstream" << "wstringstream";
@@ -375,7 +376,7 @@ void CheckNullPointer::nullPointer()
 }
 
 namespace {
-    static const std::set<std::string> stl_istream = make_container< std::set<std::string> >() <<
+    const std::set<std::string> stl_istream = make_container< std::set<std::string> >() <<
             "fstream" << "ifstream" << "iostream" << "istream" <<
             "istringstream" << "stringstream" << "wistringstream" << "wstringstream";
 }

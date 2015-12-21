@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,6 @@
 #include <sstream>
 #include <cctype>
 #include <stack>
-#include <cassert>
 
 // How many compileExpression recursions are allowed?
 // For practical code this could be endless. But in some special torture test
@@ -963,6 +962,8 @@ static Token * createAstAtToken(Token *tok, bool cpp)
                     break;
                 init1 = 0;
             }
+            if (!tok2) // #7109 invalid code
+                return nullptr;
             tok2 = tok2->next();
         }
         if (!tok2 || tok2->str() != ";") {
@@ -1011,7 +1012,7 @@ static Token * createAstAtToken(Token *tok, bool cpp)
     if (Token::Match(tok, "%type% <") && !Token::Match(tok->linkAt(1), "> [({]"))
         return tok->linkAt(1);
 
-    if (tok->str() == "return" || !tok->previous() || Token::Match(tok, "%name% %op%|(|[|.|::|<|?") || Token::Match(tok->previous(), "[;{}] %cop%|++|--|( !!{")) {
+    if (tok->str() == "return" || !tok->previous() || Token::Match(tok, "%name% %op%|(|[|.|::|<|?|;") || Token::Match(tok->previous(), "[;{}] %cop%|++|--|( !!{")) {
         if (cpp && Token::Match(tok->tokAt(-2), "[;{}] new|delete %name%"))
             tok = tok->previous();
 
@@ -1023,7 +1024,7 @@ static Token * createAstAtToken(Token *tok, bool cpp)
             return tok1;
 
         // Compile inner expressions inside inner ({..}) and lambda bodies
-        for (tok = tok1->next(); tok && tok != endToken; tok = tok ? tok->next() : NULL) {
+        for (tok = tok1->next(); tok && tok != endToken; tok = tok ? tok->next() : nullptr) {
             if (tok->str() != "{")
                 continue;
 
@@ -1041,11 +1042,11 @@ static Token * createAstAtToken(Token *tok, bool cpp)
                 break;
 
             const Token * const endToken2 = tok->link();
-            for (; tok && tok != endToken && tok != endToken2; tok = tok ? tok->next() : NULL)
+            for (; tok && tok != endToken && tok != endToken2; tok = tok ? tok->next() : nullptr)
                 tok = createAstAtToken(tok, cpp);
         }
 
-        return endToken ? endToken->previous() : NULL;
+        return endToken ? endToken->previous() : nullptr;
     }
 
     return tok;
@@ -1053,8 +1054,34 @@ static Token * createAstAtToken(Token *tok, bool cpp)
 
 void TokenList::createAst()
 {
-    for (Token *tok = _front; tok; tok = tok ? tok->next() : NULL) {
+    for (Token *tok = _front; tok; tok = tok ? tok->next() : nullptr) {
         tok = createAstAtToken(tok, isCPP());
+    }
+}
+
+void TokenList::validateAst()
+{
+    std::set < const Token* > astTokens;
+    // Verify that ast looks ok
+    for (const Token *tok = _front; tok; tok = tok->next()) {
+        // Syntax error if binary operator only has 1 operand
+        if ((tok->isAssignmentOp() || tok->isComparisonOp() || Token::Match(tok,"[|^/%]")) && tok->astOperand1() && !tok->astOperand2())
+            throw InternalError(tok, "Syntax Error: AST broken, binary operator has only one operand.", InternalError::SYNTAX);
+
+        // Syntax error if we encounter "?" with operand2 that is not ":"
+        if (tok->astOperand2() && tok->str() == "?" && tok->astOperand2()->str() != ":")
+            throw InternalError(tok, "Syntax Error: AST broken, ternary operator lacks ':'.", InternalError::SYNTAX);
+
+        // check for endless recursion
+        const Token* parent=tok;
+        while ((parent = parent->astParent()) != nullptr) {
+            if (parent==tok)
+                throw InternalError(tok, "AST broken: endless recursion from '" + tok->str() + "'", InternalError::SYNTAX);
+            if (astTokens.find(parent)!= astTokens.end()) {
+                break;
+             }
+            astTokens.insert(parent);
+        }
     }
 }
 

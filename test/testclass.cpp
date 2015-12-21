@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,6 +78,7 @@ private:
         TEST_CASE(memsetOnInvalid);    // Ticket #5425: Crash upon invalid
         TEST_CASE(memsetOnStdPodType); // Ticket #5901 - std::uint8_t
         TEST_CASE(memsetOnFloat);      // Ticket #5421
+        TEST_CASE(memsetOnUnknown);    // Ticket #7183
         TEST_CASE(mallocOnClass);
 
         TEST_CASE(this_subtraction);    // warn about "this-x"
@@ -237,13 +238,13 @@ private:
                                   "    Class(const Class& other) { }\n"
                                   "    virtual int i() = 0;\n"
                                   "};");
-        ASSERT_EQUALS("[test.cpp:2]: (style) Abstract class 'Class' has a copy/move constructor that is not explicit.\n", errout.str());
+        ASSERT_EQUALS("", errout.str());
 
         checkExplicitConstructors("class Class {\n"
                                   "    Class(Class&& other) { }\n"
                                   "    virtual int i() = 0;\n"
                                   "};");
-        ASSERT_EQUALS("[test.cpp:2]: (style) Abstract class 'Class' has a copy/move constructor that is not explicit.\n", errout.str());
+        ASSERT_EQUALS("", errout.str());
 
         // #6585
         checkExplicitConstructors("class Class {\n"
@@ -256,7 +257,7 @@ private:
                                   "    public: Class(const Class&);\n"
                                   "    virtual int i() = 0;\n"
                                   "};");
-        ASSERT_EQUALS("[test.cpp:2]: (style) Abstract class 'Class' has a copy/move constructor that is not explicit.\n", errout.str());
+        ASSERT_EQUALS("", errout.str());
     }
 
     void checkDuplInheritedMembers(const char code[]) {
@@ -365,6 +366,18 @@ private:
                                   "};\n"
                                   "class Derived : public Base {\n"
                                   "};");
+        ASSERT_EQUALS("", errout.str());
+
+        // #6692
+        checkDuplInheritedMembers("namespace test1 {\n"
+                                  "   struct SWibble{};\n"
+                                  "   typedef SWibble wibble;\n"
+                                  "}\n"
+                                  "namespace test2 {\n"
+                                  "   struct SWibble : public test1::wibble {\n"
+                                  "   int Value;\n"
+                                  "   };\n"
+                                  "}");
         ASSERT_EQUALS("", errout.str());
 
     }
@@ -583,6 +596,15 @@ private:
                              "   F() : p(malloc(100)) {}\n"
                              "};");
         ASSERT_EQUALS("[test.cpp:1]: (style) 'class F' does not have a copy constructor which is recommended since the class contains a pointer to allocated memory.\n", errout.str());
+
+        // #7198
+        checkCopyConstructor("struct F {\n"
+                             "   static char* c;\n"
+                             "   F() {\n"
+                             "      p = malloc(100);\n"
+                             "   }\n"
+                             "};");
+        ASSERT_EQUALS("", errout.str());
     }
 
 
@@ -2664,6 +2686,14 @@ private:
                       "void f() {\n"
                       "    A a;\n"
                       "    memset(&a, 0, sizeof(A));\n"
+                      "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void memsetOnUnknown() {
+        checkNoMemset("void clang_tokenize(CXToken **Tokens) {\n"
+                      "  *Tokens = (CXToken *)malloc(sizeof(CXToken) * CXTokens.size());\n"
+                      "  memmove(*Tokens, CXTokens.data(), sizeof(CXToken) * CXTokens.size());\n"
                       "}");
         ASSERT_EQUALS("", errout.str());
     }
@@ -6178,23 +6208,33 @@ private:
         ASSERT_EQUALS("[test.cpp:7] -> [test.cpp:3]: (warning) Call of pure virtual function 'pure' in constructor.\n", errout.str());
 
         checkPureVirtualFunctionCall("class A\n"
-                                     " {\n"
-                                     "    virtual void pure()=0; \n"
-                                     "    virtual ~A(); \n"
-                                     "    int m; \n"
+                                     "{\n"
+                                     "    virtual void pure()=0;\n"
+                                     "    virtual ~A();\n"
+                                     "    int m;\n"
                                      "};\n"
                                      "A::~A()\n"
-                                     "{if (b) pure();}\n");
+                                     "{if (b) pure();}");
         ASSERT_EQUALS("[test.cpp:8] -> [test.cpp:3]: (warning) Call of pure virtual function 'pure' in destructor.\n", errout.str());
 
-        // ticket # 5831
+        // #5831
         checkPureVirtualFunctionCall("class abc {\n"
                                      "public:\n"
                                      "  virtual ~abc() throw() {}\n"
                                      "  virtual void def(void* g) throw () = 0;\n"
-                                     "};\n");
+                                     "};");
         ASSERT_EQUALS("", errout.str());
 
+        // #4992
+        checkPureVirtualFunctionCall("class CMyClass {\n"
+                                     "    std::function< void(void) > m_callback;\n"
+                                     "public:\n"
+                                     "    CMyClass() {\n"
+                                     "        m_callback = [this]() { return VirtualMethod(); };\n"
+                                     "    }\n"
+                                     "    virtual void VirtualMethod() = 0;\n"
+                                     "};");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void pureVirtualFunctionCallOtherClass() {

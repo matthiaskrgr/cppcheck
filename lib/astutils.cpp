@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -271,3 +271,48 @@ bool isWithoutSideEffects(bool cpp, const Token* tok)
     return true;
 }
 
+bool isVariableChanged(const Token *start, const Token *end, const unsigned int varid)
+{
+    for (const Token *tok = start; tok != end; tok = tok->next()) {
+        if (tok->varId() == varid) {
+            if (Token::Match(tok, "%name% =|++|--"))
+                return true;
+
+            if (Token::Match(tok->previous(), "++|-- %name%"))
+                return true;
+
+            if (Token::Match(tok->tokAt(-2), "[(,] & %var% [,)]"))
+                return true; // TODO: check if function parameter is const
+
+            if (Token::Match(tok->previous(), "[(,] %var% [,)]")) {
+                const Token *parent = tok->astParent();
+                while (parent && parent->str() == ",")
+                    parent = parent->astParent();
+                if (parent && Token::Match(parent->previous(), "%name% (") && !parent->previous()->function())
+                    return true;
+                // TODO: check if function parameter is non-const reference etc..
+            }
+
+            const Token *parent = tok->astParent();
+            while (Token::Match(parent, ".|::"))
+                parent = parent->astParent();
+            if (parent && parent->tokType() == Token::eIncDecOp)
+                return true;
+        }
+    }
+    return false;
+}
+
+int numberOfArguments(const Token *start)
+{
+    int arguments=0;
+    const Token* const openBracket = start->next();
+    if (openBracket && openBracket->str()=="(" && openBracket->next() && openBracket->next()->str()!=")") {
+        const Token* argument=openBracket->next();
+        while (argument) {
+            ++arguments;
+            argument = argument->nextArgument();
+        }
+    }
+    return arguments;
+}

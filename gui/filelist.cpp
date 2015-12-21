@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ bool FileList::FilterMatches(const QFileInfo &inf)
         const QStringList filters = FileList::GetDefaultFilters();
         QString ext("*.");
         ext += inf.suffix();
-        if (filters.contains(ext))
+        if (filters.contains(ext, Qt::CaseInsensitive))
             return true;
     }
     return false;
@@ -68,7 +68,7 @@ void FileList::AddDirectory(const QString &directory, bool recursive)
         dir.setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
         QFileInfoList list = dir.entryInfoList();
         QFileInfo item;
-        foreach(item, list) {
+        foreach (item, list) {
             const QString path = item.canonicalFilePath();
             AddDirectory(path, recursive);
         }
@@ -78,7 +78,7 @@ void FileList::AddDirectory(const QString &directory, bool recursive)
 void FileList::AddPathList(const QStringList &paths)
 {
     QString path;
-    foreach(path, paths) {
+    foreach (path, paths) {
         QFileInfo inf(path);
         if (inf.isFile())
             AddFile(path);
@@ -91,7 +91,7 @@ QStringList FileList::GetFileList() const
 {
     if (mExcludedPaths.empty()) {
         QStringList names;
-        foreach(QFileInfo item, mFileList) {
+        foreach (QFileInfo item, mFileList) {
             QString name = QDir::fromNativeSeparators(item.canonicalFilePath());
             names << name;
         }
@@ -109,7 +109,7 @@ void FileList::AddExcludeList(const QStringList &paths)
 QStringList FileList::ApplyExcludeList() const
 {
     QStringList paths;
-    foreach(QFileInfo item, mFileList) {
+    foreach (QFileInfo item, mFileList) {
         QString name = QDir::fromNativeSeparators(item.canonicalFilePath());
         if (!Match(name))
             paths << name;

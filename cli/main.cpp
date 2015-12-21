@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 /**
  *
  * @mainpage Cppcheck
- * @version 1.70.99
+ * @version 1.71.99
  *
  * @section overview_sec Overview
  * Cppcheck is a simple tool for static analysis of C/C++ code.
@@ -102,7 +102,7 @@ void CheckOther::checkZeroDivision()
 
 #include "cppcheckexecutor.h"
 
-#include <cstdio>
+#include <iostream>
 #include <cstdlib>
 
 #ifdef _WIN32
@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
 
     CppCheckExecutor exec;
 #ifdef _WIN32
-    GetModuleFileNameA(NULL, exename, sizeof(exename)/sizeof(exename[0])-1);
+    GetModuleFileNameA(nullptr, exename, sizeof(exename)/sizeof(exename[0])-1);
     argv[0] = exename;
 #endif
 
@@ -136,11 +136,11 @@ int main(int argc, char* argv[])
         return exec.check(argc, argv);
 #ifdef NDEBUG
     } catch (const InternalError& e) {
-        printf("%s\n", e.errorMessage.c_str());
+        std::cout << e.errorMessage << std::endl;
     } catch (const std::exception& error) {
-        printf("%s\n", error.what());
+        std::cout << error.what() << std::endl;
     } catch (...) {
-        printf("Unknown exception\n");
+        std::cout << "Unknown exception" << std::endl;
     }
     return EXIT_FAILURE;
 #endif

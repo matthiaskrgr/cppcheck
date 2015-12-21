@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "cppcheck.h"
+#include "version.h"
 
 static void unencode(const char *src, char *dest)
 {
@@ -44,7 +45,15 @@ public:
 
     void reportOut(const std::string &outmsg) { }
     void reportErr(const ErrorLogger::ErrorMessage &msg) {
-        printf("%s\n", msg.toString(true).c_str());
+        const std::string s = msg.toString(true);
+
+        printf("%s\n", s.c_str());
+
+        FILE *logfile = fopen("democlient.log", "at");
+        if (logfile != NULL) {
+            fprintf(logfile, "%s\n", s.c_str());
+            fclose(logfile);
+        }
     }
 
     void reportProgress(const
@@ -76,14 +85,18 @@ int main()
         fgets(data, len, stdin);
     }
 
-    char code[4096] = {0};
-    unencode(data, code);
-
-    if (strlen(code) > 1000) {
+    if (data[4000] != '\0') {
         puts("Content-type: text/html\r\n\r\n");
         puts("<html><body>For performance reasons the code must be shorter than 1000 chars.</body></html>");
         return EXIT_SUCCESS;
     }
+
+    const char *pdata = data;
+    if (std::strncmp(pdata, "code=", 5)==0)
+        pdata += 5;
+
+    char code[4096] = {0};
+    unencode(pdata, code);
 
     FILE *logfile = fopen("democlient.log", "at");
     if (logfile != NULL) {
@@ -92,7 +105,7 @@ int main()
     }
 
     puts("Content-type: text/html\r\n\r\n");
-    puts("<html><body><pre>");
+    puts("<html><body>Cppcheck version " CPPCHECK_VERSION_STRING "<pre>");
 
     CppcheckExecutor cppcheckExecutor;
     cppcheckExecutor.run(code);

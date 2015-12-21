@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@
 
 #include <cmath>
 #include <cctype>
+#include <cstdlib>
 #include <limits>
 
 
@@ -313,6 +314,108 @@ MathLib::biguint MathLib::toULongNumber(const std::string & str)
     return ret;
 }
 
+static bool isOctalDigitString(const std::string& str)
+{
+    for (std::string::const_iterator it=str.begin(); it!=str.end(); ++it) {
+        if (!MathLib::isOctalDigit(*it))
+            return false;
+    }
+    return true;
+}
+
+static unsigned int encodeMultiChar(const std::string& str)
+{
+    unsigned int retval(str.front());
+    for (std::string::const_iterator it=str.begin()+1; it!=str.end(); ++it) {
+        retval = retval<<8 | *it;
+    }
+    return retval;
+}
+
+MathLib::bigint MathLib::characterLiteralToLongNumber(const std::string& str)
+{
+    if (str.empty())
+        return 0; // for unit-testing...
+    if (str.size()==1)
+        return str[0] & 0xff;
+    if (str[0] != '\\') {
+        // C99 6.4.4.4
+        // The value of an integer character constant containing more than one character (e.g., 'ab'),
+        // or containing a character or escape sequence that does not map to a single-byte execution character,
+        // is implementation-defined.
+        // clang and gcc seem to use the following encoding: 'AB' as (('A' << 8) | 'B')
+        return encodeMultiChar(str);
+    }
+    const std::string& str1 = str.substr(1);
+
+    switch (str1[0]) {
+    case 'x':
+        return toLongNumber("0x" + str.substr(2));
+    case 'u': // 16-bit unicode character
+        return encodeMultiChar(str1);
+    case 'U': // 32-bit unicode character
+        return encodeMultiChar(str1);
+    default: {
+        char c;
+        switch (str.size()-1) {
+        case 1:
+            switch (str[1]) {
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+                return str[1]-'0';
+            case 'a':
+                c = '\a';
+                break;
+            case 'b':
+                c = '\b';
+                break;
+            case 'e':
+                c = 0x1B; // clang, gcc, tcc interpret this as 0x1B - escape character
+                break;
+            case 'f':
+                c = '\f';
+                break;
+            case 'n':
+                c = '\n';
+                break;
+            case 'r':
+                c = '\r';
+                break;
+            case 't':
+                c = '\t';
+                break;
+            case 'v':
+                c = '\v';
+                break;
+            case '\\':
+            case '\?':
+            case '\'':
+            case '\"':
+                c = str[1];
+                break;
+            default:
+                throw InternalError(0, "Internal Error. MathLib::toLongNumber: Unhandled char constant '" + str + "'.");
+            }
+            return c & 0xff;
+        case 2:
+        case 3:
+            if (isOctalDigitString(str1))
+                return toLongNumber("0" + str1);
+            break;
+
+        }
+    }
+    }
+
+    throw InternalError(0, "Internal Error. MathLib::toLongNumber: Unhandled char constant '" + str + "'.");
+}
+
 MathLib::bigint MathLib::toLongNumber(const std::string & str)
 {
     // hexadecimal numbers:
@@ -361,6 +464,10 @@ MathLib::bigint MathLib::toLongNumber(const std::string & str)
             return std::numeric_limits<bigint>::min();
         else
             return static_cast<bigint>(doubleval);
+    }
+
+    if (str[0] == '\'' && str.size() >= 3U && str[str.size()-1U] == '\'') {
+        return characterLiteralToLongNumber(str.substr(1,str.size()-2));
     }
 
     bigint ret = 0;

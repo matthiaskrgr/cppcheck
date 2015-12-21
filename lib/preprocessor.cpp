@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -174,9 +174,9 @@ std::string Preprocessor::read(std::istream &istr, const std::string &filename)
     // The UTF-16 BOM is 0xfffe or 0xfeff.
     unsigned int bom = 0;
     if (istr.peek() >= 0xfe) {
-        bom = ((unsigned int)istr.get() << 8);
+        bom = ((unsigned char)istr.get() << 8);
         if (istr.peek() >= 0xfe)
-            bom |= (unsigned int)istr.get();
+            bom |= (unsigned char)istr.get();
         else
             bom = 0; // allowed boms are 0/0xfffe/0xfeff
     }
@@ -485,7 +485,7 @@ std::string Preprocessor::removeComments(const std::string &str, const std::stri
             errmsg.str("");
             errmsg << "The code contains unhandled characters " << info << ". Checking continues, but do not expect valid results.\n"
                    << "The code contains characters that are unhandled " << info << ". Neither unicode nor extended ASCII are supported. Checking continues, but do not expect valid results.";
-            writeError(filename, lineno, _errorLogger, "unhandledCharacters", errmsg.str());
+            writeError(Path::simplifyPath(filename), lineno, _errorLogger, "unhandledCharacters", errmsg.str());
         }
 
         if (_settings.terminated())
@@ -1444,8 +1444,9 @@ std::list<std::string> Preprocessor::getcfgs(const std::string &filedata, const 
 
             // Get name of define
             std::string defineName(*it2);
-            if (defineName.find_first_of("=(") != std::string::npos)
-                defineName.erase(defineName.find_first_of("=("));
+            const std::string::size_type end = defineName.find_first_of("=(");
+            if (end != std::string::npos)
+                defineName.erase(end);
 
             // Remove ifdef configurations that match the defineName
             while ((pos = cfg.find(defineName, pos)) != std::string::npos) {
@@ -1811,16 +1812,18 @@ std::string Preprocessor::getcode(const std::string &filedata, const std::string
 
             typedef std::set<std::string>::const_iterator It;
             for (It it = _settings.userUndefs.begin(); it != _settings.userUndefs.end(); ++it) {
-                std::string::size_type pos = line.find_first_not_of(' ',8);
-                if (pos != std::string::npos) {
-                    std::string::size_type pos2 = line.find(*it,pos);
-                    if ((pos2 != std::string::npos) &&
-                        ((line.size() == pos2 + (*it).size()) ||
-                         (line[pos2 + (*it).size()] == ' ') ||
-                         (line[pos2 + (*it).size()] == '('))) {
-                        match = false;
-                        break;
-                    }
+                const std::string::size_type symbolPos = line.find_first_not_of(' ', 8);
+                if (symbolPos == std::string::npos)
+                    continue;
+                const std::string::size_type undefMatchPos = line.find(*it, symbolPos);
+                if (undefMatchPos == std::string::npos)
+                    continue;
+                const std::string::size_type behindUndefPos = undefMatchPos + (*it).size();
+                if ((line.size() == behindUndefPos) ||
+                    (line[behindUndefPos] == ' ') ||
+                    (line[behindUndefPos] == '(')) {
+                    match = false;
+                    break;
                 }
             }
 
@@ -1839,8 +1842,9 @@ std::string Preprocessor::getcode(const std::string &filedata, const std::string
                     cfgmap[line.substr(8)] = "";
                 else if (line[pos] == ' ') {
                     std::string value(line.substr(pos + 1));
-                    if (cfgmap.find(value) != cfgmap.end())
-                        value = cfgmap[value];
+                    std::map<std::string, std::string>::const_iterator cfgpos = cfgmap.find(value);
+                    if (cfgpos != cfgmap.end())
+                        value = cfgpos->second;
                     cfgmap[line.substr(8, pos - 8)] = value;
                 } else
                     cfgmap[line.substr(8, pos - 8)] = "";
@@ -1914,7 +1918,7 @@ std::string Preprocessor::getcode(const std::string &filedata, const std::string
         // #error => return ""
         if (match && line.compare(0, 6, "#error") == 0) {
             if (!_settings.userDefines.empty() && !_settings._force) {
-                error(filenames.top(), lineno, line);
+                error(Path::simplifyPath(filenames.top()), lineno, line);
             }
             return "";
         }
@@ -2020,10 +2024,11 @@ static bool openHeader(std::string &filename, const std::list<std::string> &incl
         return true;
     }
 
-    std::list<std::string> includePaths2(includePaths);
-    includePaths2.push_front("");
+    fin.open(filename.c_str());
+    if (fin.is_open())
+        return true;
 
-    for (std::list<std::string>::const_iterator iter = includePaths2.begin(); iter != includePaths2.end(); ++iter) {
+    for (std::list<std::string>::const_iterator iter = includePaths.begin(); iter != includePaths.end(); ++iter) {
         const std::string nativePath(Path::toNativeSeparators(*iter));
         fin.open((nativePath + filename).c_str());
         if (fin.is_open()) {
@@ -3044,7 +3049,7 @@ std::string Preprocessor::expandMacros(const std::string &code, std::string file
                     ++pos;
 
                     if (pos >= line.size()) {
-                        writeError(filename,
+                        writeError(Path::simplifyPath(filename),
                                    linenr + tmpLinenr,
                                    errorLogger,
                                    "noQuoteCharPair",

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -142,7 +142,6 @@ private:
     // Reporting errors..
     void noConstructorError(const Token *tok, const std::string &classname, bool isStruct);
     void noExplicitConstructorError(const Token *tok, const std::string &classname, bool isStruct);
-    void noExplicitCopyMoveConstructorError(const Token *tok, const std::string &classname, bool isStruct);
     //void copyConstructorMallocError(const Token *cctor, const Token *alloc, const std::string& var_name);
     void copyConstructorShallowCopyError(const Token *tok, const std::string& varname);
     void noCopyConstructorError(const Token *tok, const std::string &classname, bool isStruct);
@@ -173,7 +172,6 @@ private:
         CheckClass c(0, settings, errorLogger);
         c.noConstructorError(0, "classname", false);
         c.noExplicitConstructorError(0, "classname", false);
-        c.noExplicitCopyMoveConstructorError(0, "classname", false);
         //c.copyConstructorMallocError(0, 0, "var");
         c.copyConstructorShallowCopyError(0, "var");
         c.noCopyConstructorError(0, "class", false);
@@ -208,7 +206,7 @@ private:
         return "Check the code for each class.\n"
                "- Missing constructors and copy constructors\n"
                //"- Missing allocation of memory in copy constructor\n"
-               "- Constructors which should be explicit are explicit\n"
+               "- Constructors which should be explicit\n"
                "- Are all variables initialized by the constructors?\n"
                "- Are all variables assigned by 'operator='?\n"
                "- Warn if memset, memcpy etc are used on a class\n"
@@ -256,19 +254,19 @@ private:
 
     /**
      * @brief assign a variable in the varlist
-     * @param varname name of variable to mark assigned
+     * @param varid id of variable to mark assigned
      * @param scope pointer to variable Scope
      * @param usage reference to usage vector
      */
-    static void assignVar(const std::string &varname, const Scope *scope, std::vector<Usage> &usage);
+    static void assignVar(unsigned int varid, const Scope *scope, std::vector<Usage> &usage);
 
     /**
      * @brief initialize a variable in the varlist
-     * @param varname name of variable to mark initialized
+     * @param varid id of variable to mark initialized
      * @param scope pointer to variable Scope
      * @param usage reference to usage vector
      */
-    static void initVar(const std::string &varname, const Scope *scope, std::vector<Usage> &usage);
+    static void initVar(unsigned int varid, const Scope *scope, std::vector<Usage> &usage);
 
     /**
      * @brief set all variables in list assigned

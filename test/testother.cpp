@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,8 +49,6 @@ private:
 
         TEST_CASE(nanInArithmeticExpression);
 
-        TEST_CASE(invalidFunctionUsage1);
-
         TEST_CASE(varScope1);
         TEST_CASE(varScope2);
         TEST_CASE(varScope3);
@@ -78,15 +76,6 @@ private:
         TEST_CASE(invalidPointerCast);
 
         TEST_CASE(passedByValue);
-
-        TEST_CASE(mathfunctionCall_fmod);
-        TEST_CASE(mathfunctionCall_sqrt);
-        TEST_CASE(mathfunctionCall_log);
-        TEST_CASE(mathfunctionCall_acos);
-        TEST_CASE(mathfunctionCall_asin);
-        TEST_CASE(mathfunctionCall_pow);
-        TEST_CASE(mathfunctionCall_atan2);
-        TEST_CASE(mathfunctionCall_precision);
 
         TEST_CASE(switchRedundantAssignmentTest);
         TEST_CASE(switchRedundantOperationTest);
@@ -148,6 +137,7 @@ private:
         TEST_CASE(incompleteArrayFill);
 
         TEST_CASE(redundantVarAssignment);
+        TEST_CASE(redundantVarAssignment_7133);
         TEST_CASE(redundantMemWrite);
 
         TEST_CASE(varFuncNullUB);
@@ -161,8 +151,6 @@ private:
         TEST_CASE(checkComparisonFunctionIsAlwaysTrueOrFalse);
 
         TEST_CASE(integerOverflow); // #5895
-
-        TEST_CASE(checkIgnoredReturnValue);
 
         TEST_CASE(redundantPointerOp);
         TEST_CASE(test_isSameExpression);
@@ -597,62 +585,6 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
-    }
-
-    void invalidFunctionUsage(const char code[], bool isCPP = true) {
-        // Clear the error buffer..
-        errout.str("");
-
-        const char cfg[] = "<?xml version=\"1.0\"?>\n"
-                           "<def>\n"
-                           "  <function name=\"memset\"> <arg nr=\"3\"><not-bool/></arg> </function>\n"
-                           "  <function name=\"strtol\"> <arg nr=\"3\"><valid>0,2:36</valid></arg> </function>\n"
-                           "</def>";
-        tinyxml2::XMLDocument xmldoc;
-        xmldoc.Parse(cfg, sizeof(cfg));
-
-        Settings settings;
-        settings.library.load(xmldoc);
-
-        // Tokenize..
-        Tokenizer tokenizer(&settings, this);
-        std::istringstream istr(code);
-        tokenizer.tokenize(istr, isCPP ? "test.cpp" : "test.c");
-
-        // Check for redundant code..
-        CheckOther checkOther(&tokenizer, &settings, this);
-        checkOther.invalidFunctionUsage();
-    }
-
-    void invalidFunctionUsage1() {
-        invalidFunctionUsage("int f() { memset(a,b,sizeof(a)!=12); }");
-        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid memset() argument nr 3. A non-boolean value is required.\n", errout.str());
-
-        invalidFunctionUsage("int f() { memset(a,b,sizeof(a)!=0); }");
-        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid memset() argument nr 3. A non-boolean value is required.\n", errout.str());
-
-        // Ticket #6588 (c mode)
-        invalidFunctionUsage("void record(char* buf, int n) {\n"
-                             "  memset(buf, 0, n < 255);\n"           /* KO */
-                             "  memset(buf, 0, n < 255 ? n : 255);\n" /* OK */
-                             "}", /*isCPP=*/false);
-        ASSERT_EQUALS("[test.c:2]: (error) Invalid memset() argument nr 3. A non-boolean value is required.\n", errout.str());
-
-        // Ticket #6588 (c++ mode)
-        invalidFunctionUsage("void record(char* buf, int n) {\n"
-                             "  memset(buf, 0, n < 255);\n"           /* KO */
-                             "  memset(buf, 0, n < 255 ? n : 255);\n" /* OK */
-                             "}");
-        ASSERT_EQUALS("[test.cpp:2]: (error) Invalid memset() argument nr 3. A non-boolean value is required.\n", errout.str());
-
-        invalidFunctionUsage("int f() { strtol(a,b,sizeof(a)!=12); }");
-        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strtol() argument nr 3. The value is 0 or 1 (comparison result) but the valid values are '0,2:36'.\n", errout.str());
-
-        invalidFunctionUsage("int f() { strtol(a,b,1); }");
-        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strtol() argument nr 3. The value is 1 but the valid values are '0,2:36'.\n", errout.str());
-
-        invalidFunctionUsage("int f() { strtol(a,b,10); }");
-        ASSERT_EQUALS("", errout.str());
     }
 
     void varScope1() {
@@ -1405,367 +1337,6 @@ private:
               "}; ");
         ASSERT_EQUALS("", errout.str());
 
-    }
-
-    void mathfunctionCall_sqrt() {
-        // sqrt, sqrtf, sqrtl
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  sqrt(-1) << std::endl;\n"
-              "    std::cout <<  sqrtf(-1) << std::endl;\n"
-              "    std::cout <<  sqrtl(-1) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1 to sqrt() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value -1 to sqrtf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -1 to sqrtl() leads to implementation-defined result.\n", errout.str());
-
-        // implementation-defined behaviour for "finite values of x<0" only:
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  sqrt(-0.) << std::endl;\n"
-              "    std::cout <<  sqrtf(-0.) << std::endl;\n"
-              "    std::cout <<  sqrtl(-0.) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  sqrt(1) << std::endl;\n"
-              "    std::cout <<  sqrtf(1) << std::endl;\n"
-              "    std::cout <<  sqrtl(1) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void mathfunctionCall_log() {
-        // log,log10,logf,logl,log10f,log10l
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  log(-2) << std::endl;\n"
-              "    std::cout <<  logf(-2) << std::endl;\n"
-              "    std::cout <<  logl(-2) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -2 to log() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value -2 to logf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -2 to logl() leads to implementation-defined result.\n", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  log(-1) << std::endl;\n"
-              "    std::cout <<  logf(-1) << std::endl;\n"
-              "    std::cout <<  logl(-1) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1 to log() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value -1 to logf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -1 to logl() leads to implementation-defined result.\n", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  log(-1.0) << std::endl;\n"
-              "    std::cout <<  logf(-1.0) << std::endl;\n"
-              "    std::cout <<  logl(-1.0) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1.0 to log() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value -1.0 to logf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -1.0 to logl() leads to implementation-defined result.\n", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  log(-0.1) << std::endl;\n"
-              "    std::cout <<  logf(-0.1) << std::endl;\n"
-              "    std::cout <<  logl(-0.1) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -0.1 to log() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value -0.1 to logf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -0.1 to logl() leads to implementation-defined result.\n", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  log(0) << std::endl;\n"
-              "    std::cout <<  logf(0.) << std::endl;\n"
-              "    std::cout <<  logl(0.0) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value 0 to log() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value 0. to logf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value 0.0 to logl() leads to implementation-defined result.\n", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  log(1E-3)    << std::endl;\n"
-              "    std::cout <<  logf(1E-3)   << std::endl;\n"
-              "    std::cout <<  logl(1E-3)   << std::endl;\n"
-              "    std::cout <<  log(1.0E-3)  << std::endl;\n"
-              "    std::cout <<  logf(1.0E-3) << std::endl;\n"
-              "    std::cout <<  logl(1.0E-3) << std::endl;\n"
-              "    std::cout <<  log(1.0E+3)  << std::endl;\n"
-              "    std::cout <<  logf(1.0E+3) << std::endl;\n"
-              "    std::cout <<  logl(1.0E+3) << std::endl;\n"
-              "    std::cout <<  log(2.0)     << std::endl;\n"
-              "    std::cout <<  logf(2.0)    << std::endl;\n"
-              "    std::cout <<  logf(2.0f)   << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::string *log(0);\n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-
-        // #3473 - no warning if "log" is a variable
-        check("Fred::Fred() : log(0) { }");
-        ASSERT_EQUALS("", errout.str());
-
-        // #5748
-        check("void f() { foo.log(0); }");
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void mathfunctionCall_acos() {
-        // acos, acosf, acosl
-        check("void foo()\n"
-              "{\n"
-              " return acos(-1)      \n"
-              "    + acos(0.1)       \n"
-              "    + acos(0.0001)    \n"
-              "    + acos(0.01)      \n"
-              "    + acos(1.0E-1)    \n"
-              "    + acos(-1.0E-1)   \n"
-              "    + acos(+1.0E-1)   \n"
-              "    + acos(0.1E-1)    \n"
-              "    + acos(+0.1E-1)   \n"
-              "    + acos(-0.1E-1)   \n"
-              "    + acosf(-1)       \n"
-              "    + acosf(0.1)      \n"
-              "    + acosf(0.0001)   \n"
-              "    + acosf(0.01)     \n"
-              "    + acosf(1.0E-1)   \n"
-              "    + acosf(-1.0E-1)  \n"
-              "    + acosf(+1.0E-1)  \n"
-              "    + acosf(0.1E-1)   \n"
-              "    + acosf(+0.1E-1)  \n"
-              "    + acosf(-0.1E-1)  \n"
-              "    + acosl(-1)       \n"
-              "    + acosl(0.1)      \n"
-              "    + acosl(0.0001)   \n"
-              "    + acosl(0.01)     \n"
-              "    + acosl(1.0E-1)   \n"
-              "    + acosl(-1.0E-1)  \n"
-              "    + acosl(+1.0E-1)  \n"
-              "    + acosl(0.1E-1)   \n"
-              "    + acosl(+0.1E-1)  \n"
-              "    + acosl(-0.1E-1); \n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  acos(1.1) << std::endl;\n"
-              "    std::cout <<  acosf(1.1) << std::endl;\n"
-              "    std::cout <<  acosl(1.1) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value 1.1 to acos() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value 1.1 to acosf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value 1.1 to acosl() leads to implementation-defined result.\n", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  acos(-1.1) << std::endl;\n"
-              "    std::cout <<  acosf(-1.1) << std::endl;\n"
-              "    std::cout <<  acosl(-1.1) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1.1 to acos() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value -1.1 to acosf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -1.1 to acosl() leads to implementation-defined result.\n", errout.str());
-    }
-
-    void mathfunctionCall_asin() {
-        // asin, asinf, asinl
-        check("void foo()\n"
-              "{\n"
-              " return asin(1)       \n"
-              "    + asin(-1)        \n"
-              "    + asin(0.1)       \n"
-              "    + asin(0.0001)    \n"
-              "    + asin(0.01)      \n"
-              "    + asin(1.0E-1)    \n"
-              "    + asin(-1.0E-1)   \n"
-              "    + asin(+1.0E-1)   \n"
-              "    + asin(0.1E-1)    \n"
-              "    + asin(+0.1E-1)   \n"
-              "    + asin(-0.1E-1)   \n"
-              "    + asinf(1)        \n"
-              "    + asinf(-1)       \n"
-              "    + asinf(0.1)      \n"
-              "    + asinf(0.0001)   \n"
-              "    + asinf(0.01)     \n"
-              "    + asinf(1.0E-1)   \n"
-              "    + asinf(-1.0E-1)  \n"
-              "    + asinf(+1.0E-1)  \n"
-              "    + asinf(0.1E-1)   \n"
-              "    + asinf(+0.1E-1)  \n"
-              "    + asinf(-0.1E-1)  \n"
-              "    + asinl(1)        \n"
-              "    + asinl(-1)       \n"
-              "    + asinl(0.1)      \n"
-              "    + asinl(0.0001)   \n"
-              "    + asinl(0.01)     \n"
-              "    + asinl(1.0E-1)   \n"
-              "    + asinl(-1.0E-1)  \n"
-              "    + asinl(+1.0E-1)  \n"
-              "    + asinl(0.1E-1)   \n"
-              "    + asinl(+0.1E-1)  \n"
-              "    + asinl(-0.1E-1); \n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  asin(1.1) << std::endl;\n"
-              "    std::cout <<  asinf(1.1) << std::endl;\n"
-              "    std::cout <<  asinl(1.1) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value 1.1 to asin() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value 1.1 to asinf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value 1.1 to asinl() leads to implementation-defined result.\n", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  asin(-1.1) << std::endl;\n"
-              "    std::cout <<  asinf(-1.1) << std::endl;\n"
-              "    std::cout <<  asinl(-1.1) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1.1 to asin() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value -1.1 to asinf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -1.1 to asinl() leads to implementation-defined result.\n", errout.str());
-    }
-
-    void mathfunctionCall_pow() {
-        // pow, powf, powl
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  pow(0,-10) << std::endl;\n"
-              "    std::cout <<  powf(0,-10) << std::endl;\n"
-              "    std::cout <<  powl(0,-10) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing values 0 and -10 to pow() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing values 0 and -10 to powf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing values 0 and -10 to powl() leads to implementation-defined result.\n", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  pow(0,10) << std::endl;\n"
-              "    std::cout <<  powf(0,10) << std::endl;\n"
-              "    std::cout <<  powl(0,10) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void mathfunctionCall_atan2() {
-        // atan2
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  atan2(1,1)         ;\n"
-              "    std::cout <<  atan2(-1,-1)       ;\n"
-              "    std::cout <<  atan2(0.1,1)       ;\n"
-              "    std::cout <<  atan2(0.0001,100)  ;\n"
-              "    std::cout <<  atan2(0.0,1e-1)    ;\n"
-              "    std::cout <<  atan2(1.0E-1,-3)   ;\n"
-              "    std::cout <<  atan2(-1.0E-1,+2)  ;\n"
-              "    std::cout <<  atan2(+1.0E-1,0)   ;\n"
-              "    std::cout <<  atan2(0.1E-1,3)    ;\n"
-              "    std::cout <<  atan2(+0.1E-1,1)   ;\n"
-              "    std::cout <<  atan2(-0.1E-1,8)   ;\n"
-              "    std::cout <<  atan2f(1,1)        ;\n"
-              "    std::cout <<  atan2f(-1,-1)      ;\n"
-              "    std::cout <<  atan2f(0.1,1)      ;\n"
-              "    std::cout <<  atan2f(0.0001,100) ;\n"
-              "    std::cout <<  atan2f(0.0,1e-1)   ;\n"
-              "    std::cout <<  atan2f(1.0E-1,-3)  ;\n"
-              "    std::cout <<  atan2f(-1.0E-1,+2) ;\n"
-              "    std::cout <<  atan2f(+1.0E-1,0)  ;\n"
-              "    std::cout <<  atan2f(0.1E-1,3)   ;\n"
-              "    std::cout <<  atan2f(+0.1E-1,1)  ;\n"
-              "    std::cout <<  atan2f(-0.1E-1,8)  ;\n"
-              "    std::cout <<  atan2l(1,1)        ;\n"
-              "    std::cout <<  atan2l(-1,-1)      ;\n"
-              "    std::cout <<  atan2l(0.1,1)      ;\n"
-              "    std::cout <<  atan2l(0.0001,100) ;\n"
-              "    std::cout <<  atan2l(0.0,1e-1)   ;\n"
-              "    std::cout <<  atan2l(1.0E-1,-3)  ;\n"
-              "    std::cout <<  atan2l(-1.0E-1,+2) ;\n"
-              "    std::cout <<  atan2l(+1.0E-1,0)  ;\n"
-              "    std::cout <<  atan2l(0.1E-1,3)   ;\n"
-              "    std::cout <<  atan2l(+0.1E-1,1)  ;\n"
-              "    std::cout <<  atan2l(-0.1E-1,8)  ;\n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  atan2(0,0) << std::endl;\n"
-              "    std::cout <<  atan2f(0,0) << std::endl;\n"
-              "    std::cout <<  atan2l(0,0) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing values 0 and 0 to atan2() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing values 0 and 0 to atan2f() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing values 0 and 0 to atan2l() leads to implementation-defined result.\n", errout.str());
-    }
-
-    void mathfunctionCall_fmod() {
-        // fmod, fmodl, fmodf
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  fmod(1.0,0) << std::endl;\n"
-              "    std::cout <<  fmodf(1.0,0) << std::endl;\n"
-              "    std::cout <<  fmodl(1.0,0) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing values 1.0 and 0 to fmod() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing values 1.0 and 0 to fmodf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing values 1.0 and 0 to fmodl() leads to implementation-defined result.\n", errout.str());
-
-        check("void foo()\n"
-              "{\n"
-              "    std::cout <<  fmod(1.0,1) << std::endl;\n"
-              "    std::cout <<  fmodf(1.0,1) << std::endl;\n"
-              "    std::cout <<  fmodl(1.0,1) << std::endl;\n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-    }
-
-    void mathfunctionCall_precision() {
-        check("void foo() {\n"
-              "    print(exp(x) - 1);\n"
-              "    print(log(1 + x));\n"
-              "    print(1 - erf(x));\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:2]: (style) Expression 'exp(x) - 1' can be replaced by 'expm1(x)' to avoid loss of precision.\n"
-                      "[test.cpp:3]: (style) Expression 'log(1 + x)' can be replaced by 'log1p(x)' to avoid loss of precision.\n"
-                      "[test.cpp:4]: (style) Expression '1 - erf(x)' can be replaced by 'erfc(x)' to avoid loss of precision.\n", errout.str());
-
-        check("void foo() {\n"
-              "    print(exp(x) - 1.0);\n"
-              "    print(log(1.0 + x));\n"
-              "    print(1.0 - erf(x));\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:2]: (style) Expression 'exp(x) - 1' can be replaced by 'expm1(x)' to avoid loss of precision.\n"
-                      "[test.cpp:3]: (style) Expression 'log(1 + x)' can be replaced by 'log1p(x)' to avoid loss of precision.\n"
-                      "[test.cpp:4]: (style) Expression '1 - erf(x)' can be replaced by 'erfc(x)' to avoid loss of precision.\n", errout.str());
-
-        check("void foo() {\n"
-              "    print(exp(3 + x*f(a)) - 1);\n"
-              "    print(log(x*4 + 1));\n"
-              "    print(1 - erf(34*x + f(x) - c));\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:2]: (style) Expression 'exp(x) - 1' can be replaced by 'expm1(x)' to avoid loss of precision.\n"
-                      "[test.cpp:3]: (style) Expression 'log(1 + x)' can be replaced by 'log1p(x)' to avoid loss of precision.\n"
-                      "[test.cpp:4]: (style) Expression '1 - erf(x)' can be replaced by 'erfc(x)' to avoid loss of precision.\n", errout.str());
-
-        check("void foo() {\n"
-              "    print(2*exp(x) - 1);\n"
-              "    print(1 - erf(x)/2.0);\n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
     }
 
     void switchRedundantAssignmentTest() {
@@ -3704,6 +3275,16 @@ private:
               "    memset(p, sizeof(p), i);\n"
               "}\n");
         ASSERT_EQUALS("", errout.str());
+
+        // #6269 false positives in case of overloaded standard library functions
+        check("class c {\n"
+              "  void memset( int i );\n"
+              "  void f( void )   {\n"
+              "     memset( 0 );\n"
+              "  }\n"
+              "};");
+        ASSERT_EQUALS("", errout.str());
+
     }
 
     void memsetInvalid2ndParam() {
@@ -5203,6 +4784,14 @@ private:
 
         check("x = y ? z << $-1 : 0;\n");
         ASSERT_EQUALS("", errout.str());
+
+        // Negative LHS
+        check("const int x = -1 >> 2;");
+        ASSERT_EQUALS("[test.cpp:1]: (error) Shifting a negative value is undefined behaviour\n", errout.str());
+
+        // #6383 - unsigned type
+        check("const int x = (unsigned int)(-1) >> 2;");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void incompleteArrayFill() {
@@ -5417,7 +5006,7 @@ private:
         check("class C {\n"
               "    int x;\n"
               "    void g() { return x*x; }\n"
-              "    void f();\n"
+              "    void f(Foo z);\n"
               "};\n"
               "\n"
               "void C::f(Foo z) {\n"
@@ -5568,6 +5157,101 @@ private:
               "    i = 1;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        // #6555
+        check("void foo() {\n"
+              "    char *p = 0;\n"
+              "    try {\n"
+              "        p = fred();\n"
+              "        p = wilma();\n"
+              "    }\n"
+              "    catch (...) {\n"
+              "        barney(p);\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n"
+              "    char *p = 0;\n"
+              "    try {\n"
+              "        p = fred();\n"
+              "        p = wilma();\n"
+              "    }\n"
+              "    catch (...) {\n"
+              "        barney(x);\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4] -> [test.cpp:5]: (performance) Variable 'p' is reassigned a value before the old one has been used.\n"
+                      "[test.cpp:2]: (style) The scope of the variable 'p' can be reduced.\n", errout.str());
+
+        check("void foo() {\n"
+              "    char *p = 0;\n"
+              "    try {\n"
+              "        if(z) {\n"
+              "            p = fred();\n"
+              "            p = wilma();\n"
+              "        }\n"
+              "    }\n"
+              "    catch (...) {\n"
+              "        barney(p);\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // Member variable pointers
+        check("void podMemPtrs() {\n"
+              "    int POD::*memptr;\n"
+              "    memptr = &POD::a;\n"
+              "    memptr = &POD::b;\n"
+              "    if (memptr)\n"
+              "        memptr = 0;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (performance) Variable 'memptr' is reassigned a value before the old one has been used.\n", errout.str());
+    }
+
+    void redundantVarAssignment_7133() {
+        // #7133
+        check("sal_Int32 impl_Export() {\n"
+              "   try {\n"
+              "        try  {\n"
+              "          uno::Sequence< uno::Any > aArgs(2);\n"
+              "          beans::NamedValue aValue;\n"
+              "          aValue.Name = \"DocumentHandler\";\n"
+              "          aValue.Value <<= xDocHandler;\n"
+              "          aArgs[0] <<= aValue;\n"
+              "          aValue.Name = \"Model\";\n"
+              "          aValue.Value <<= xDocumentComp;\n"
+              "          aArgs[1] <<= aValue;\n"
+              "        }\n"
+              "        catch (const uno::Exception&) {\n"
+              "        }\n"
+              "   }\n"
+              "   catch (const uno::Exception&)  {\n"
+              "   }\n"
+              "}", "test.cpp", false, true);
+        TODO_ASSERT_EQUALS("",
+                           "[test.cpp:6] -> [test.cpp:9]: (performance) Variable 'Name' is reassigned a value before the old one has been used.\n",
+                           errout.str());
+
+        check("void ConvertBitmapData(sal_uInt16 nDestBits) {\n"
+              "BitmapBuffer aSrcBuf;\n"
+              "    aSrcBuf.mnBitCount = nSrcBits;\n"
+              "    BitmapBuffer aDstBuf;\n"
+              "    aSrcBuf.mnBitCount = nDestBits;\n"
+              "    bConverted = ::ImplFastBitmapConversion( aDstBuf, aSrcBuf, aTwoRects );\n"
+              "}", "test.c");
+        ASSERT_EQUALS("[test.c:3] -> [test.c:5]: (performance) Variable 'mnBitCount' is reassigned a value before the old one has been used.\n", errout.str());
+        check("void ConvertBitmapData(sal_uInt16 nDestBits) {\n"
+              "BitmapBuffer aSrcBuf;\n"
+              "    aSrcBuf.mnBitCount = nSrcBits;\n"
+              "    BitmapBuffer aDstBuf;\n"
+              "    aSrcBuf.mnBitCount = nDestBits;\n"
+              "    bConverted = ::ImplFastBitmapConversion( aDstBuf, aSrcBuf, aTwoRects );\n"
+              "}");
+        TODO_ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:5]: (performance, inconclusive) Variable 'mnBitCount' is reassigned a value before the old one has been used.\n",
+                           "[test.cpp:3] -> [test.cpp:5]: (performance) Variable 'mnBitCount' is reassigned a value before the old one has been used.\n",
+                           errout.str());
+
     }
 
     void redundantMemWrite() {
@@ -6039,97 +5723,6 @@ private:
 #endif
     }
 
-    void checkIgnoredReturnValue() {
-        Settings settings;
-        const char xmldata[] = "<?xml version=\"1.0\"?>\n"
-                               "<def>\n"
-                               "  <function name=\"mystrcmp,foo::mystrcmp\">\n"
-                               "    <use-retval/>\n"
-                               "    <arg nr=\"1\"/>\n"
-                               "    <arg nr=\"2\"/>\n"
-                               "  </function>\n"
-                               "</def>";
-        tinyxml2::XMLDocument doc;
-        doc.Parse(xmldata, sizeof(xmldata));
-        settings.library.load(doc);
-
-        check("void foo() {\n"
-              "  mystrcmp(a, b);\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Return value of function mystrcmp() is not used.\n", errout.str());
-
-        check("void foo() {\n"
-              "  foo::mystrcmp(a, b);\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Return value of function mystrcmp() is not used.\n", errout.str());
-
-        check("bool mystrcmp(char* a, char* b);\n" // cppcheck sees a custom strcmp definition, but it returns a value. Assume it is the one specified in the library.
-              "void foo() {\n"
-              "    mystrcmp(a, b);\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Return value of function mystrcmp() is not used.\n", errout.str());
-
-        check("void mystrcmp(char* a, char* b);\n" // cppcheck sees a custom strcmp definition which returns void!
-              "void foo() {\n"
-              "    mystrcmp(a, b);\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("", errout.str());
-
-        check("void foo() {\n"
-              "    class mystrcmp { mystrcmp() {} };\n" // strcmp is a constructor definition here
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("", errout.str());
-
-        check("void foo() {\n"
-              "    return mystrcmp(a, b);\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("", errout.str());
-
-        check("void foo() {\n"
-              "    return foo::mystrcmp(a, b);\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("", errout.str());
-
-        check("void foo() {\n"
-              "    if(mystrcmp(a, b));\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("", errout.str());
-
-        check("void foo() {\n"
-              "    bool b = mystrcmp(a, b);\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("", errout.str());
-
-        // #6194
-        check("void foo() {\n"
-              "    MyStrCmp mystrcmp(x, y);\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("", errout.str());
-
-        // #6197
-        check("void foo() {\n"
-              "    abc::def.mystrcmp(a,b);\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("", errout.str());
-
-        // #6233
-        check("int main() {\n"
-              "    auto lambda = [](double value) {\n"
-              "        double rounded = floor(value + 0.5);\n"
-              "        printf(\"Rounded value = %f\\n\", rounded);\n"
-              "    };\n"
-              "    lambda(13.3);\n"
-              "    return 0;\n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-
-        // #6669
-        check("void foo(size_t size) {\n"
-              "   void * res{malloc(size)};\n"
-              "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("", errout.str());
-    }
-
     void redundantPointerOp() {
         check("int *f(int *x) {\n"
               "    return &*x;\n"
@@ -6392,6 +5985,77 @@ private:
             "        destroy;\n"
             "}\n");
         ASSERT_EQUALS("", errout.str());
+
+        checkInterlockedDecrement(
+            "int f() {\n"
+            "    int counter = 0;\n"
+            "    if (InterlockedDecrement(&counter) == 0) {\n"
+            "        destroy();\n"
+            "        return 0;\n"
+            "    } else {\n"
+            "        return counter;\n"
+            "    }\n"
+            "}\n");
+        ASSERT_EQUALS("[test.cpp:7]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
+
+        checkInterlockedDecrement(
+            "int f() {\n"
+            "    int counter = 0;\n"
+            "    if (::InterlockedDecrement(&counter) == 0) {\n"
+            "        destroy();\n"
+            "        return 0;\n"
+            "    } else {\n"
+            "        return counter;\n"
+            "    }\n"
+            "}\n");
+        ASSERT_EQUALS("[test.cpp:7]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
+
+
+        checkInterlockedDecrement(
+            "int f() {\n"
+            "    int counter = 0;\n"
+            "    if (InterlockedDecrement(&counter) == 0) {\n"
+            "        destroy();\n"
+            "        return 0;\n"
+            "    }\n"
+            "    return counter;\n"
+            "}\n");
+        ASSERT_EQUALS("[test.cpp:7]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
+
+        checkInterlockedDecrement(
+            "int f() {\n"
+            "    int counter = 0;\n"
+            "    if (::InterlockedDecrement(&counter) == 0) {\n"
+            "        destroy();\n"
+            "        return 0;\n"
+            "    }\n"
+            "    return counter;\n"
+            "}\n");
+        ASSERT_EQUALS("[test.cpp:7]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
+
+        checkInterlockedDecrement(
+            "int f() {\n"
+            "    int counter = 0;\n"
+            "    if (InterlockedDecrement(&counter) == 0) {\n"
+            "        destroy();\n"
+            "        return 0;\n"
+            "    } else\n"
+            "        return counter;\n"
+            "    \n"
+            "}\n");
+        ASSERT_EQUALS("[test.cpp:7]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
+
+        checkInterlockedDecrement(
+            "int f() {\n"
+            "    int counter = 0;\n"
+            "    if (::InterlockedDecrement(&counter) == 0) {\n"
+            "        destroy();\n"
+            "        return 0;\n"
+            "    } else\n"
+            "        return counter;\n"
+            "    \n"
+            "}\n");
+        ASSERT_EQUALS("[test.cpp:7]: (error) Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.\n", errout.str());
     }
 
     void testUnusedLabel() {

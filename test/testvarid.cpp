@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,7 +64,7 @@ private:
         TEST_CASE(varid32);   // ticket #2835 (segmentation fault)
         TEST_CASE(varid33);   // ticket #2875 (segmentation fault)
         TEST_CASE(varid34);   // ticket #2825
-        TEST_CASE(varid35);   // ticket #2937
+        TEST_CASE(varid35);   // function declaration inside function body
         TEST_CASE(varid36);   // ticket #2980 (segmentation fault)
         TEST_CASE(varid37);   // ticket #3092 (varid for 'Bar bar(*this);')
         TEST_CASE(varid38);   // ticket #3272 (varid for 'FOO class C;')
@@ -88,6 +88,7 @@ private:
         TEST_CASE(varid56); // function with a throw()
         TEST_CASE(varid57); // #6636: new scope by {}
         TEST_CASE(varid58); // #6638: for loop in for condition
+        TEST_CASE(varid59); // #6696
         TEST_CASE(varid_cpp_keywords_in_c_code);
         TEST_CASE(varid_cpp_keywords_in_c_code2); // #5373: varid=0 for argument called "delete"
         TEST_CASE(varidFunctionCall1);
@@ -117,6 +118,8 @@ private:
         TEST_CASE(varid_in_class15);    // #5533 - functions
         TEST_CASE(varid_in_class16);
         TEST_CASE(varid_in_class17);    // #6056 - no varid for member functions
+        TEST_CASE(varid_in_class18);    // #7127
+        TEST_CASE(varid_in_class19);
         TEST_CASE(varid_initList);
         TEST_CASE(varid_initListWithBaseTemplate);
         TEST_CASE(varid_operator);
@@ -757,7 +760,8 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
-    void varid35() { // ticket #2937
+    void varid35() { // function declaration inside function body
+        // #2937
         const char code[] ="int foo() {\n"
                            "    int f(x);\n"
                            "    return f;\n"
@@ -768,6 +772,18 @@ private:
                                 "3: return f@1 ;\n"
                                 "4: }\n";
         ASSERT_EQUALS(expected, tokenize(code));
+
+        // #4627
+        const char code2[] = "void f() {\n"
+                             "  int  *p;\n"
+                             "  void bar(int *p);\n"
+                             "}";
+        const char expected2[] = "\n\n##file 0\n"
+                                 "1: void f ( ) {\n"
+                                 "2: int * p@1 ;\n"
+                                 "3: void bar ( int * p ) ;\n"
+                                 "4: }\n";
+        ASSERT_EQUALS(expected2, tokenize(code2));
     }
 
     void varid36() { // ticket #2980 (segmentation fault)
@@ -1056,6 +1072,24 @@ private:
                                  "6: }\n"
                                  "7: }\n";
         ASSERT_EQUALS(expected1, tokenize(code1, false, "test.cpp"));
+    }
+
+    void varid59() { // #6696
+        const char code[] = "class DLLSYM B;\n"
+                            "struct B {\n"
+                            "    ~B() {}\n"
+                            "};";
+        const char expected[] = "\n\n##file 0\n"
+                                "1: class DLLSYM B@1 ;\n" // In this line, we cannot really do better...
+                                "2: struct B {\n"
+                                "3: ~ B@1 ( ) { }\n" // ...but here we could
+                                "4: } ;\n";
+        const char wanted[] = "\n\n##file 0\n"
+                              "1: class DLLSYM B@1 ;\n"
+                              "2: struct B {\n"
+                              "3: ~ B ( ) { }\n"
+                              "4: } ;\n";;
+        TODO_ASSERT_EQUALS(wanted, expected, tokenize(code, false, "test.cpp"));
     }
 
     void varid_cpp_keywords_in_c_code() {
@@ -1646,15 +1680,39 @@ private:
     }
 
     void varid_in_class16() { // Set varId for inline member functions
-        const char code[] = "class Fred {\n"
-                            "    int x;\n"
-                            "    void foo(int x) { this->x = x; }\n"
-                            "};\n";
-        ASSERT_EQUALS("\n\n##file 0\n"
-                      "1: class Fred {\n"
-                      "2: int x@1 ;\n"
-                      "3: void foo ( int x@2 ) { this . x@1 = x@2 ; }\n"
-                      "4: } ;\n", tokenize(code, false, "test.cpp"));
+        {
+            const char code[] = "class Fred {\n"
+                                "    int x;\n"
+                                "    void foo(int x) { this->x = x; }\n"
+                                "};\n";
+            ASSERT_EQUALS("\n\n##file 0\n"
+                          "1: class Fred {\n"
+                          "2: int x@1 ;\n"
+                          "3: void foo ( int x@2 ) { this . x@1 = x@2 ; }\n"
+                          "4: } ;\n", tokenize(code, false, "test.cpp"));
+        }
+        {
+            const char code[] = "class Fred {\n"
+                                "    void foo(int x) { this->x = x; }\n"
+                                "    int x;\n"
+                                "};\n";
+            ASSERT_EQUALS("\n\n##file 0\n"
+                          "1: class Fred {\n"
+                          "2: void foo ( int x@1 ) { this . x@2 = x@1 ; }\n"
+                          "3: int x@2 ;\n"
+                          "4: } ;\n", tokenize(code, false, "test.cpp"));
+        }
+        {
+            const char code[] = "class Fred {\n"
+                                "    void foo(int x) { (*this).x = x; }\n"
+                                "    int x;\n"
+                                "};\n";
+            ASSERT_EQUALS("\n\n##file 0\n"
+                          "1: class Fred {\n"
+                          "2: void foo ( int x@1 ) { ( * this ) . x@2 = x@1 ; }\n"
+                          "3: int x@2 ;\n"
+                          "4: } ;\n", tokenize(code, false, "test.cpp"));
+        }
     }
 
     void varid_in_class17() { // #6056 - Set no varid for member functions
@@ -1695,6 +1753,48 @@ private:
                       "3: SomeType someVar2 ( j , j ) ;\n" // This one could be a function
                       "4: SomeType someVar3@3 ( j , 1 ) ;\n"
                       "5: SomeType someVar4@4 ( new bar ) ;\n", tokenize(code2, false, "test.cpp"));
+    }
+
+    void varid_in_class18() {
+        const char code[] = "class A {\n"
+                            "    class B;\n"
+                            "};\n"
+                            "class A::B {\n"
+                            "    B();\n"
+                            "    int* i;\n"
+                            "};\n"
+                            "A::B::B() :\n"
+                            "    i(0)\n"
+                            "{}";
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class A {\n"
+                      "2: class B ;\n"
+                      "3: } ;\n"
+                      "4: class A :: B {\n"
+                      "5: B ( ) ;\n"
+                      "6: int * i@1 ;\n"
+                      "7: } ;\n"
+                      "8: A :: B :: B ( ) :\n"
+                      "9: i@1 ( 0 )\n"
+                      "10: { }\n", tokenize(code, false, "test.cpp"));
+    }
+
+    void varid_in_class19() {
+        const char code[] = "class Fred {\n"
+                            "    char *str1;\n"
+                            "    ~Fred();\n"
+                            "};\n"
+                            "Fred::~Fred() {\n"
+                            "    free(str1);\n"
+                            "}";
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class Fred {\n"
+                      "2: char * str1@1 ;\n"
+                      "3: ~ Fred ( ) ;\n"
+                      "4: } ;\n"
+                      "5: Fred :: ~ Fred ( ) {\n"
+                      "6: free ( str1@1 ) ;\n"
+                      "7: }\n", tokenize(code, false, "test.cpp"));
     }
 
     void varid_initList() {
@@ -1766,8 +1866,19 @@ private:
                       "4: } ;\n",
                       tokenize(code6));
 
+        const char code7[] = "class Foo : public Bar {\n"
+                             "  explicit Foo(int i) : Bar(mi = i) { }\n"
+                             "  int mi;\n"
+                             "};";
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class Foo : public Bar {\n"
+                      "2: explicit Foo ( int i@1 ) : Bar ( mi@2 = i@1 ) { }\n"
+                      "3: int mi@2 ;\n"
+                      "4: } ;\n",
+                      tokenize(code7));
+
         // #6520
-        const char code7[] = "class A {\n"
+        const char code8[] = "class A {\n"
                              "  A(int x) : y(a?0:1), x(x) {}\n"
                              "  int x, y;\n"
                              "};";
@@ -1776,7 +1887,23 @@ private:
                       "2: A ( int x@1 ) : y@3 ( a ? 0 : 1 ) , x@2 ( x@1 ) { }\n"
                       "3: int x@2 ; int y@3 ;\n"
                       "4: } ;\n",
-                      tokenize(code7));
+                      tokenize(code8));
+
+        // #7123
+        const char code9[] = "class A {\n"
+                             "  double *work;\n"
+                             "  A(const Matrix &m) throw (e);\n"
+                             "};\n"
+                             "A::A(const Matrix &m) throw (e) : work(0)\n"
+                             "{}";
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class A {\n"
+                      "2: double * work@1 ;\n"
+                      "3: A ( const Matrix & m@2 ) throw ( e ) ;\n"
+                      "4: } ;\n"
+                      "5: A :: A ( const Matrix & m@3 ) throw ( e ) : work@1 ( 0 )\n"
+                      "6: { }\n",
+                      tokenize(code9));
     }
 
     void varid_initListWithBaseTemplate() {
@@ -1824,6 +1951,23 @@ private:
                       "3: A ( int x@2 ) : x@1 ( x@2 ) { }\n"
                       "4: } ;\n",
                       tokenize(code4));
+
+        const char code5[] = "class BCLass : public Ticket<void> {\n"
+                             "  BCLass();\n"
+                             "  PClass* member;\n"
+                             "};\n"
+                             "BCLass::BCLass() : Ticket<void>() {\n"
+                             "  member = 0;\n"
+                             "}";
+        ASSERT_EQUALS("\n\n##file 0\n"
+                      "1: class BCLass : public Ticket < void > {\n"
+                      "2: BCLass ( ) ;\n"
+                      "3: PClass * member@1 ;\n"
+                      "4: } ;\n"
+                      "5: BCLass :: BCLass ( ) : Ticket < void > ( ) {\n"
+                      "6: member@1 = 0 ;\n"
+                      "7: }\n",
+                      tokenize(code5));
     }
 
     void varid_operator() {

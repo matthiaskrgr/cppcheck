@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -165,8 +165,10 @@ private:
 
     void valueFlowNumber() {
         ASSERT_EQUALS(123, valueOfTok("x=123;",   "123").intvalue);
-        ASSERT_EQUALS(0,   valueOfTok("x=false;", "false").intvalue);
-        ASSERT_EQUALS(1,   valueOfTok("x=true;",  "true").intvalue);
+        ASSERT_EQUALS(0, valueOfTok("x=false;", "false").intvalue);
+        ASSERT_EQUALS(1, valueOfTok("x=true;",  "true").intvalue);
+        ASSERT_EQUALS((int)('a'), valueOfTok("x='a';",  "'a'").intvalue);
+        ASSERT_EQUALS((int)('\n'), valueOfTok("x='\\n';", "'\\n'").intvalue);
     }
 
     void valueFlowString() {
@@ -207,6 +209,13 @@ private:
                 "  *x = 0;\n"  // <- x can point at i
                 "}";
         ASSERT_EQUALS(true, testValueOfX(code, 4, "& i"));
+
+        code  = "void f() {\n"
+                "  struct X *x;\n"
+                "  x = &x[1];\n"
+                "}";
+        ASSERT_EQUALS(true, tokenValues(code, "&").empty());
+        ASSERT_EQUALS(true, tokenValues(code, "x [").empty());
     }
 
     void valueFlowArrayElement() {
@@ -236,6 +245,18 @@ private:
                "  *x = 0;\n"     // .. => x value is a
                "}";
         ASSERT_EQUALS(true, testValueOfX(code, 4, "a"));
+
+        code  = "char f() {\n"
+                "    const char *x = \"abcd\";\n"
+                "    return x[0];\n"
+                "}";
+        ASSERT_EQUALS((int)('a'), valueOfTok(code, "[").intvalue);
+
+        code  = "char f() {\n"
+                "    const char *x = \"\";\n"
+                "    return x[0];\n"
+                "}";
+        ASSERT_EQUALS(0, valueOfTok(code, "[").intvalue);
     }
 
     void valueFlowCalculations() {
@@ -783,6 +804,37 @@ private:
                "    dosomething(q);\n"
                "}\n";
         ASSERT_EQUALS(false, testValueOfX(code, 4U, 0));
+
+        // ?:
+        code = "void f() {\n"
+               "    int x = 8;\n"
+               "    a = ((x > 10) ?\n"
+               "        x : 0);\n" // <- x is not 8
+               "}";
+        ASSERT_EQUALS(false, testValueOfX(code, 4U, 8));
+
+        code = "void f() {\n" // #6973
+               "    char *x = \"\";\n"
+               "    a = ((x[0] == 'U') ?\n"
+               "        x[1] : 0);\n" // <- x is not ""
+               "}";
+        ASSERT_EQUALS(false, testValueOfX(code, 4U, "\"\""));
+
+        code = "void f() {\n" // #6973
+               "    char *x = getenv (\"LC_ALL\");\n"
+               "    if (x == NULL)\n"
+               "        x = \"\";\n"
+               "\n"
+               "    if ( (x[0] == 'U') &&\n"  // x can be ""
+               "         (x[1] ?\n"           // x can't be ""
+               "          x[3] :\n"           // x can't be ""
+               "          x[2] ))\n"          // x can't be ""
+               "    {}\n"
+               "}\n";
+        ASSERT_EQUALS(true, testValueOfX(code, 6U, "\"\""));
+        ASSERT_EQUALS(false, testValueOfX(code, 7U, "\"\""));
+        ASSERT_EQUALS(false, testValueOfX(code, 8U, "\"\""));
+        ASSERT_EQUALS(false, testValueOfX(code, 9U, "\"\""));
 
         // if/else
         code = "void f() {\n"
@@ -1694,6 +1746,15 @@ private:
 
         code = "void f() {\n"
                "  int x = 0;\n"
+               "  do {\n"
+               "    if (x < 0) {}\n"
+               "    fred.dostuff(x);\n"
+               "  } while (abc);\n"
+               "}\n";
+        ASSERT(isNotKnownValues(code, "<"));
+
+        code = "void f() {\n"
+               "  int x = 0;\n"
                "  if (y) { dostuff(x); }\n"
                "  if (!x) {}\n"
                "}\n";
@@ -1726,6 +1787,17 @@ private:
                "    break;\n"
                "  }\n"
                "  if (!x) {}\n"  // <- possible value
+               "}";
+        ASSERT(isNotKnownValues(code, "!"));
+
+        code = "void f() {\n" // #7049
+               "  int x = 0;\n"
+               "  switch (a) {\n"
+               "  case 1:\n"
+               "    x = 1;\n"
+               "  case 2:\n"
+               "    if (!x) {}\n" // <- possible value
+               "  }\n"
                "}";
         ASSERT(isNotKnownValues(code, "!"));
 

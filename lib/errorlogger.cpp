@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@
 #include <cassert>
 #include <iomanip>
 #include <sstream>
-#include <vector>
+#include <array>
 
 InternalError::InternalError(const Token *tok, const std::string &errorMsg, Type type) :
     token(tok), errorMessage(errorMsg)
@@ -131,7 +131,8 @@ bool ErrorLogger::ErrorMessage::deserialize(const std::string &data)
     _inconclusive = false;
     _callStack.clear();
     std::istringstream iss(data);
-    std::vector<std::string> results;
+    std::array<std::string, 5> results;
+    std::size_t elem = 0;
     while (iss.good()) {
         unsigned int len = 0;
         if (!(iss >> len))
@@ -149,12 +150,12 @@ bool ErrorLogger::ErrorMessage::deserialize(const std::string &data)
             continue;
         }
 
-        results.push_back(temp);
-        if (results.size() == 5)
+        results[elem++] = temp;
+        if (elem == 5)
             break;
     }
 
-    if (results.size() != 5)
+    if (elem != 5)
         throw InternalError(0, "Internal Error: Deserialization of error message failed");
 
     _id = results[0];
@@ -419,4 +420,37 @@ std::string ErrorLogger::ErrorMessage::FileLocation::stringify() const
         oss << ':' << line;
     oss << ']';
     return oss.str();
+}
+
+std::string ErrorLogger::toxml(const std::string &str)
+{
+    std::ostringstream xml;
+    const bool isstring(str[0] == '\"');
+    for (std::size_t i = 0U; i < str.length(); i++) {
+        char c = str[i];
+        switch (c) {
+        case '<':
+            xml << "&lt;";
+            break;
+        case '>':
+            xml << "&gt;";
+            break;
+        case '&':
+            xml << "&amp;";
+            break;
+        case '\"':
+            xml << "&quot;";
+            break;
+        case '\0':
+            xml << "\\0";
+            break;
+        default:
+            if (!isstring || (c >= ' ' && c <= 'z'))
+                xml << c;
+            else
+                xml << 'x';
+            break;
+        }
+    }
+    return xml.str();
 }

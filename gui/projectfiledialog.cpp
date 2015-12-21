@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,12 +53,12 @@ ProjectFileDialog::ProjectFileDialog(const QString &path, QWidget *parent)
     if (!datadir.isEmpty())
         searchPaths << datadir << datadir + "/cfg";
     QStringList libs;
-    foreach(const QString sp, searchPaths) {
+    foreach (const QString sp, searchPaths) {
         QDir dir(sp);
         dir.setSorting(QDir::Name);
         dir.setNameFilters(QStringList("*.cfg"));
         dir.setFilter(QDir::Files | QDir::NoDotAndDotDot);
-        foreach(QFileInfo item, dir.entryInfoList()) {
+        foreach (QFileInfo item, dir.entryInfoList()) {
             QString library = item.fileName();
             {
                 Library lib;
@@ -75,7 +75,7 @@ ProjectFileDialog::ProjectFileDialog(const QString &path, QWidget *parent)
         }
     }
     qSort(libs);
-    foreach(const QString library, libs) {
+    foreach (const QString library, libs) {
         QCheckBox *checkbox = new QCheckBox(this);
         checkbox->setText(library);
         mUI.librariesLayout->addWidget(checkbox);
@@ -208,7 +208,7 @@ QStringList ProjectFileDialog::GetExcludedPaths() const
 QStringList ProjectFileDialog::GetLibraries() const
 {
     QStringList libraries;
-    foreach(const QCheckBox *checkbox, mLibraryCheckboxes) {
+    foreach (const QCheckBox *checkbox, mLibraryCheckboxes) {
         if (checkbox->isChecked())
             libraries << checkbox->text();
     }
@@ -234,7 +234,7 @@ void ProjectFileDialog::SetRootPath(const QString &root)
 
 void ProjectFileDialog::SetIncludepaths(const QStringList &includes)
 {
-    foreach(QString dir, includes) {
+    foreach (QString dir, includes) {
         AddIncludeDir(dir);
     }
 }
@@ -243,7 +243,7 @@ void ProjectFileDialog::SetDefines(const QStringList &defines)
 {
     QString definestr;
     QString define;
-    foreach(define, defines) {
+    foreach (define, defines) {
         definestr += define;
         definestr += ";";
     }
@@ -255,14 +255,14 @@ void ProjectFileDialog::SetDefines(const QStringList &defines)
 
 void ProjectFileDialog::SetPaths(const QStringList &paths)
 {
-    foreach(QString path, paths) {
+    foreach (QString path, paths) {
         AddPath(path);
     }
 }
 
 void ProjectFileDialog::SetExcludedPaths(const QStringList &paths)
 {
-    foreach(QString path, paths) {
+    foreach (QString path, paths) {
         AddExcludePath(path);
     }
 }

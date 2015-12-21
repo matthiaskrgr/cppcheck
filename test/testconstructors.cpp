@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -103,6 +103,8 @@ private:
 
         TEST_CASE(initvar_destructor);      // No variables need to be initialized in a destructor
         TEST_CASE(initvar_func_ret_func_ptr); // ticket #4449
+
+        TEST_CASE(initvar_alias); // #6921
 
         TEST_CASE(operatorEqSTL);
 
@@ -1389,6 +1391,54 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void initvar_alias() { // #6921
+        check("struct S {\n"
+              "    int a;\n"
+              "    S() {\n"
+              "        int& pa = a;\n"
+              "        pa = 4;\n"
+              "    }\n"
+              "};");
+        ASSERT_EQUALS("", errout.str());
+
+        check("struct S {\n"
+              "    int a;\n"
+              "    S() {\n"
+              "        int* pa = &a;\n"
+              "        *pa = 4;\n"
+              "    }\n"
+              "};");
+        ASSERT_EQUALS("", errout.str());
+
+        check("struct S {\n"
+              "    int a[2];\n"
+              "    S() {\n"
+              "        int* pa = a;\n"
+              "        for (int i = 0; i < 2; i++)\n"
+              "            *pa++ = i;\n"
+              "    }\n"
+              "};");
+        ASSERT_EQUALS("", errout.str());
+
+        check("struct S {\n"
+              "    int* a[2];\n"
+              "    S() {\n"
+              "        int* pa = a[1];\n"
+              "        *pa = 0;\n"
+              "    }\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Member variable 'S::a' is not initialized in the constructor.\n", errout.str());
+
+        check("struct S {\n"
+              "    int a;\n"
+              "    S() {\n"
+              "        int pa = a;\n"
+              "        pa = 4;\n"
+              "    }\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Member variable 'S::a' is not initialized in the constructor.\n", errout.str());
+    }
+
     void operatorEqSTL() {
         check("class Fred\n"
               "{\n"
@@ -2469,7 +2519,7 @@ private:
               "    float g;\n"
               "public:\n"
               "    Fred() : f{0, true} { }\n"
-              "    float get() const\n"
+              "    float get() const;\n"
               "};\n"
               "float Fred::get() const { return g; }");
         ASSERT_EQUALS("[test.cpp:9]: (warning) Member variable 'Fred::g' is not initialized in the constructor.\n", errout.str());

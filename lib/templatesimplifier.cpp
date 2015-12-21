@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -452,7 +452,7 @@ std::set<std::string> TemplateSimplifier::expandSpecialized(Token *tokens)
         tok->deleteThis();
 
         // Use this special template in the code..
-        while (nullptr != (tok2 = const_cast<Token *>(Token::findmatch(tok2, pattern.c_str())))) {
+        while (nullptr != (tok2 = const_cast<Token *>(Token::findsimplematch(tok2, pattern.c_str())))) {
             Token::eraseTokens(tok2, Token::findsimplematch(tok2, "<")->findClosingBracket()->next());
             tok2->str(name);
         }
@@ -608,7 +608,7 @@ void TemplateSimplifier::useDefaultArgumentValues(const std::list<Token *> &temp
         for (std::list<Token *>::const_iterator iter2 = templateInstantiations->begin(); iter2 != templateInstantiations->end(); ++iter2) {
             Token *tok = *iter2;
 
-            if (!Token::Match(tok, (classname + " < %any%").c_str()))
+            if (!Token::simpleMatch(tok, (classname + " <").c_str()))
                 continue;
 
             // count the parameters..
@@ -860,9 +860,13 @@ void TemplateSimplifier::expandTemplate(
     }
 }
 
+static bool isLowerThanLogicalAnd(const Token *lower)
+{
+    return lower->isAssignmentOp() || Token::Match(lower, "}|;|(|[|]|)|,|?|:|%oror%|return|throw|case");
+}
 static bool isLowerThanOr(const Token* lower)
 {
-    return lower->isAssignmentOp() || Token::Match(lower, "}|;|(|[|]|)|,|?|:|%oror%|&&|return|throw|case");
+    return isLowerThanLogicalAnd(lower) || lower->str() == "&&";
 }
 static bool isLowerThanXor(const Token* lower)
 {
@@ -874,11 +878,11 @@ static bool isLowerThanAnd(const Token* lower)
 }
 static bool isLowerThanShift(const Token* lower)
 {
-    return isLowerThanAnd(lower) || Token::Match(lower, "%comp%|&");
+    return isLowerThanAnd(lower) || lower->str() == "&";
 }
 static bool isLowerThanPlusMinus(const Token* lower)
 {
-    return isLowerThanShift(lower) || Token::Match(lower, "<<|>>");
+    return isLowerThanShift(lower) || Token::Match(lower, "%comp%|<<|>>");
 }
 static bool isLowerThanMulDiv(const Token* lower)
 {
@@ -947,7 +951,9 @@ bool TemplateSimplifier::simplifyNumericCalculations(Token *tok)
                      (Token::Match(op, ">>|<<") && isLowerThanShift(tok) && isLowerThanPlusMinus(after)) || // NOT associative
                      (op->str() == "&" && isLowerThanShift(tok) && isLowerThanShift(after)) || // associative
                      (op->str() == "^" && isLowerThanAnd(tok) && isLowerThanAnd(after)) || // associative
-                     (op->str() == "|" && isLowerThanXor(tok) && isLowerThanXor(after)))) // associative
+                     (op->str() == "|" && isLowerThanXor(tok) && isLowerThanXor(after)) || // associative
+                     (op->str() == "&&" && isLowerThanOr(tok) && isLowerThanOr(after)) ||
+                     (op->str() == "||" && isLowerThanLogicalAnd(tok) && isLowerThanLogicalAnd(after))))
             break;
 
         tok = tok->next();
@@ -958,18 +964,29 @@ bool TemplateSimplifier::simplifyNumericCalculations(Token *tok)
 
         // Integer operations
         if (Token::Match(op, ">>|<<|&|^|%or%")) {
+            // Don't simplify if operand is negative, shifting with negative
+            // operand is UB. Bitmasking with negative operand is implementation
+            // defined behaviour.
+            if (MathLib::isNegative(tok->str()) || MathLib::isNegative(tok->strAt(2)))
+                continue;
+
             const char cop = op->str()[0];
             std::string result;
             if (tok->str().find_first_of("uU") != std::string::npos)
                 result = ShiftUInt(cop, tok, tok->tokAt(2));
             else
                 result = ShiftInt(cop, tok, tok->tokAt(2));
-            if (!result.empty()) {
-                ret = true;
-                tok->str(result);
-                tok->deleteNext(2);
-                continue;
-            }
+            if (result.empty())
+                break;
+            tok->str(result);
+        }
+
+        // Logical operations
+        else if (Token::Match(op, "%oror%|&&")) {
+            int op1 = !MathLib::isNullValue(tok->str());
+            int op2 = !MathLib::isNullValue(tok->strAt(2));
+            int result = (op->str() == "||") ? (op1 || op2) : (op1 && op2);
+            tok->str(result ? "1" : "0");
         }
 
         else if (Token::Match(tok->previous(), "- %num% - %num%"))
@@ -986,9 +1003,15 @@ bool TemplateSimplifier::simplifyNumericCalculations(Token *tok)
         }
 
         tok->deleteNext(2);
+        tok = tok->previous();
 
         ret = true;
     }
+
+    if (Token::Match(tok, "%oror%|&& %num% %oror%|&&|,|)") || Token::Match(tok, "[(,] %num% %oror%|&&")) {
+        tok->next()->str(MathLib::isNullValue(tok->next()->str()) ? "0" : "1");
+    }
+
     return ret;
 }
 
@@ -1023,7 +1046,7 @@ bool TemplateSimplifier::simplifyCalculations(Token *_tokens)
         }
 
         if (Token::Match(tok->previous(), "(|&&|%oror% %char% %comp% %num% &&|%oror%|)")) {
-            tok->str(MathLib::toString(tok->str()[1] & 0xff));
+            tok->str(MathLib::toString(MathLib::toLongNumber(tok->str())));
         }
 
         if (tok->isNumber()) {
@@ -1032,6 +1055,7 @@ bool TemplateSimplifier::simplifyCalculations(Token *_tokens)
                 Token::Match(tok->previous(), "[(=,] 1 %oror%")) {
                 unsigned int par = 0;
                 const Token *tok2 = tok;
+                bool andAnd = (tok->next()->str() == "&&");
                 for (; tok2; tok2 = tok2->next()) {
                     if (tok2->str() == "(")
                         ++par;
@@ -1039,10 +1063,10 @@ bool TemplateSimplifier::simplifyCalculations(Token *_tokens)
                         if (par == 0)
                             break;
                         --par;
-                    } else if (par == 0 && (Token::Match(tok2, "[,;?]")))
+                    } else if (par == 0 && isLowerThanLogicalAnd(tok2) && (andAnd || tok2->str() != "||"))
                         break;
                 }
-                if (Token::Match(tok2, "[);,?]")) {
+                if (tok2) {
                     Token::eraseTokens(tok, tok2);
                     ret = true;
                 }
@@ -1050,7 +1074,8 @@ bool TemplateSimplifier::simplifyCalculations(Token *_tokens)
             }
 
             if (tok->str() == "0") {
-                if (Token::Match(tok->previous(), "[+-|] 0")) {
+                if ((Token::Match(tok->previous(), "[+-] 0 %cop%|;") && isLowerThanMulDiv(tok->next())) ||
+                    (Token::Match(tok->previous(), "%or% 0 %cop%|;") && isLowerThanXor(tok->next()))) {
                     tok = tok->previous();
                     if (Token::Match(tok->tokAt(-4), "[;{}] %name% = %name% [+-|] 0 ;") &&
                         tok->strAt(-3) == tok->previous()->str()) {
@@ -1123,12 +1148,8 @@ bool TemplateSimplifier::simplifyCalculations(Token *_tokens)
                 ret = true;
             }
 
-            if (Token::simpleMatch(tok->previous(), "( 0 ||") ||
-                Token::simpleMatch(tok->previous(), "|| 0 )") ||
-                Token::simpleMatch(tok->previous(), "( 0 |") ||
-                Token::simpleMatch(tok->previous(), "| 0 )") ||
-                Token::simpleMatch(tok->previous(), "( 1 &&") ||
-                Token::simpleMatch(tok->previous(), "&& 1 )")) {
+            if (Token::simpleMatch(tok->previous(), "( 0 |") ||
+                Token::simpleMatch(tok->previous(), "| 0 )")) {
                 if (tok->previous()->isConstOp())
                     tok = tok->previous();
                 tok->deleteNext();
@@ -1172,8 +1193,15 @@ bool TemplateSimplifier::simplifyCalculations(Token *_tokens)
             tok->deleteNext(2);
         }
 
-        else {
-            ret |= simplifyNumericCalculations(tok);
+        else if (simplifyNumericCalculations(tok)) {
+            ret = true;
+            while (Token::Match(tok->tokAt(-2), "%cop%|,|( %num% %cop% %num% %cop%|,|)")) {
+                Token *before = tok->tokAt(-2);
+                if (simplifyNumericCalculations(before))
+                    tok = before;
+                else
+                    break;
+            }
         }
     }
     return ret;

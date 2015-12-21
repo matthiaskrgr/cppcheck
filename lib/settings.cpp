@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
  */
 
 #include "settings.h"
-#include "path.h"
 #include "preprocessor.h"       // Preprocessor
 #include "utils.h"
 
@@ -29,7 +28,6 @@ Settings::Settings()
       debug(false),
       debugnormal(false),
       debugwarnings(false),
-      debugFalsePositive(false),
       dump(false),
       exceptionHandling(false),
       inconclusive(false),
@@ -62,18 +60,18 @@ Settings::Settings()
 }
 
 namespace {
-    static const std::set<std::string> id = make_container< std::set<std::string> > ()
-                                            << "warning"
-                                            << "style"
-                                            << "performance"
-                                            << "portability"
-                                            << "information"
-                                            << "missingInclude"
-                                            << "unusedFunction"
+    const std::set<std::string> id = make_container< std::set<std::string> > ()
+                                     << "warning"
+                                     << "style"
+                                     << "performance"
+                                     << "portability"
+                                     << "information"
+                                     << "missingInclude"
+                                     << "unusedFunction"
 #ifdef CHECK_INTERNAL
-                                            << "internal"
+                                     << "internal"
 #endif
-                                            ;
+                                     ;
 }
 std::string Settings::addEnabled(const std::string &str)
 {

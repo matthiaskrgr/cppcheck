@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,14 +23,15 @@
 
 #include "config.h"
 #include "mathlib.h"
-#include "token.h"
+#include "standards.h"
+#include "errorlogger.h"
 
 #include <map>
 #include <set>
 #include <string>
 #include <list>
+#include <vector>
 
-class TokenList;
 namespace tinyxml2 {
     class XMLDocument;
     class XMLElement;
@@ -120,6 +121,15 @@ public:
     std::set<std::string> functionconst;
     std::set<std::string> functionpure;
 
+    struct WarnInfo {
+        std::string message;
+        Standards standards;
+        Severity::SeverityType severity;
+    };
+    std::map<std::string, WarnInfo> functionwarn;
+
+    const WarnInfo* getWarnInfo(const Token* ftok) const;
+
     // returns true if ftok is not a library function
     bool isNotLibraryFunction(const Token *ftok) const;
 
@@ -137,27 +147,29 @@ public:
             type_templateArgNo(-1),
             size_templateArgNo(-1),
             arrayLike_indexOp(false),
-            stdStringLike(false) {
+            stdStringLike(false),
+            opLessAllowed(true) {
         }
 
         enum Action {
-            RESIZE, CLEAR, PUSH, POP, FIND,
+            RESIZE, CLEAR, PUSH, POP, FIND, INSERT, ERASE, CHANGE_CONTENT, CHANGE, CHANGE_INTERNAL,
             NO_ACTION
         };
         enum Yield {
-            AT_INDEX, ITEM, BUFFER, BUFFER_NT, START_ITERATOR, END_ITERATOR, SIZE, EMPTY,
+            AT_INDEX, ITEM, BUFFER, BUFFER_NT, START_ITERATOR, END_ITERATOR, ITERATOR, SIZE, EMPTY,
             NO_YIELD
         };
         struct Function {
             Action action;
             Yield yield;
         };
-        std::string startPattern, endPattern;
+        std::string startPattern, endPattern, itEndPattern;
         std::map<std::string, Function> functions;
         int type_templateArgNo;
         int size_templateArgNo;
         bool arrayLike_indexOp;
         bool stdStringLike;
+        bool opLessAllowed;
 
         Action getAction(const std::string& function) const {
             std::map<std::string, Function>::const_iterator i = functions.find(function);
@@ -174,7 +186,7 @@ public:
         }
     };
     std::map<std::string, Container> containers;
-    const Container* detectContainer(const Token* typeStart) const;
+    const Container* detectContainer(const Token* typeStart, bool iterator = false) const;
 
     class ArgumentChecks {
     public:

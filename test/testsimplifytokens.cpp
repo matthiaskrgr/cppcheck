@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -83,6 +83,7 @@ private:
         TEST_CASE(sizeof19);    // #1891 - sizeof 'x'
         TEST_CASE(sizeof20);    // #2024 - sizeof a)
         TEST_CASE(sizeof21);    // #2232 - sizeof...(Args)
+        TEST_CASE(sizeof22);
         TEST_CASE(sizeofsizeof);
         TEST_CASE(casting);
 
@@ -1396,6 +1397,12 @@ private:
         tok(code);
     }
 
+    void sizeof22() {
+        // sizeof from library
+        const char code[] = "foo(sizeof(uint32_t), sizeof(std::uint32_t));";
+        TODO_ASSERT_EQUALS("foo ( 4 , 4 ) ;", "foo ( 4 , sizeof ( std :: uint32_t ) ) ;", tokWithStdLib(code));
+    }
+
     void sizeofsizeof() {
         // ticket #1682
         const char code[] = "void f()\n"
@@ -2084,13 +2091,23 @@ private:
 
         ASSERT_EQUALS("( 4 )", tok("(1 * 2 / 1 * 2)")); // #3722
 
+        ASSERT_EQUALS("x ( 60129542144 )", tok("x(14<<4+17<<300%17)")); // #4931
+        ASSERT_EQUALS("x ( 1 )", tok("x(8|5&6+0 && 7)")); // #6104
+        ASSERT_EQUALS("x ( 1 )", tok("x(2 && 4<<4<<5 && 4)")); // #4933
+        ASSERT_EQUALS("x ( 1 )", tok("x(9&&8%5%4/3)")); // #4931
+        ASSERT_EQUALS("x ( 1 )", tok("x(2 && 2|5<<2%4)")); // #4931
+        ASSERT_EQUALS("x ( -2 << 6 | 1 )", tok("x(1-3<<6|5/3)")); // #4931
+        ASSERT_EQUALS("x ( 2 )", tok("x(2|0*0&2>>1+0%2*1)")); // #4931
+        ASSERT_EQUALS("x ( 0 & 4 != 1 )", tok("x(4%1<<1&4!=1)")); // #4931 (can be simplified further but it's not a problem)
+        ASSERT_EQUALS("x ( true )", tok("x(0&&4>0==2||4)")); // #4931
+
         // don't remove these spaces..
         ASSERT_EQUALS("new ( auto ) ( 4 ) ;", tok("new (auto)(4);"));
     }
 
     void comparisons() {
         ASSERT_EQUALS("( 1 )", tok("( 1 < 2 )"));
-        ASSERT_EQUALS("( x )", tok("( x && 1 < 2 )"));
+        ASSERT_EQUALS("( x && true )", tok("( x && 1 < 2 )"));
         ASSERT_EQUALS("( 5 )", tok("( 1 < 2 && 3 < 4 ? 5 : 6 )"));
         ASSERT_EQUALS("( 6 )", tok("( 1 > 2 && 3 > 4 ? 5 : 6 )"));
     }
@@ -2645,6 +2662,15 @@ private:
                 "if ((a && b) || true || (c && d)) g();\n"
                 "}";
             ASSERT_EQUALS("void f ( int a ) { g ( ) ; }", tok(code));
+        }
+
+        {
+            // #4931
+            const char code[] =
+                "void f() {\n"
+                "if (12 && 7) g();\n"
+                "}";
+            ASSERT_EQUALS("void f ( ) { g ( ) ; }", tok(code));
         }
     }
 

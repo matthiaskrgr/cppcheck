@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -106,7 +106,7 @@ void SettingsDialog::InitIncludepathsList()
     QSettings settings;
     const QString allPaths = settings.value(SETTINGS_GLOBAL_INCLUDE_PATHS).toString();
     const QStringList paths = allPaths.split(";", QString::SkipEmptyParts);
-    foreach(QString path, paths) {
+    foreach (QString path, paths) {
         AddIncludePath(path);
     }
 }
@@ -115,7 +115,7 @@ void SettingsDialog::InitTranslationsList()
 {
     const QString current = mTranslator->GetCurrentLanguage();
     QList<TranslationInfo> translations = mTranslator->GetTranslations();
-    foreach(TranslationInfo translation, translations) {
+    foreach (TranslationInfo translation, translations) {
         QListWidgetItem *item = new QListWidgetItem;
         item->setText(translation.mName);
         item->setData(LangCodeRole, QVariant(translation.mCode));
@@ -211,7 +211,7 @@ void SettingsDialog::AddApplication()
 void SettingsDialog::RemoveApplication()
 {
     QList<QListWidgetItem *> selected = mUI.mListWidget->selectedItems();
-    foreach(QListWidgetItem *item, selected) {
+    foreach (QListWidgetItem *item, selected) {
         const int removeIndex = mUI.mListWidget->row(item);
         const int currentDefault = mTempApplications->GetDefaultApplication();
         mTempApplications->RemoveApplication(removeIndex);
@@ -230,13 +230,16 @@ void SettingsDialog::EditApplication()
 {
     QList<QListWidgetItem *> selected = mUI.mListWidget->selectedItems();
     QListWidgetItem *item = 0;
-    foreach(item, selected) {
+    foreach (item, selected) {
         int row = mUI.mListWidget->row(item);
         Application& app = mTempApplications->GetApplication(row);
         ApplicationDialog dialog(tr("Modify an application"), app, this);
 
         if (dialog.exec() == QDialog::Accepted) {
-            item->setText(app.getName());
+            QString name = app.getName();
+            if (mTempApplications->GetDefaultApplication() == row)
+                name += tr(" [Default]");
+            item->setText(name);
         }
     }
 }

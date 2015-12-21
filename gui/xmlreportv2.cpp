@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -157,7 +157,7 @@ QList<ErrorItem> XmlReportV2::Read()
                 insideResults = false;
             break;
 
-            // Not handled
+        // Not handled
         case QXmlStreamReader::NoToken:
         case QXmlStreamReader::Invalid:
         case QXmlStreamReader::StartDocument:
@@ -220,7 +220,7 @@ ErrorItem XmlReportV2::ReadError(QXmlStreamReader *reader)
                 errorRead = true;
             break;
 
-            // Not handled
+        // Not handled
         case QXmlStreamReader::NoToken:
         case QXmlStreamReader::Invalid:
         case QXmlStreamReader::StartDocument:

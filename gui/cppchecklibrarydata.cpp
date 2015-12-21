@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -145,10 +145,15 @@ static CppcheckLibraryData::Function loadFunction(QXmlStreamReader &xmlReader, c
             function.formatstr.secure = xmlReader.attributes().value("secure").toString();
         } else if (elementName == "arg")
             function.args.append(loadFunctionArg(xmlReader));
+        else if (elementName == "warn") {
+            function.warn.severity     = xmlReader.attributes().value("severity").toString();
+            function.warn.reason       = xmlReader.attributes().value("reason").toString();
+            function.warn.alternatives = xmlReader.attributes().value("alternatives").toString();
+            function.warn.msg          = xmlReader.readElementText();
+        }
     }
     return function;
 }
-
 
 static CppcheckLibraryData::MemoryResource loadMemoryResource(QXmlStreamReader &xmlReader)
 {
@@ -227,7 +232,7 @@ static void writeContainerFunctions(QXmlStreamWriter &xmlWriter, const QString n
         else if (name == "size")
             xmlWriter.writeAttribute("templateParameter", QString::number(extra));
     }
-    foreach(const CppcheckLibraryData::Container::Function &function, functions) {
+    foreach (const CppcheckLibraryData::Container::Function &function, functions) {
         xmlWriter.writeStartElement("function");
         xmlWriter.writeAttribute("name", function.name);
         if (!function.action.isEmpty())
@@ -270,8 +275,9 @@ static void writeFunction(QXmlStreamWriter &xmlWriter, const CppcheckLibraryData
         comments = comments.mid(1);
     while (comments.endsWith("\n"))
         comments.chop(1);
-    foreach(const QString &comment, comments.split('\n')) {
-        xmlWriter.writeComment(comment);
+    foreach (const QString &comment, comments.split('\n')) {
+        if (comment.length() >= 1)
+            xmlWriter.writeComment(comment);
     }
 
     xmlWriter.writeStartElement("function");
@@ -288,7 +294,7 @@ static void writeFunction(QXmlStreamWriter &xmlWriter, const CppcheckLibraryData
     if (function.leakignore)
         xmlWriter.writeEmptyElement("leak-ignore");
     // Argument info..
-    foreach(const CppcheckLibraryData::Function::Arg &arg, function.args) {
+    foreach (const CppcheckLibraryData::Function::Arg &arg, function.args) {
         if (arg.formatstr) {
             xmlWriter.writeStartElement("formatstr");
             if (!function.formatstr.scan.isNull())
@@ -317,7 +323,7 @@ static void writeFunction(QXmlStreamWriter &xmlWriter, const CppcheckLibraryData
         if (!arg.valid.isEmpty())
             xmlWriter.writeTextElement("valid",arg.valid);
 
-        foreach(const CppcheckLibraryData::Function::Arg::MinSize &minsize, arg.minsizes) {
+        foreach (const CppcheckLibraryData::Function::Arg::MinSize &minsize, arg.minsizes) {
             xmlWriter.writeStartElement("minsize");
             xmlWriter.writeAttribute("type", minsize.type);
             xmlWriter.writeAttribute("arg", minsize.arg);
@@ -328,22 +334,41 @@ static void writeFunction(QXmlStreamWriter &xmlWriter, const CppcheckLibraryData
 
         xmlWriter.writeEndElement();
     }
+
+    if (!function.warn.isEmpty()) {
+        xmlWriter.writeStartElement("warn");
+
+        if (!function.warn.severity.isEmpty())
+            xmlWriter.writeAttribute("severity", function.warn.severity);
+
+        if (!function.warn.reason.isEmpty())
+            xmlWriter.writeAttribute("reason", function.warn.reason);
+
+        if (!function.warn.alternatives.isEmpty())
+            xmlWriter.writeAttribute("alternatives", function.warn.alternatives);
+
+        if (!function.warn.msg.isEmpty())
+            xmlWriter.writeCharacters(function.warn.msg);
+
+        xmlWriter.writeEndElement();
+    }
+
     xmlWriter.writeEndElement();
 }
 
 static void writeMemoryResource(QXmlStreamWriter &xmlWriter, const CppcheckLibraryData::MemoryResource &mr)
 {
     xmlWriter.writeStartElement(mr.type);
-    foreach(const CppcheckLibraryData::MemoryResource::Alloc &alloc, mr.alloc) {
+    foreach (const CppcheckLibraryData::MemoryResource::Alloc &alloc, mr.alloc) {
         xmlWriter.writeStartElement("alloc");
         xmlWriter.writeAttribute("init", alloc.init ? "true" : "false");
         xmlWriter.writeCharacters(alloc.name);
         xmlWriter.writeEndElement();
     }
-    foreach(const QString &dealloc, mr.dealloc) {
+    foreach (const QString &dealloc, mr.dealloc) {
         xmlWriter.writeTextElement("dealloc", dealloc);
     }
-    foreach(const QString &use, mr.use) {
+    foreach (const QString &use, mr.use) {
         xmlWriter.writeTextElement("use", use);
     }
     xmlWriter.writeEndElement();
@@ -359,26 +384,26 @@ QString CppcheckLibraryData::toString() const
     xmlWriter.writeStartElement("def");
     xmlWriter.writeAttribute("format","2");
 
-    foreach(const Define &define, defines) {
+    foreach (const Define &define, defines) {
         xmlWriter.writeStartElement("define");
         xmlWriter.writeAttribute("name", define.name);
         xmlWriter.writeAttribute("value", define.value);
         xmlWriter.writeEndElement();
     }
 
-    foreach(const Function &function, functions) {
+    foreach (const Function &function, functions) {
         writeFunction(xmlWriter, function);
     }
 
-    foreach(const MemoryResource &mr, memoryresource) {
+    foreach (const MemoryResource &mr, memoryresource) {
         writeMemoryResource(xmlWriter, mr);
     }
 
-    foreach(const Container &container, containers) {
+    foreach (const Container &container, containers) {
         writeContainer(xmlWriter, container);
     }
 
-    foreach(const PodType &podtype, podtypes) {
+    foreach (const PodType &podtype, podtypes) {
         xmlWriter.writeStartElement("podtype");
         xmlWriter.writeAttribute("name", podtype.name);
         if (!podtype.sign.isEmpty())

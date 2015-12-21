@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -97,6 +97,20 @@ public:
             QList<struct MinSize> minsizes;
         };
         QList<struct Arg> args;
+
+        struct {
+            QString severity;
+            QString reason;
+            QString alternatives;
+            QString msg;
+
+            bool isEmpty() const {
+                return severity.isEmpty() &&
+                       reason.isEmpty() &&
+                       alternatives.isEmpty() &&
+                       msg.isEmpty();
+            }
+        } warn;
     };
 
     struct MemoryResource {

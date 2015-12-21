@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -96,14 +96,6 @@ public:
     enum AllocType { No, Malloc, New, NewArray, File, Fd, Pipe, OtherMem, OtherRes, Many };
 
     void memoryLeak(const Token *tok, const std::string &varname, AllocType alloctype);
-
-    /**
-     * @brief Get type of deallocation at given position
-     * @param tok position
-     * @param varname variable name
-     * @return type of deallocation
-     */
-    AllocType getDeallocationType(const Token *tok, const std::string &varname) const;
 
     /**
      * @brief Get type of deallocation at given position

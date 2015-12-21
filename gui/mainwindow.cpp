@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -435,9 +435,11 @@ QStringList MainWindow::SelectFilesToCheck(QFileDialog::FileMode mode)
     // QFileDialog::getExistingDirectory() because they show native Windows
     // selection dialog which is a lot more usable than Qt:s own dialog.
     if (mode == QFileDialog::ExistingFiles) {
+
         selected = QFileDialog::getOpenFileNames(this,
                    tr("Select files to check"),
-                   GetPath(SETTINGS_LAST_CHECK_PATH));
+                   GetPath(SETTINGS_LAST_CHECK_PATH),
+                   tr("C/C++ Source (%1)").arg(FileList::GetDefaultFilters().join(" ")));
         if (selected.isEmpty())
             mCurrentDirectory.clear();
         else {
@@ -528,7 +530,7 @@ void MainWindow::CheckDirectory()
 void MainWindow::AddIncludeDirs(const QStringList &includeDirs, Settings &result)
 {
     QString dir;
-    foreach(dir, includeDirs) {
+    foreach (dir, includeDirs) {
         QString incdir;
         if (!QDir::isAbsolutePath(dir))
             incdir = mCurrentDirectory + "/";
@@ -611,6 +613,12 @@ bool MainWindow::TryLoadLibrary(Library *library, QString filename)
         case Library::ErrorCode::PLATFORM_TYPE_REDEFINED:
             errmsg = tr("Platform type redefined");
             break;
+        case Library::ErrorCode::UNKNOWN_ELEMENT:
+            errmsg = tr("Unknown element");
+            break;
+        default:
+            errmsg = tr("Unknown issue");
+            break;
         }
         if (!error.reason.empty())
             errmsg += " '" + QString::fromStdString(error.reason) + "'";
@@ -634,20 +642,20 @@ Settings MainWindow::GetCppcheckSettings()
 
         const QStringList defines = pfile->GetDefines();
         QString define;
-        foreach(define, defines) {
+        foreach (define, defines) {
             if (!result.userDefines.empty())
                 result.userDefines += ";";
             result.userDefines += define.toStdString();
         }
 
         const QStringList libraries = pfile->GetLibraries();
-        foreach(QString library, libraries) {
+        foreach (QString library, libraries) {
             const QString filename = library + ".cfg";
             TryLoadLibrary(&result.library, filename);
         }
 
         const QStringList suppressions = pfile->GetSuppressions();
-        foreach(QString suppression, suppressions) {
+        foreach (QString suppression, suppressions) {
             result.nomsg.addSuppressionLine(suppression.toStdString());
         }
 

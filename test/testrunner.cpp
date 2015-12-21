@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,9 +19,8 @@
 #include "testsuite.h"
 #include "preprocessor.h"
 #include "options.h"
-#include <cstdio>
+#include <iostream>
 #include <cstdlib>
-#include <ctime>
 
 int main(int argc, char *argv[])
 {
@@ -41,11 +40,11 @@ int main(int argc, char *argv[])
         return (failedTestsCount == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 #ifdef NDEBUG
     } catch (const InternalError& e) {
-        printf("%s\n", e.errorMessage.c_str());
+        std::cout << e.errorMessage << std::endl;
     } catch (const std::exception& error) {
-        printf("%s\n", error.what());
+        std::cout << error.what() << std::endl;
     } catch (...) {
-        printf("Unknown exception\n");
+        std::cout << "Unknown exception" << std::endl;
     }
     return EXIT_FAILURE;
 #endif

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,6 +64,14 @@ ResultsTree::ResultsTree(QWidget * parent) :
 
 ResultsTree::~ResultsTree()
 {
+}
+
+void ResultsTree::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Enter || event->key() == Qt::Key_Return) {
+        QuickStartApplication(this->currentIndex());
+    }
+    QTreeView::keyPressEvent(event);
 }
 
 void ResultsTree::Initialize(QSettings *settings, ApplicationList *list)
@@ -774,7 +782,7 @@ void ResultsTree::HideResult()
 
     QModelIndexList selectedRows = mSelectionModel->selectedRows();
     QModelIndex index;
-    foreach(index, selectedRows) {
+    foreach (index, selectedRows) {
         QStandardItem *item = mModel.itemFromIndex(index);
         //Set the "hide" flag for this item
         QVariantMap data = item->data().toMap();
@@ -903,7 +911,7 @@ void ResultsTree::SaveResults(Report *report) const
 
     for (int i = 0; i < mModel.rowCount(); i++) {
         QStandardItem *item = mModel.item(i, 0);
-        if (!isRowHidden(i, item->index()))
+        if (!isRowHidden(i, QModelIndex()))
             SaveErrors(report, item);
     }
 

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,6 +47,7 @@ private:
         TEST_CASE(structmember_extern); // No false positives for extern structs
         TEST_CASE(structmember10);
         TEST_CASE(structmember11); // #4168 - initialization with {} / passed by address to unknown function
+        TEST_CASE(structmember12); // #7179 - FP unused structmember
 
         TEST_CASE(localvar1);
         TEST_CASE(localvar2);
@@ -223,50 +224,6 @@ private:
         ASSERT_EQUALS("[test.cpp:3]: (style) union member 'abc::a' is never used.\n"
                       "[test.cpp:4]: (style) union member 'abc::b' is never used.\n"
                       "[test.cpp:5]: (style) union member 'abc::c' is never used.\n", errout.str());
-
-        checkStructMemberUsage("struct A\n"
-                               "{\n"
-                               "    int a;\n"
-                               "};\n"
-                               "struct B\n"
-                               "{\n"
-                               "    int a;\n"
-                               "};\n"
-                               "void foo()\n"
-                               "{\n"
-                               "    A a;\n"
-                               "    a.a;\n"
-                               "}");
-        ASSERT_EQUALS("[test.cpp:7]: (style) struct member 'B::a' is never used.\n", errout.str());
-
-        checkStructMemberUsage("struct A\n"
-                               "{\n"
-                               "    int a;\n"
-                               "};\n"
-                               "struct B\n"
-                               "{\n"
-                               "    int a;\n"
-                               "};\n"
-                               "void foo(A* a)\n"
-                               "{\n"
-                               "    a->a;\n"
-                               "}");
-        ASSERT_EQUALS("[test.cpp:7]: (style) struct member 'B::a' is never used.\n", errout.str());
-
-        checkStructMemberUsage("struct A\n"
-                               "{\n"
-                               "    int a;\n"
-                               "};\n"
-                               "struct B\n"
-                               "{\n"
-                               "    int a;\n"
-                               "};\n"
-                               "A& bar();\n"
-                               "void foo()\n"
-                               "{\n"
-                               "    bar().a;\n"
-                               "}");
-        ASSERT_EQUALS("[test.cpp:7]: (style) struct member 'B::a' is never used.\n", errout.str());
     }
 
     void structmember2() {
@@ -434,6 +391,26 @@ private:
                                "struct abc s = {0};\n"
                                "void f() { }");
         TODO_ASSERT_EQUALS("abc::x is not used", "", errout.str());
+    }
+
+    void structmember12() { // #7179
+        checkStructMemberUsage("#include <stdio.h>\n"
+                               "struct\n"
+                               "{\n"
+                               "    union\n"
+                               "    {\n"
+                               "        struct\n"
+                               "        {\n"
+                               "            int a;\n"
+                               "        } struct1;\n"
+                               "    };\n"
+                               "} var = {0};\n"
+                               "int main(int argc, char *argv[])\n"
+                               "{\n"
+                               "    printf(\"var.struct1.a = %d\n\", var.struct1.a);\n"
+                               "    return 1;\n"
+                               "}\n");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void structmember_extern() {

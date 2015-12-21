@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -79,6 +79,8 @@ private:
         TEST_CASE(clarifyCondition6);     // #3818
 
         TEST_CASE(alwaysTrue);
+
+        TEST_CASE(checkInvalidTestForOverflow);
     }
 
     void check(const char code[], const char* filename = "test.cpp") {
@@ -175,6 +177,15 @@ private:
         check("void f(int x) {\n"
               "    extern int y; y = x & 7;\n"
               "    while (y==8);\n" // non-local variable => no error
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f(int x) {\n"
+              "    int a = 100;\n"
+              "    while (x) {\n"
+              "        int y = 16 | a;\n"
+              "        while (y != 0) y--;\n"
+              "    }\n"
               "}");
         ASSERT_EQUALS("", errout.str());
 
@@ -1592,6 +1603,38 @@ private:
               "  int x = 0;\n"
               "  if (a) { return; }\n" // <- this is just here to fool simplifyKnownVariabels
               "  if ($x != $0) {}\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void checkInvalidTestForOverflow() {
+        check("void f(char *p, unsigned int x) {\n"
+              "    assert((p + x) < p);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Invalid test for overflow '(p+x)<p'. Condition is always false unless there is overflow, and overflow is UB.\n", errout.str());
+
+        check("void f(char *p, unsigned int x) {\n"
+              "    assert((p + x) >= p);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Invalid test for overflow '(p+x)>=p'. Condition is always true unless there is overflow, and overflow is UB.\n", errout.str());
+
+        check("void f(char *p, unsigned int x) {\n"
+              "    assert(p > (p + x));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Invalid test for overflow 'p>(p+x)'. Condition is always false unless there is overflow, and overflow is UB.\n", errout.str());
+
+        check("void f(char *p, unsigned int x) {\n"
+              "    assert(p <= (p + x));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Invalid test for overflow 'p<=(p+x)'. Condition is always true unless there is overflow, and overflow is UB.\n", errout.str());
+
+        check("void f(signed int x) {\n"
+              "    assert(x + 100 < x);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Invalid test for overflow 'x+100<x'. Condition is always false unless there is overflow, and overflow is UB.\n", errout.str());
+
+        check("void f(signed int x) {\n" // unsigned overflow => dont warn
+              "    assert(x + 100U < x);\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }

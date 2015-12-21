@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@
 #define mathlibH
 //---------------------------------------------------------------------------
 
-#include <cstdlib>
 #include <string>
 #include <sstream>
 #include "config.h"
@@ -113,6 +112,8 @@ public:
      * @return true if given character is octal digit.
      */
     static bool isOctalDigit(char c);
+    static MathLib::bigint characterLiteralToLongNumber(const std::string& str);
+
 };
 
 MathLib::value operator+(const MathLib::value &v1, const MathLib::value &v2);

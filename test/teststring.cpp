@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -307,10 +307,10 @@ private:
 
         // Ticket #5734
         check("int foo(char c) {\n"
-              "return c == '42';}", "test.cpp");
+              "return c == '4';}", "test.cpp");
         ASSERT_EQUALS("", errout.str());
         check("int foo(char c) {\n"
-              "return c == '42';}", "test.c");
+              "return c == '4';}", "test.c");
         ASSERT_EQUALS("", errout.str());
         check("int foo(char c) {\n"
               "return c == \"42\"[0];}", "test.cpp");

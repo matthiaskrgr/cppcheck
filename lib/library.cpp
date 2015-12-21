@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,17 @@
 #include "astutils.h"
 
 #include <string>
-#include <algorithm>
+
+static std::vector<std::string> getnames(const char *names)
+{
+    std::vector<std::string> ret;
+    while (const char *p = std::strchr(names,',')) {
+        ret.push_back(std::string(names, p-names));
+        names = p + 1;
+    }
+    ret.push_back(names);
+    return ret;
+}
 
 Library::Library() : allocid(0)
 {
@@ -61,7 +71,7 @@ Library::Error Library::load(const char exename[], const char path[])
             fullfilename += ".cfg";
             error = doc.LoadFile(fullfilename.c_str());
             if (error != tinyxml2::XML_ERROR_FILE_NOT_FOUND)
-                absolute_path = Path::getAbsoluteFilePath(fullfilename.c_str());
+                absolute_path = Path::getAbsoluteFilePath(fullfilename);
         }
 
         if (error == tinyxml2::XML_ERROR_FILE_NOT_FOUND) {
@@ -77,7 +87,7 @@ Library::Error Library::load(const char exename[], const char path[])
             const std::string filename(cfgfolder + sep + fullfilename);
             error = doc.LoadFile(filename.c_str());
             if (error != tinyxml2::XML_ERROR_FILE_NOT_FOUND)
-                absolute_path = Path::getAbsoluteFilePath(filename.c_str());
+                absolute_path = Path::getAbsoluteFilePath(filename);
         }
     } else
         absolute_path = Path::getAbsoluteFilePath(path);
@@ -177,23 +187,15 @@ Library::Error Library::load(const tinyxml2::XMLDocument &doc)
         }
 
         else if (nodename == "function") {
-            const char *name_char = node->Attribute("name");
-            if (name_char == nullptr)
+            const char *name = node->Attribute("name");
+            if (name == nullptr)
                 return Error(MISSING_ATTRIBUTE, "name");
-            std::string name = name_char;
-            for (;;) {
-                const std::string::size_type pos = name.find(',');
-                if (pos == std::string::npos)
-                    break;
-                const Error &err = loadFunction(node, name.substr(0,pos), unknown_elements);
+            const std::vector<std::string> names(getnames(name));
+            for (unsigned int i = 0U; i < names.size(); ++i) {
+                const Error &err = loadFunction(node, names[i], unknown_elements);
                 if (err.errorcode != ErrorCode::OK)
                     return err;
-                name.erase(0,pos+1);
             }
-
-            const Error &err = loadFunction(node, name, unknown_elements);
-            if (err.errorcode != ErrorCode::OK)
-                return err;
         }
 
         else if (nodename == "reflection") {
@@ -319,6 +321,12 @@ Library::Error Library::load(const tinyxml2::XMLDocument &doc)
             const char* const endPattern = node->Attribute("endPattern");
             if (endPattern)
                 container.endPattern = endPattern;
+            const char* const itEndPattern = node->Attribute("itEndPattern");
+            if (itEndPattern)
+                container.itEndPattern = itEndPattern;
+            const char* const opLessAllowed = node->Attribute("opLessAllowed");
+            if (opLessAllowed)
+                container.opLessAllowed = std::string(opLessAllowed) == "true";
 
             for (const tinyxml2::XMLElement *containerNode = node->FirstChildElement(); containerNode; containerNode = containerNode->NextSiblingElement()) {
                 const std::string containerNodeName = containerNode->Name();
@@ -347,6 +355,16 @@ Library::Error Library::load(const tinyxml2::XMLDocument &doc)
                                 action = Container::POP;
                             else if (actionName == "find")
                                 action = Container::FIND;
+                            else if (actionName == "insert")
+                                action = Container::INSERT;
+                            else if (actionName == "erase")
+                                action = Container::ERASE;
+                            else if (actionName == "change-content")
+                                action = Container::CHANGE_CONTENT;
+                            else if (actionName == "change-internal")
+                                action = Container::CHANGE_INTERNAL;
+                            else if (actionName == "change")
+                                action = Container::CHANGE;
                             else
                                 return Error(BAD_ATTRIBUTE_VALUE, actionName);
                         }
@@ -367,6 +385,8 @@ Library::Error Library::load(const tinyxml2::XMLDocument &doc)
                                 yield = Container::START_ITERATOR;
                             else if (yieldName == "end-iterator")
                                 yield = Container::END_ITERATOR;
+                            else if (yieldName == "iterator")
+                                yield = Container::ITERATOR;
                             else if (yieldName == "size")
                                 yield = Container::SIZE;
                             else if (yieldName == "empty")
@@ -412,7 +432,9 @@ Library::Error Library::load(const tinyxml2::XMLDocument &doc)
             const char * const sign = node->Attribute("sign");
             if (sign)
                 podType.sign = *sign;
-            podtypes[name] = podType;
+            const std::vector<std::string> names(getnames(name));
+            for (unsigned int i = 0U; i < names.size(); ++i)
+                podtypes[names[i]] = podType;
         }
 
         else if (nodename == "platformtype") {
@@ -598,6 +620,46 @@ Library::Error Library::loadFunction(const tinyxml2::XMLElement * const node, co
             const tinyxml2::XMLAttribute* scan = functionnode->FindAttribute("scan");
             const tinyxml2::XMLAttribute* secure = functionnode->FindAttribute("secure");
             _formatstr[name] = std::make_pair(scan && scan->BoolValue(), secure && secure->BoolValue());
+        } else if (functionnodename == "warn") {
+            WarnInfo wi;
+            const char* const severity = functionnode->Attribute("severity");
+            if (severity == nullptr)
+                return Error(MISSING_ATTRIBUTE, "severity");
+            wi.severity = Severity::fromString(severity);
+
+            const char* const cstd = functionnode->Attribute("cstd");
+            if (cstd) {
+                if (!wi.standards.setC(cstd))
+                    return Error(BAD_ATTRIBUTE_VALUE, cstd);
+            } else
+                wi.standards.c = Standards::C89;
+
+            const char* const cppstd = functionnode->Attribute("cppstd");
+            if (cppstd) {
+                if (!wi.standards.setCPP(cppstd))
+                    return Error(BAD_ATTRIBUTE_VALUE, cppstd);
+            } else
+                wi.standards.cpp = Standards::CPP03;
+
+            const char* const reason = functionnode->Attribute("reason");
+            const char* const alternatives = functionnode->Attribute("alternatives");
+            if (reason && alternatives) {
+                // Construct message
+                wi.message = std::string(reason) + " function '" + name + "' called. It is recommended to use ";
+                std::vector<std::string> alt = getnames(alternatives);
+                for (std::size_t i = 0; i < alt.size(); ++i) {
+                    wi.message += "'" + alt[i] + "'";
+                    if (i == alt.size() - 1)
+                        wi.message += " instead.";
+                    else if (i == alt.size() - 2)
+                        wi.message += " or ";
+                    else
+                        wi.message += ", ";
+                }
+            } else
+                wi.message = functionnode->GetText();
+
+            functionwarn[name] = wi;
         } else
             unknown_elements.insert(functionnodename);
     }
@@ -773,7 +835,7 @@ bool Library::isScopeNoReturn(const Token *end, std::string *unknownFunc) const
     return false;
 }
 
-const Library::Container* Library::detectContainer(const Token* typeStart) const
+const Library::Container* Library::detectContainer(const Token* typeStart, bool iterator) const
 {
     for (std::map<std::string, Container>::const_iterator i = containers.begin(); i != containers.end(); ++i) {
         const Container& container = i->second;
@@ -781,12 +843,13 @@ const Library::Container* Library::detectContainer(const Token* typeStart) const
             continue;
 
         if (Token::Match(typeStart, container.startPattern.c_str())) {
-            if (container.endPattern.empty())
+            if (!iterator && container.endPattern.empty()) // If endPattern is undefined, it will always match, but itEndPattern has to be defined.
                 return &container;
 
             for (const Token* tok = typeStart; tok && !tok->varId(); tok = tok->next()) {
                 if (tok->link()) {
-                    if (Token::Match(tok->link(), container.endPattern.c_str()))
+                    const std::string& endPattern = iterator ? container.itEndPattern : container.endPattern;
+                    if (Token::Match(tok->link(), endPattern.c_str()))
                         return &container;
                     break;
                 }
@@ -806,15 +869,7 @@ bool Library::isNotLibraryFunction(const Token *ftok) const
     if (ftok->varId())
         return true;
 
-    int callargs = 0;
-    for (const Token *tok = ftok->tokAt(2); tok && tok->str() != ")"; tok = tok->next()) {
-        if (callargs == 0)
-            callargs = 1;
-        if (tok->str() == ",")
-            callargs++;
-        else if (tok->link() && Token::Match(tok, "<|(|["))
-            tok = tok->link();
-    }
+    int callargs = numberOfArguments(ftok);
     const std::map<std::string, std::map<int, ArgumentChecks> >::const_iterator it = argumentChecks.find(functionName(ftok));
     if (it == argumentChecks.end())
         return (callargs != 0);
@@ -826,6 +881,16 @@ bool Library::isNotLibraryFunction(const Token *ftok) const
             return args > callargs;
     }
     return args != callargs;
+}
+
+const Library::WarnInfo* Library::getWarnInfo(const Token* ftok) const
+{
+    if (isNotLibraryFunction(ftok))
+        return nullptr;
+    std::map<std::string, WarnInfo>::const_iterator i = functionwarn.find(functionName(ftok));
+    if (i == functionwarn.cend())
+        return nullptr;
+    return &i->second;
 }
 
 bool Library::isUseRetVal(const Token* ftok) const

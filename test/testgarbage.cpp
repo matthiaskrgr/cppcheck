@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -201,8 +201,16 @@ private:
         TEST_CASE(garbageCode150); // #7089
         TEST_CASE(garbageCode151); // #4175
         TEST_CASE(garbageCode152); // travis after 9c7271a5
-
-
+        TEST_CASE(garbageCode153);
+        TEST_CASE(garbageCode154); // #7112
+        TEST_CASE(garbageCode155); // #7118
+        TEST_CASE(garbageCode156); // #7120
+        TEST_CASE(garbageCode157); // #7131
+        TEST_CASE(garbageCode158); // #3238
+        TEST_CASE(garbageCode159); // #7119
+        TEST_CASE(garbageCode160); // #7190
+        TEST_CASE(garbageCode161); // #7200
+        TEST_CASE(garbageCode162); // #7208
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
         TEST_CASE(garbageAST);
@@ -1213,6 +1221,43 @@ private:
         checkCode(code);
     }
 
+    void garbageCode153() {
+        ASSERT_THROW(checkCode("enum { X = << { X } } { X X } enum { X = << { ( X ) } } { } X */"), InternalError);
+    }
+
+    void garbageCode154() {
+        checkCode("\"abc\"[];");
+    }
+
+    void garbageCode155() { // #7118
+        checkCode("&p(!{}e x){({(0?:?){({})}()})}");
+    }
+
+    void garbageCode156() { // #7120
+        checkCode("struct {}a; d f() { c ? : } {}a.p");
+    }
+
+    void garbageCode157() { // #7131
+        ASSERT_THROW(checkCode("namespace std {\n"
+                               "  template < typename >\n"
+                               "  void swap(); \n"
+                               "}"
+                               "template std::swap\n"), InternalError);
+    }
+
+    void garbageCode158() { // #3238
+        checkCode("__FBSDID(\"...\");\n");
+    }
+
+    void garbageCode159() { // #7119
+        checkCode("({}typedef typename x;typename x!){({{}()})}"); // don't hang
+    }
+
+    void garbageCode160() { // #7190
+        ASSERT_THROW(checkCode("f(a,b,c,d)float [  a[],d;int ]  b[],c;{} "), InternalError); // don't hang
+    }
+
+
     void garbageValueFlow() {
         // #6089
         const char* code = "{} int foo(struct, x1, struct x2, x3, int, x5, x6, x7)\n"
@@ -1338,6 +1383,16 @@ private:
         // #4169
         checkCode("volatile true , test < test < #ifdef __ppc__ true ,");
     }
+    void garbageCode161() {
+        //7200
+        ASSERT_THROW(checkCode("{ }{ if () try { } catch (...)} B : : ~B { }"), InternalError);
+    }
+
+    void garbageCode162() {
+        //7208
+        ASSERT_THROW(checkCode("return <<  >>  x return <<  >>  x ", false), InternalError);
+    }
+
 };
 
 REGISTER_TEST(TestGarbage)

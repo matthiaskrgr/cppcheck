@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -126,9 +126,19 @@ public:
     */
     unsigned long long calculateChecksum() const;
 
+    /**
+     * Create abstract syntax tree.
+     */
     void createAst();
 
+    /**
+     * Check abstract syntax tree.
+     * Throws InternalError on failure
+     */
+    void validateAst();
+
 private:
+
     /** Disable copy constructor, no implementation */
     TokenList(const TokenList &);
 

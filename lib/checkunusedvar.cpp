@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@
 #include "checkunusedvar.h"
 #include "symboldatabase.h"
 #include <algorithm>
-#include <cctype>
 #include <utility>
 //---------------------------------------------------------------------------
 
@@ -1249,32 +1248,10 @@ void CheckUnusedVar::checkStructMemberUsage()
                 continue;
 
             // Check if the struct member variable is used anywhere in the file
-            const std::string usagePattern(". " + *memberVarName);
-            bool used = false;
-            const Token* usageTok = _tokenizer->tokens();
-            while ((usageTok = Token::findsimplematch(usageTok->next(), usagePattern.c_str())) != nullptr) {
-                // Locate the containing struct variable and ensure it's of the same type, not a random struct
-                const Token* structVarTok = usageTok->previous();
-                // Walk backwards over array accesses
-                while (structVarTok && structVarTok->link())
-                    structVarTok = structVarTok->link()->previous();
-                if (!structVarTok)
-                    continue;
-                const Variable* structVar = structVarTok->variable();
-                if (structVar && structVar->type() && structVar->type()->name() == structname) {
-                    used = true;
-                    break;
-                }
-                const Function* function = structVarTok->function();
-                if (function && function->retType && function->retType->name() == structname) {
-                    used = true;
-                    break;
-                }
-            }
+            if (Token::findsimplematch(_tokenizer->tokens(), (". " + *memberVarName).c_str()))
+                continue;
 
-            if (!used) {
-                unusedStructMemberError(tok->next(), structname, *memberVarName, tok->scope()->type == Scope::eUnion);
-            }
+            unusedStructMemberError(tok->next(), structname, *memberVarName, tok->scope()->type == Scope::eUnion);
         }
     }
 }

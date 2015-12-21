@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 
 #include "tokenize.h"
 #include "symboldatabase.h"
+#include "utils.h"
 
 #include <cctype>
 #include <cstdlib>
@@ -94,8 +95,8 @@ struct Filepointer {
 };
 
 namespace {
-    static const std::set<std::string> whitelist = make_container< std::set<std::string> > ()
-            << "clearerr" << "feof" << "ferror" << "fgetpos" << "ftell" << "setbuf" << "setvbuf" << "ungetc" << "ungetwc";
+    const std::set<std::string> whitelist = make_container< std::set<std::string> > ()
+                                            << "clearerr" << "feof" << "ferror" << "fgetpos" << "ftell" << "setbuf" << "setvbuf" << "ungetc" << "ungetwc";
 }
 
 void CheckIO::checkFileUsage()
@@ -998,7 +999,7 @@ void CheckIO::checkFormatString(const Token * const tok,
                             case 'l':
                                 if (i+1 != formatString.end() && *(i+1) == *i)
                                     specifier += *i++;
-                                // fallthrough
+                            // fallthrough
                             case 'j':
                             case 'q':
                             case 't':
@@ -1300,7 +1301,7 @@ void CheckIO::checkFormatString(const Token * const tok,
                                     specifier += *i++;
                                     specifier += *i++;
                                 }
-                                // fallthrough
+                            // fallthrough
                             case 'j': // intmax_t or uintmax_t
                             case 'z': // size_t
                             case 't': // ptrdiff_t
@@ -1551,8 +1552,8 @@ CheckIO::ArgumentInfo::~ArgumentInfo()
 }
 
 namespace {
-    static const std::set<std::string> stl_vector = make_container< std::set<std::string> >() << "array" << "vector";
-    static const std::set<std::string> stl_string = make_container< std::set<std::string> >() << "string" << "u16string" << "u32string" << "wstring";
+    const std::set<std::string> stl_vector = make_container< std::set<std::string> >() << "array" << "vector";
+    const std::set<std::string> stl_string = make_container< std::set<std::string> >() << "string" << "u16string" << "u32string" << "wstring";
 }
 
 bool CheckIO::ArgumentInfo::isStdVectorOrString()
@@ -1613,7 +1614,7 @@ bool CheckIO::ArgumentInfo::isStdVectorOrString()
 }
 
 namespace {
-    static const std::set<std::string> stl_container = make_container< std::set<std::string> >() <<
+    const std::set<std::string> stl_container = make_container< std::set<std::string> >() <<
             "array" << "bitset" << "deque" << "forward_list" <<
             "hash_map" << "hash_multimap" << "hash_set" <<
             "list" << "map" << "multimap" << "multiset" <<

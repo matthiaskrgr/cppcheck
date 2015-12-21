@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -63,8 +63,7 @@ std::string Path::simplifyPath(std::string originalPath)
     const bool isUnc = originalPath.size() > 2 && originalPath[0] == '/' && originalPath[1] == '/';
 
     // Remove ./, .//, ./// etc. at the beginning
-    if (originalPath.size() > 2 && originalPath[0] == '.' &&
-        originalPath[1] == '/') {
+    while (originalPath.size() > 2 && originalPath[0] == '.' && originalPath[1] == '/') { // remove "./././"
         size_t toErase = 2;
         for (std::size_t i = 2; i < originalPath.size(); i++) {
             if (originalPath[i] == '/')
@@ -220,6 +219,8 @@ bool Path::isCPP(const std::string &path)
         extension == ".cc" ||
         extension == ".c++" ||
         extension == ".hpp" ||
+        extension == ".hxx" ||
+        extension == ".hh" ||
         extension == ".tpp" ||
         extension == ".txx") {
         return true;
@@ -248,7 +249,7 @@ std::string Path::getAbsoluteFilePath(const std::string& filePath)
     if (_fullpath(absolute, filePath.c_str(), _MAX_PATH))
         absolute_path = absolute;
 #elif defined(__linux__) || defined(__sun) || defined(__hpux) || defined(__GNUC__)
-    char * absolute = realpath(filePath.c_str(), NULL);
+    char * absolute = realpath(filePath.c_str(), nullptr);
     if (absolute)
         absolute_path = absolute;
     free(absolute);

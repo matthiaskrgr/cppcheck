@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -117,11 +117,6 @@ public:
      */
     void getErrorMessages();
 
-    /**
-     * @brief Analyse file - It's public so unit tests can be written
-     */
-    void analyseFile(std::istream &f, const std::string &filename);
-
     void tooManyConfigsError(const std::string &file, const std::size_t numberOfConfigurations);
     void purgedConfigurationMessage(const std::string &file, const std::string& configuration);
 
@@ -150,14 +145,22 @@ private:
     unsigned int processFile(const std::string& filename, std::istream& fileStream);
 
     /**
-     * @brief Check file
-     * @param code
-     * @param FileName
-     * @param checksums
-     * @param[out] internalErrorFound will be set to true if an internal has been caught, false else
-     * @return false if file has been checked before, true else !?
+     * @brief Check raw tokens
+     * @param tokenizer
      */
-    bool checkFile(const std::string &code, const char FileName[], std::set<unsigned long long>& checksums, bool& internalErrorFound);
+    void checkRawTokens(const Tokenizer &tokenizer);
+
+    /**
+     * @brief Check normal tokens
+     * @param tokenizer
+     */
+    void checkNormalTokens(const Tokenizer &tokenizer);
+
+    /**
+     * @brief Check simplified tokens
+     * @param tokenizer
+     */
+    void checkSimplifiedTokens(const Tokenizer &tokenizer);
 
     /**
      * @brief Execute rules, if any
@@ -181,19 +184,6 @@ private:
      * @param outmsg Message to show, e.g. "Checking main.cpp..."
      */
     virtual void reportOut(const std::string &outmsg);
-
-    /**
-     * @brief Check given code. If error is found, return true
-     * and print out source of the file. Try to reduce the code
-     * while still showing the error.
-     */
-    bool findError(std::string code, const char FileName[]);
-
-    /**
-     * @brief Replace "from" strings with "to" strings in "code"
-     * and return it.
-     */
-    static void replaceAll(std::string& code, const std::string &from, const std::string &to);
 
     std::list<std::string> _errorList;
     Settings _settings;

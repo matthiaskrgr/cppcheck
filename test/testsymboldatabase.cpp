@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 #include "testsuite.h"
 #include "testutils.h"
 #include "symboldatabase.h"
+#include "utils.h"
 #include <sstream>
 #include <stdexcept>
 
@@ -234,6 +235,7 @@ private:
         TEST_CASE(symboldatabase50); // #6432
         TEST_CASE(symboldatabase51); // #6538
         TEST_CASE(symboldatabase52); // #6581
+        TEST_CASE(symboldatabase53); // #7124 (library podtype)
 
         TEST_CASE(isImplicitlyVirtual);
         TEST_CASE(isPure);
@@ -1596,7 +1598,7 @@ private:
         check("testing::testing()\n"
               "{\n"
               "}");
-        ASSERT_EQUALS("", errout.str());
+        ASSERT_EQUALS("[test.cpp:1]: (debug) Executable scope 'testing' with unknown function.\n", errout.str());
     }
 
     void symboldatabase5() {
@@ -2186,8 +2188,21 @@ private:
         if (db) {
             ASSERT_EQUALS(2, db->scopeList.size());
             ASSERT_EQUALS(2, db->getVariableListSize()-1);
-            ASSERT(db->getVariableFromVarId(1));
-            ASSERT(db->getVariableFromVarId(2));
+            ASSERT(db->getVariableFromVarId(1) != nullptr);
+            ASSERT(db->getVariableFromVarId(2) != nullptr);
+        }
+    }
+
+    void symboldatabase53() { // #7124
+        GET_SYMBOL_DB("int32_t x;"
+                      "std::int32_t y;");
+
+        ASSERT(db != nullptr);
+        if (db) {
+            ASSERT(db->getVariableFromVarId(1) != nullptr);
+            ASSERT(db->getVariableFromVarId(2) != nullptr);
+            ASSERT_EQUALS(false, db->getVariableFromVarId(1)->isClass());
+            ASSERT_EQUALS(false, db->getVariableFromVarId(2)->isClass());
         }
     }
 
@@ -2988,8 +3003,7 @@ private:
         Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
         tokenizer.tokenize(istr, "test.cpp");
-        tokenizer.getSymbolDatabase();
-        const Token *tok = Token::findsimplematch(tokenizer.tokens(),str);
+        const Token * const tok = Token::findsimplematch(tokenizer.tokens(),str);
         return tok->valueType()->str();
     }
 

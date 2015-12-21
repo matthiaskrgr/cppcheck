@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -63,5 +63,14 @@ bool isOppositeCond(bool isNot, bool cpp, const Token * const cond1, const Token
 bool isConstExpression(const Token *tok, const std::set<std::string> &constFunctions);
 
 bool isWithoutSideEffects(bool cpp, const Token* tok);
+
+/** Is variable changed in block of code? */
+bool isVariableChanged(const Token *start, const Token *end, const unsigned int varid);
+
+/** Determines the number of arguments - if token is a function call or macro
+ * @param start token which is supposed to be the function/macro name.
+ * \return Number of arguments
+ */
+int numberOfArguments(const Token *start);
 
 #endif // astutilsH

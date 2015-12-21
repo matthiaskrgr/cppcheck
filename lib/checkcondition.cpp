@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -142,6 +142,13 @@ bool CheckCondition::assignIfParseScope(const Token * const assignTok,
         if (Token::Match(tok2, "if|while (")) {
             if (!islocal && tok2->str() == "while")
                 continue;
+            if (tok2->str() == "while") {
+                // is variable changed in loop?
+                const Token *bodyStart = tok2->linkAt(1)->next();
+                const Token *bodyEnd   = bodyStart ? bodyStart->link() : nullptr;
+                if (!bodyEnd || bodyEnd->str() != "}" || isVariableChanged(bodyStart, bodyEnd, varid))
+                    continue;
+            }
 
             // parse condition
             const Token * const end = tok2->next()->link();
@@ -268,7 +275,6 @@ void CheckCondition::comparison()
     if (!_settings->isEnabled("style"))
         return;
 
-    // Experimental code based on AST
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
         if (Token::Match(tok, "==|!=")) {
             const Token *expr1 = tok->astOperand1();
@@ -1007,4 +1013,68 @@ void CheckCondition::alwaysTrueFalseError(const Token *tok, bool knownResult)
                 Severity::style,
                 "knownConditionTrueFalse",
                 "Condition '" + expr + "' is always " + (knownResult ? "true" : "false"));
+}
+
+void CheckCondition::checkInvalidTestForOverflow()
+{
+    if (!_settings->isEnabled("warning"))
+        return;
+
+    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
+    const std::size_t functions = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < functions; ++i) {
+        const Scope * scope = symbolDatabase->functionScopes[i];
+
+        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
+            if (!tok->isComparisonOp() || !tok->astOperand1() || !tok->astOperand2())
+                continue;
+
+            const Token *calcToken, *exprToken;
+            bool result;
+            if (Token::Match(tok, "<|>=") && tok->astOperand1()->str() == "+") {
+                calcToken = tok->astOperand1();
+                exprToken = tok->astOperand2();
+                result = (tok->str() == ">=");
+            } else if (Token::Match(tok, ">|<=") && tok->astOperand2()->str() == "+") {
+                calcToken = tok->astOperand2();
+                exprToken = tok->astOperand1();
+                result = (tok->str() == "<=");
+            } else
+                continue;
+
+            // Only warn for signed integer overflows and pointer overflows.
+            if (!(calcToken->valueType() && (calcToken->valueType()->pointer || calcToken->valueType()->sign == ValueType::Sign::SIGNED)))
+                continue;
+            if (!(exprToken->valueType() && (exprToken->valueType()->pointer || exprToken->valueType()->sign == ValueType::Sign::SIGNED)))
+                continue;
+
+            const Token *termToken;
+            if (isSameExpression(_tokenizer->isCPP(), exprToken, calcToken->astOperand1(), _settings->library.functionpure))
+                termToken = calcToken->astOperand2();
+            else if (isSameExpression(_tokenizer->isCPP(), exprToken, calcToken->astOperand2(), _settings->library.functionpure))
+                termToken = calcToken->astOperand1();
+            else
+                continue;
+
+            if (!termToken)
+                continue;
+
+            // Only warn when termToken is always positive
+            if (termToken->valueType() && termToken->valueType()->sign == ValueType::Sign::UNSIGNED)
+                invalidTestForOverflow(tok, result);
+            else if (termToken->isNumber() && MathLib::isPositive(termToken->str()))
+                invalidTestForOverflow(tok, result);
+        }
+    }
+}
+
+void CheckCondition::invalidTestForOverflow(const Token* tok, bool result)
+{
+    std::string errmsg;
+    errmsg = "Invalid test for overflow '" +
+             (tok ? tok->expressionString() : std::string("x + u < x")) +
+             "'. Condition is always " +
+             std::string(result ? "true" : "false") +
+             " unless there is overflow, and overflow is UB.";
+    reportError(tok, Severity::warning, "invalidTestForOverflow", errmsg);
 }

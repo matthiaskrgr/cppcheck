@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Daniel Marjamäki and Cppcheck team.
+ * Copyright (C) 2007-2015 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,19 +25,21 @@
 #include <QFileInfo>
 #include "translationhandler.h"
 
+
+static void unused() __attribute__((unused));
 // Provide own translations for standard buttons. This (garbage) code is needed to enforce them to appear in .ts files even after "lupdate gui.pro"
 static void unused()
 {
     // Qt4
-    QT_TRANSLATE_NOOP("QDialogButtonBox", "OK");
-    QT_TRANSLATE_NOOP("QDialogButtonBox", "Cancel");
-    QT_TRANSLATE_NOOP("QDialogButtonBox", "Close");
-    QT_TRANSLATE_NOOP("QDialogButtonBox", "Save");
+    Q_UNUSED(QT_TRANSLATE_NOOP("QDialogButtonBox", "OK"));
+    Q_UNUSED(QT_TRANSLATE_NOOP("QDialogButtonBox", "Cancel"));
+    Q_UNUSED(QT_TRANSLATE_NOOP("QDialogButtonBox", "Close"));
+    Q_UNUSED(QT_TRANSLATE_NOOP("QDialogButtonBox", "Save"));
     // Qt5
-    QT_TRANSLATE_NOOP("QPlatformTheme", "OK");
-    QT_TRANSLATE_NOOP("QPlatformTheme", "Cancel");
-    QT_TRANSLATE_NOOP("QPlatformTheme", "Close");
-    QT_TRANSLATE_NOOP("QPlatformTheme", "Save");
+    Q_UNUSED(QT_TRANSLATE_NOOP("QPlatformTheme", "OK"));
+    Q_UNUSED(QT_TRANSLATE_NOOP("QPlatformTheme", "Cancel"));
+    Q_UNUSED(QT_TRANSLATE_NOOP("QPlatformTheme", "Close"));
+    Q_UNUSED(QT_TRANSLATE_NOOP("QPlatformTheme", "Save"));
 }
 
 TranslationHandler::TranslationHandler(QObject *parent) :
@@ -69,7 +71,7 @@ TranslationHandler::~TranslationHandler()
 const QStringList TranslationHandler::GetNames() const
 {
     QStringList names;
-    foreach(TranslationInfo translation, mTranslations) {
+    foreach (TranslationInfo translation, mTranslations) {
         names.append(translation.mName);
     }
     return names;
