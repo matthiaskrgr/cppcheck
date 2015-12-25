@@ -188,7 +188,7 @@ void CheckFunctions::checkMathFunctions()
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
             if (tok->varId())
                 continue;
-            if (printWarnings) {
+            if (printWarnings && Token::Match(tok, "%name% ( !!)")) {
                 if (tok->strAt(-1) != "."
                     && Token::Match(tok, "log|logf|logl|log10|log10f|log10l ( %num% )")) {
                     const std::string& number = tok->strAt(2);
@@ -222,7 +222,7 @@ void CheckFunctions::checkMathFunctions()
                         mathfunctionCallWarning(tok, 2);
                 }
                 // fmod ( x , y) If y is zero, then either a range error will occur or the function will return zero (implementation-defined).
-                else if (Token::Match(tok, "fmod|fmodf|fmodl ( %any%")) {
+                else if (Token::Match(tok, "fmod|fmodf|fmodl (")) {
                     const Token* nextArg = tok->tokAt(2)->nextArgument();
                     if (nextArg && nextArg->isNumber() && MathLib::isNullValue(nextArg->str()))
                         mathfunctionCallWarning(tok, 2);

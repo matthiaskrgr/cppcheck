@@ -819,7 +819,7 @@ void CheckClass::initializationListUsage()
                 break;
             if (Token::Match(tok, "try|do {"))
                 break;
-            if (Token::Match(tok, "%var% = %any%") && tok->strAt(-1) != "*") {
+            if (Token::Match(tok, "%var% =") && tok->strAt(-1) != "*") {
                 const Variable* var = tok->variable();
                 if (var && var->scope() == owner && !var->isStatic()) {
                     if (var->isPointer() || var->isReference() || (!var->type() && !var->isStlStringType() && !(Token::Match(var->typeStartToken(), "std :: %type% <") && !Token::simpleMatch(var->typeStartToken()->linkAt(3), "> ::"))))
@@ -991,7 +991,7 @@ void CheckClass::checkMemset()
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token *tok = scope->classStart; tok && tok != scope->classEnd; tok = tok->next()) {
-            if (Token::Match(tok, "memset|memcpy|memmove ( %any%")) {
+            if (Token::Match(tok, "memset|memcpy|memmove (")) {
                 const Token* arg1 = tok->tokAt(2);
                 const Token* arg3 = arg1->nextArgument();
                 if (arg3)
@@ -1052,11 +1052,11 @@ void CheckClass::checkMemset()
                     type = typeTok->type()->classScope;
 
                 if (type) {
-                    std::list<const Scope *> parsedTypes;
+                    std::set<const Scope *> parsedTypes;
                     checkMemsetType(scope, tok, type, false, parsedTypes);
                 }
             } else if (tok->variable() && tok->variable()->typeScope() && Token::Match(tok, "%var% = calloc|malloc|realloc|g_malloc|g_try_malloc|g_realloc|g_try_realloc (")) {
-                std::list<const Scope *> parsedTypes;
+                std::set<const Scope *> parsedTypes;
                 checkMemsetType(scope, tok->tokAt(2), tok->variable()->typeScope(), true, parsedTypes);
 
                 if (tok->variable()->typeScope()->numConstructors > 0 && printWarnings)
@@ -1066,12 +1066,12 @@ void CheckClass::checkMemset()
     }
 }
 
-void CheckClass::checkMemsetType(const Scope *start, const Token *tok, const Scope *type, bool allocation, std::list<const Scope *> parsedTypes)
+void CheckClass::checkMemsetType(const Scope *start, const Token *tok, const Scope *type, bool allocation, std::set<const Scope *> parsedTypes)
 {
     // If type has been checked there is no need to check it again
-    if (std::find(parsedTypes.begin(), parsedTypes.end(), type) != parsedTypes.end())
+    if (parsedTypes.find(type) != parsedTypes.end())
         return;
-    parsedTypes.push_back(type);
+    parsedTypes.insert(type);
 
     const bool printPortability = _settings->isEnabled("portability");
 
@@ -1876,10 +1876,11 @@ bool CheckClass::checkConstFunc(const Scope *scope, const Function *func, bool& 
                 if (lhs->astParent()->strAt(1) != "const")
                     return false;
             } else {
-                const Variable* v2 = lhs->previous()->variable();
-                if (lhs->tokType() == Token::eAssignmentOp && v2)
-                    if (!v2->isConst() && v2->isReference() && lhs == v2->nameToken()->next())
+                if (lhs->tokType() == Token::eAssignmentOp) {
+                    const Variable* lhsVar = lhs->previous()->variable();
+                    if (lhsVar && !lhsVar->isConst() && lhsVar->isReference() && lhs == lhsVar->nameToken()->next())
                         return false;
+                }
             }
 
             const Token* jumpBackToken = nullptr;

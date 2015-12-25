@@ -1147,7 +1147,7 @@ void CheckBufferOverrun::checkGlobalAndLocalVariable()
 
         for (const Token *tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
             // if the previous token exists, it must be either a variable name or "[;{}]"
-            if (tok->previous() && (!tok->previous()->isName() && !Token::Match(tok->previous(), "[;{}]")))
+            if (tok->previous() && !tok->previous()->isName() && !Token::Match(tok->previous(), "[;{}]"))
                 continue;
 
             // size : Max array index
@@ -1427,13 +1427,14 @@ void CheckBufferOverrun::bufferOverrun2()
             continue;
 
         // Set full varname..
-        std::string varname(tok->str());
+        std::string varname;
         if (tok->astParent() && tok->astParent()->str() == ".") {
             const Token *parent = tok->astParent();
             while (parent->astParent() && parent->astParent()->str() == ".")
                 parent = parent->astParent();
             varname = parent->expressionString();
-        }
+        } else
+            varname = tok->str();
 
 
         const Token * const strtoken = tok->getValueTokenMinStrSize();

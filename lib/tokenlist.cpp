@@ -236,8 +236,8 @@ bool TokenList::createTokens(std::istream &code, const std::string& file0)
             if (!CurrentToken.empty()) {
                 addtoken(CurrentToken, lineno, FileIndex, true);
                 _back->isExpandedMacro(expandedMacro);
+                CurrentToken.clear();
             }
-            CurrentToken.clear();
             expandedMacro = true;
             continue;
         }
@@ -352,9 +352,8 @@ bool TokenList::createTokens(std::istream &code, const std::string& file0)
             if (!CurrentToken.empty()) {
                 _back->isExpandedMacro(expandedMacro);
                 expandedMacro = false;
+                CurrentToken.clear();
             }
-
-            CurrentToken.clear();
 
             if (ch == '\n') {
                 if (_settings->terminated())
@@ -909,7 +908,7 @@ static void compileAssignTernary(Token *&tok, AST_state& state)
         } else if (tok->str() == "?") {
             // http://en.cppreference.com/w/cpp/language/operator_precedence says about ternary operator:
             //       "The expression in the middle of the conditional operator (between ? and :) is parsed as if parenthesized: its precedence relative to ?: is ignored."
-            // Hence, we rely on Tokenizer::prepareTernaryOpForAST() to add such parantheses where necessary.
+            // Hence, we rely on Tokenizer::prepareTernaryOpForAST() to add such parentheses where necessary.
             if (tok->strAt(1) == ":") {
                 state.op.push(0);
             }
@@ -1079,7 +1078,7 @@ void TokenList::validateAst()
                 throw InternalError(tok, "AST broken: endless recursion from '" + tok->str() + "'", InternalError::SYNTAX);
             if (astTokens.find(parent)!= astTokens.end()) {
                 break;
-             }
+            }
             astTokens.insert(parent);
         }
     }
