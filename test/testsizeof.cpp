@@ -610,6 +610,15 @@ private:
                       "[test.cpp:5]: (portability) 'p2' is of type 'void *'. When using void pointers in calculations, the behaviour is undefined.\n", errout.str());
 
         check("void f() {\n"
+              "  void* p1 = malloc(10);\n"
+              "  void* p2 = malloc(5);\n"
+              "  p1-=4;\n"
+              "  p2+=4;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (portability) 'p1' is of type 'void *'. When using void pointers in calculations, the behaviour is undefined.\n"
+                      "[test.cpp:5]: (portability) 'p2' is of type 'void *'. When using void pointers in calculations, the behaviour is undefined.\n", errout.str());
+
+        check("void f() {\n"
               "  void* p = malloc(10);\n"
               "  int* p2 = &p + 4;\n"
               "  int* p3 = &p - 1;\n"
@@ -659,7 +668,7 @@ private:
                       "[test.cpp:3]: (portability) 'data' is of type 'void *'. When using void pointers in calculations, the behaviour is undefined.\n", errout.str());
 
         check("void f(void *data) {\n"
-              "  void* data2 = (void *)data + 1;\n"
+              "  void* data2 = data + 1;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:2]: (portability) 'data' is of type 'void *'. When using void pointers in calculations, the behaviour is undefined.\n", errout.str());
 

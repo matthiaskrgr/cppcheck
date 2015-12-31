@@ -540,7 +540,7 @@ void CheckOther::checkRedundantAssignment()
                 }
 
                 std::map<unsigned int, const Token*>::iterator it = varAssignments.find(tok->varId());
-                if (tok->next() && tok->next()->isAssignmentOp() && Token::Match(startToken, "[;{}]")) { // Assignment
+                if (Token::simpleMatch(tok->next(), "=") && Token::Match(startToken, "[;{}]")) { // Assignment
                     if (it != varAssignments.end()) {
                         bool error = true; // Ensure that variable is not used on right side
                         for (const Token* tok2 = tok->tokAt(2); tok2; tok2 = tok2->next()) {
@@ -733,6 +733,32 @@ void CheckOther::checkRedundantAssignmentInSwitch()
             // Bitwise operation. Report an error if it's performed twice before a break. E.g.:
             //    case 3: b |= 1;    // <== redundant
             //    case 4: b |= 1;
+            else if (Token::Match(tok2->previous(), ";|{|}|: %var% %assign% %num% ;") &&
+                     (tok2->strAt(1) == "|=" || tok2->strAt(1) == "&=") &&
+                     Token::Match(tok2->next()->astOperand2(), "%num%")) {
+                std::string bitOp = tok2->strAt(1)[0] + tok2->strAt(2);
+                std::map<unsigned int, const Token*>::const_iterator i2 = varsWithBitsSet.find(tok2->varId());
+
+                // This variable has not had a bit operation performed on it yet, so just make a note of it
+                if (i2 == varsWithBitsSet.end()) {
+                    varsWithBitsSet[tok2->varId()] = tok2;
+                    bitOperations[tok2->varId()] = bitOp;
+                }
+
+                // The same bit operation has been performed on the same variable twice, so report an error
+                else if (bitOperations[tok2->varId()] == bitOp)
+                    redundantBitwiseOperationInSwitchError(i2->second, i2->second->str());
+
+                // A different bit operation was performed on the variable, so clear it
+                else {
+                    varsWithBitsSet.erase(tok2->varId());
+                    bitOperations.erase(tok2->varId());
+                }
+            }
+
+            // Bitwise operation. Report an error if it's performed twice before a break. E.g.:
+            //    case 3: b = b | 1;    // <== redundant
+            //    case 4: b = b | 1;
             else if (Token::Match(tok2->previous(), ";|{|}|: %var% = %name% %or%|& %num% ;") &&
                      tok2->varId() == tok2->tokAt(2)->varId()) {
                 std::string bitOp = tok2->strAt(3) + tok2->strAt(4);
@@ -1890,7 +1916,7 @@ void CheckOther::checkDuplicateExpression()
             if (tok->isOp() && tok->astOperand1() && !Token::Match(tok, "+|*|<<|>>|+=|*=|<<=|>>=")) {
                 if (Token::Match(tok, "==|!=|-") && astIsFloat(tok->astOperand1(), true))
                     continue;
-                if (isSameExpression(_tokenizer->isCPP(), tok->astOperand1(), tok->astOperand2(), _settings->library.functionpure)) {
+                if (isSameExpression(_tokenizer->isCPP(), true, tok->astOperand1(), tok->astOperand2(), _settings->library.functionpure)) {
                     if (isWithoutSideEffects(_tokenizer->isCPP(), tok->astOperand1())) {
                         const bool assignment = tok->str() == "=";
                         if (assignment && warningEnabled)
@@ -1910,16 +1936,16 @@ void CheckOther::checkDuplicateExpression()
                         }
                     }
                 } else if (!Token::Match(tok, "[-/%]")) { // These operators are not associative
-                    if (styleEnabled && tok->astOperand2() && tok->str() == tok->astOperand1()->str() && isSameExpression(_tokenizer->isCPP(), tok->astOperand2(), tok->astOperand1()->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer->isCPP(), tok->astOperand2()))
+                    if (styleEnabled && tok->astOperand2() && tok->str() == tok->astOperand1()->str() && isSameExpression(_tokenizer->isCPP(), true, tok->astOperand2(), tok->astOperand1()->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer->isCPP(), tok->astOperand2()))
                         duplicateExpressionError(tok->astOperand2(), tok->astOperand2(), tok->str());
                     else if (tok->astOperand2()) {
                         const Token *ast1 = tok->astOperand1();
                         while (ast1 && tok->str() == ast1->str()) {
-                            if (isSameExpression(_tokenizer->isCPP(), ast1->astOperand1(), tok->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer->isCPP(), ast1->astOperand1()))
+                            if (isSameExpression(_tokenizer->isCPP(), true, ast1->astOperand1(), tok->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer->isCPP(), ast1->astOperand1()))
                                 // TODO: warn if variables are unchanged. See #5683
                                 // Probably the message should be changed to 'duplicate expressions X in condition or something like that'.
                                 ;//duplicateExpressionError(ast1->astOperand1(), tok->astOperand2(), tok->str());
-                            else if (styleEnabled && isSameExpression(_tokenizer->isCPP(), ast1->astOperand2(), tok->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer->isCPP(), ast1->astOperand2()))
+                            else if (styleEnabled && isSameExpression(_tokenizer->isCPP(), true, ast1->astOperand2(), tok->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer->isCPP(), ast1->astOperand2()))
                                 duplicateExpressionError(ast1->astOperand2(), tok->astOperand2(), tok->str());
                             if (!isConstExpression(ast1->astOperand2(), _settings->library.functionpure))
                                 break;
@@ -1928,7 +1954,7 @@ void CheckOther::checkDuplicateExpression()
                     }
                 }
             } else if (styleEnabled && tok->astOperand1() && tok->astOperand2() && tok->str() == ":" && tok->astParent() && tok->astParent()->str() == "?") {
-                if (isSameExpression(_tokenizer->isCPP(), tok->astOperand1(), tok->astOperand2(), temp))
+                if (isSameExpression(_tokenizer->isCPP(), true, tok->astOperand1(), tok->astOperand2(), temp))
                     duplicateExpressionTernaryError(tok);
             }
         }
@@ -2186,7 +2212,7 @@ static bool isNegative(const Token *tok, const Settings *settings)
 void CheckOther::checkNegativeBitwiseShift()
 {
     for (const Token* tok = _tokenizer->tokens(); tok; tok = tok->next()) {
-        if (tok->str() != "<<" && tok->str() != ">>")
+        if (!Token::Match(tok, "<<|>>|<<=|>>="))
             continue;
 
         if (!tok->astOperand1() || !tok->astOperand2())
@@ -2485,6 +2511,10 @@ void CheckOther::unusedLabelError(const Token* tok)
 
 void CheckOther::checkEvaluationOrder()
 {
+    // This checker is not written according to C++11 sequencing rules
+    if (_tokenizer->isCPP() && _settings->standards.cpp >= Standards::CPP11)
+        return;
+
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
@@ -2494,20 +2524,40 @@ void CheckOther::checkEvaluationOrder()
                 continue;
             if (!tok->astOperand1())
                 continue;
-            for (const Token *tok2 = tok; tok2 && tok2->astParent(); tok2 = tok2->astParent()) {
+            for (const Token *tok2 = tok;; tok2 = tok2->astParent()) {
                 // If ast parent is a sequence point then break
                 const Token * const parent = tok2->astParent();
+                if (!parent)
+                    break;
                 if (Token::Match(parent, "%oror%|&&|?|:|;"))
                     break;
                 if (parent->str() == ",") {
                     const Token *par = parent;
                     while (Token::simpleMatch(par,","))
                         par = par->astParent();
-                    if (!par || par->str() != "(")
+                    // not function => break
+                    if (!(par && par->str() == "(" && par->astOperand2()))
+                        break;
+                    // sequence point in function argument: dostuff((1,2),3) => break
+                    par = par->next();
+                    while (par && (par->previous() != parent))
+                        par = par->nextArgument();
+                    if (!par)
                         break;
                 }
                 if (parent->str() == "(" && parent->astOperand2())
                     break;
+
+                // self assignment..
+                if (tok2 == tok &&
+                    tok->str() == "=" &&
+                    parent->str() == "=" &&
+                    isSameExpression(_tokenizer->isCPP(), false, tok->astOperand1(), parent->astOperand1(), _settings->library.functionpure)) {
+                    if (_settings->isEnabled("warning") &&
+                        isSameExpression(_tokenizer->isCPP(), true, tok->astOperand1(), parent->astOperand1(), _settings->library.functionpure))
+                        selfAssignmentError(parent, tok->astOperand1()->expressionString());
+                    break;
+                }
 
                 // Is expression used?
                 bool foundError = false;
@@ -2518,9 +2568,13 @@ void CheckOther::checkEvaluationOrder()
                     tokens.pop();
                     if (!tok3)
                         continue;
+                    if (tok3->str() == "&" && !tok3->astOperand2())
+                        continue; // don't handle adress-of for now
+                    if (tok3->str() == "(" && Token::simpleMatch(tok3->previous(), "sizeof"))
+                        continue; // don't care about sizeof usage
                     tokens.push(tok3->astOperand1());
                     tokens.push(tok3->astOperand2());
-                    if (isSameExpression(_tokenizer->isCPP(), tok->astOperand1(), tok3, _settings->library.functionpure)) {
+                    if (isSameExpression(_tokenizer->isCPP(), false, tok->astOperand1(), tok3, _settings->library.functionpure)) {
                         foundError = true;
                     }
                 }

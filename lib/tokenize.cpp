@@ -54,6 +54,8 @@ namespace {
 
 const Token * Tokenizer::isFunctionHead(const Token *tok, const std::string &endsWith) const
 {
+    if (!tok)
+        return nullptr;
     if (tok->str() == "(")
         tok = tok->link();
     if (Token::Match(tok, ") const| [;:{]")) {
@@ -2616,6 +2618,8 @@ void Tokenizer::setVarIdClassDeclaration(Token * const startToken,
             if (indentlevel > 0 || initList) {
                 if (Token::Match(tok->previous(), "::|.") && tok->strAt(-2) != "this" && !Token::simpleMatch(tok->tokAt(-5), "( * this ) ."))
                     continue;
+                if (!tok->next())
+                    syntaxError(nullptr); // #7237 invalid code
                 if (tok->next()->str() == "::") {
                     if (tok->str() == className)
                         tok = tok->tokAt(2);
@@ -3023,7 +3027,7 @@ void Tokenizer::setVarId()
                                 vartok->varId(varpos->second);
                             if (vartok->strAt(1) == "<") {
                                 tok3 = vartok->next()->findClosingBracket();
-                                if (tok3 && tok3->next()->link())
+                                if (tok3 && tok3->next() && tok3->next()->link())
                                     tok3 = tok3->next()->link();
                             } else
                                 tok3 = vartok->linkAt(1);
@@ -3413,10 +3417,8 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // replace 'NULL' and similar '0'-defined macros with '0'
     simplifyNull();
 
-#ifndef CPPCHECK2
     // replace 'sin(0)' to '0' and other similar math expressions
     simplifyMathExpressions();
-#endif
 
     // combine "- %num%"
     concatenateNegativeNumberAndAnyPositive();
@@ -3424,13 +3426,11 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // Combine tokens..
     combineOperators();
 
-#ifndef CPPCHECK2
     // simplify simple calculations
     for (Token *tok = list.front() ? list.front()->next() : nullptr; tok; tok = tok->next()) {
         if (tok->isNumber())
             TemplateSimplifier::simplifyNumericCalculations(tok->previous());
     }
-#endif
 
     // remove extern "C" and extern "C" {}
     if (isCPP())
@@ -3480,9 +3480,6 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // simplify '[;{}] * & ( %any% ) =' to '%any% ='
     simplifyMulAndParens();
 
-    // ";a+=b;" => ";a=a+b;"
-    simplifyCompoundAssignment();
-
     if (!isC() && !_settings->library.markupFile(FileName)) {
         findComplicatedSyntaxErrorsInTemplates();
     }
@@ -3513,13 +3510,11 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // remove unnecessary member qualification..
     removeUnnecessaryQualification();
 
-#ifndef CPPCHECK2
     // convert Microsoft memory functions
     simplifyMicrosoftMemoryFunctions();
 
     // convert Microsoft string functions
     simplifyMicrosoftStringFunctions();
-#endif
 
     if (_settings->terminated())
         return false;
@@ -3613,9 +3608,6 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     if (_settings->terminated())
         return false;
 
-    // f(x=g())   =>   x=g(); f(x)
-    simplifyAssignmentInFunctionCall();
-
     // x = ({ 123; });  =>   { x = 123; }
     simplifyAssignmentBlock();
 
@@ -3628,13 +3620,11 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // operator = => operator=
     simplifyOperatorName();
 
-#ifndef CPPCHECK2
     // Remove redundant parentheses
     simplifyRedundantParentheses();
     for (Token *tok = list.front(); tok; tok = tok->next())
         while (TemplateSimplifier::simplifyNumericCalculations(tok))
             ;
-#endif
 
     // Handle templates..
     simplifyTemplates();
@@ -3689,10 +3679,8 @@ bool Tokenizer::simplifyTokenList1(const char FileName[])
     // Change initialisation of variable to assignment
     simplifyInitVar();
 
-#ifndef CPPCHECK2
     // Convert e.g. atol("0") into 0
     simplifyMathFunctions();
-#endif
 
     simplifyDoublePlusAndDoubleMinus();
 
@@ -3725,6 +3713,12 @@ bool Tokenizer::simplifyTokenList2()
     // Clear AST. It will be created again at the end of this function.
     for (Token *tok = list.front(); tok; tok = tok->next())
         tok->clearAst();
+
+    // f(x=g())   =>   x=g(); f(x)
+    simplifyAssignmentInFunctionCall();
+
+    // ";a+=b;" => ";a=a+b;"
+    simplifyCompoundAssignment();
 
     simplifyCharAt();
 
@@ -3773,7 +3767,6 @@ bool Tokenizer::simplifyTokenList2()
 
     simplifyIfAndWhileAssign();
 
-#ifndef CPPCHECK2
     // replace strlen(str)
     for (Token *tok = list.front(); tok; tok = tok->next()) {
         if (Token::Match(tok, "strlen ( %str% )")) {
@@ -3799,7 +3792,6 @@ bool Tokenizer::simplifyTokenList2()
         modified |= simplifyCalculations();
         validate();
     }
-#endif
 
     // simplify redundant loops
     simplifyWhile0();

@@ -211,6 +211,11 @@ private:
         TEST_CASE(garbageCode160); // #7190
         TEST_CASE(garbageCode161); // #7200
         TEST_CASE(garbageCode162); // #7208
+        TEST_CASE(garbageCode163); // #7228
+        TEST_CASE(garbageCode164); // #7234
+        TEST_CASE(garbageCode165); // #7235
+        TEST_CASE(garbageCode166); // #7236
+        TEST_CASE(garbageCode167); // #7237
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
         TEST_CASE(garbageAST);
@@ -1393,6 +1398,30 @@ private:
         ASSERT_THROW(checkCode("return <<  >>  x return <<  >>  x ", false), InternalError);
     }
 
+    void garbageCode163() {
+        //7228
+        ASSERT_THROW(checkCode("typedef s f[](){typedef d h(;f)}", false), InternalError);
+    }
+
+    void garbageCode164() {
+        //7234
+        ASSERT_THROW(checkCode("class d{k p;}(){d::d():B<()}", false), InternalError);
+    }
+
+    void garbageCode165() {
+        //7235
+        checkCode("for(;..)", false);
+    }
+
+    void garbageCode166() {
+        //7236
+        checkCode("d a(){f s=0()8[]s?():0}*()?:0", false);
+    }
+
+    void garbageCode167() {
+        //7237
+        checkCode("class D00i000{:D00i000::}i", false);
+    }
 };
 
 REGISTER_TEST(TestGarbage)

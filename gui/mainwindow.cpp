@@ -214,21 +214,26 @@ MainWindow::~MainWindow()
 
 void MainWindow::HandleCLIParams(const QStringList &params)
 {
+    int index;
     if (params.contains("-p")) {
-        const int ind = params.indexOf("-p");
-        if ((ind + 1) < params.length())
-            LoadProjectFile(params[ind + 1]);
+        index = params.indexOf("-p");
+        if ((index + 1) < params.length())
+            LoadProjectFile(params[index + 1]);
+    } else if ((index = params.indexOf(QRegExp(".*\\.cppcheck$", Qt::CaseInsensitive), 0)) >= 0 && index < params.length() && QFile(params[index]).exists()) {
+        LoadProjectFile(params[index]);
+    } else if ((index = params.indexOf(QRegExp(".*\\.xml$", Qt::CaseInsensitive), 0)) >= 0 && index < params.length() && QFile(params[index]).exists()) {
+        LoadResults(params[index]);
     } else if (params.contains("-l")) {
         QString logFile;
-        const int ind = params.indexOf("-l");
-        if ((ind + 1) < params.length())
-            logFile = params[ind + 1];
+        index = params.indexOf("-l");
+        if ((index + 1) < params.length())
+            logFile = params[index + 1];
 
         if (params.contains("-d")) {
             QString checkedDir;
-            const int ind = params.indexOf("-d");
-            if ((ind + 1) < params.length())
-                checkedDir = params[ind + 1];
+            index = params.indexOf("-d");
+            if ((index + 1) < params.length())
+                checkedDir = params[index + 1];
 
             LoadResults(logFile, checkedDir);
         } else {
@@ -808,10 +813,16 @@ void MainWindow::ReCheckSelected(QStringList files, bool all)
     // Clear details, statistics and progress
     mUI.mResults->Clear(false);
     for (int i = 0; i < files.size(); ++i)
-        mUI.mResults->Clear(files[i]);
+        mUI.mResults->ClearRecheckFile(files[i]);
+
+    FileList pathList;
+    pathList.AddPathList(files);
+    if (mProject)
+        pathList.AddExcludeList(mProject->GetProjectFile()->GetExcludedPaths());
+    QStringList fileNames = pathList.GetFileList();
     CheckLockDownUI(); // lock UI while checking
-    mUI.mResults->CheckingStarted(files.size());
-    mThread->SetCheckFiles(files);
+    mUI.mResults->CheckingStarted(fileNames.size());
+    mThread->SetCheckFiles(fileNames);
 
     // Saving last check start time, otherwise unchecked modified files will not be
     // considered in "Modified Files Check"  performed after "Selected Files Check"

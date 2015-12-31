@@ -3676,27 +3676,23 @@ static void setValueType(Token *tok, const ValueType &valuetype)
         return;
 
     if (parent->str() == "[" && valuetype.pointer > 0U) {
-        setValueType(parent, ValueType(valuetype.sign,
-                                       valuetype.type,
-                                       valuetype.pointer - 1U,
-                                       valuetype.constness >> 1,
-                                       valuetype.originalTypeName));
+        ValueType vt(valuetype);
+        vt.pointer -= 1U;
+        vt.constness >>= 1;
+        setValueType(parent, vt);
         return;
     }
     if (parent->str() == "*" && !parent->astOperand2() && valuetype.pointer > 0U) {
-        setValueType(parent, ValueType(valuetype.sign,
-                                       valuetype.type,
-                                       valuetype.pointer - 1U,
-                                       valuetype.constness >> 1,
-                                       valuetype.originalTypeName));
+        ValueType vt(valuetype);
+        vt.pointer -= 1U;
+        vt.constness >>= 1;
+        setValueType(parent, vt);
         return;
     }
     if (parent->str() == "&" && !parent->astOperand2()) {
-        setValueType(parent, ValueType(valuetype.sign,
-                                       valuetype.type,
-                                       valuetype.pointer + 1U,
-                                       valuetype.constness,
-                                       valuetype.originalTypeName));
+        ValueType vt(valuetype);
+        vt.pointer += 1U;
+        setValueType(parent, vt);
         return;
     }
 
@@ -3782,7 +3778,6 @@ static void setValueType(Token *tok, const ValueType &valuetype)
 
         setValueType(parent, vt);
         return;
-
     }
 }
 
@@ -3800,6 +3795,8 @@ static const Token * parsedecl(const Token *type, ValueType * const valuetype)
             valuetype->sign = ValueType::Sign::UNSIGNED;
         if (type->str() == "const")
             valuetype->constness |= (1 << (valuetype->pointer - pointer0));
+        else if (type->str() == "void")
+            valuetype->type = ValueType::Type::VOID;
         else if (type->str() == "bool")
             valuetype->type = ValueType::Type::BOOL;
         else if (type->str() == "char")
@@ -3871,6 +3868,13 @@ void SymbolDatabase::setValueTypeInTokenList(Token *tokens)
                     ::setValueType(tok, valuetype);
             }
 
+            // C++ cast
+            if (tok->astOperand2() && Token::Match(tok->astOperand1(), "static_cast|const_cast|dynamic_cast|reinterpret_cast < %name%") && tok->astOperand1()->linkAt(1)) {
+                ValueType valuetype;
+                if (Token::simpleMatch(parsedecl(tok->astOperand1()->tokAt(2), &valuetype), ">"))
+                    ::setValueType(tok, valuetype);
+            }
+
             // function
             else if (tok->previous() && tok->previous()->function() && tok->previous()->function()->retDef) {
                 ValueType valuetype;
@@ -3895,7 +3899,9 @@ std::string ValueType::str() const
     std::string ret;
     if (constness & 1)
         ret = " const";
-    if (isIntegral()) {
+    if (type == VOID)
+        ret += " void";
+    else if (isIntegral()) {
         if (sign == SIGNED)
             ret += " signed";
         else if (sign == UNSIGNED)

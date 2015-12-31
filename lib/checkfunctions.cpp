@@ -95,7 +95,11 @@ void CheckFunctions::invalidFunctionUsage()
                     const Token *top = argtok;
                     while (top->astParent() && top->astParent()->str() != "," && top->astParent() != tok->next())
                         top = top->astParent();
-                    if (top->isComparisonOp() || Token::Match(top, "%oror%|&&")) {
+                    const Token *var = top;
+                    while (Token::Match(var, ".|::"))
+                        var = var->astOperand2();
+                    if (Token::Match(top, "%comp%|%oror%|&&|!|true|false") ||
+                        (var && var->variable() && Token::simpleMatch(var->variable()->typeStartToken(), "bool"))) {
                         if (_settings->library.isboolargbad(functionToken, argnr))
                             invalidFunctionArgBoolError(top, functionToken->str(), argnr);
 
