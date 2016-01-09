@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -216,6 +216,10 @@ private:
         TEST_CASE(garbageCode165); // #7235
         TEST_CASE(garbageCode166); // #7236
         TEST_CASE(garbageCode167); // #7237
+        TEST_CASE(garbageCode168); // #7246
+        TEST_CASE(garbageCode169); // #6731
+        TEST_CASE(garbageCode170);
+        TEST_CASE(garbageCode171);
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
         TEST_CASE(garbageAST);
@@ -556,7 +560,7 @@ private:
     }
 
     void garbageCode33() { // #6613
-        ASSERT_THROW(checkCode("main(()B{});"), InternalError);
+        checkCode("main(()B{});");
 
         checkCode("f::y:y : <x::");
 
@@ -676,8 +680,8 @@ private:
     }
 
     void garbageCode58() { // #6732, #6762
-        ASSERT_THROW(checkCode("{ }> {= ~A()^{} }P { }"), InternalError);
-        ASSERT_THROW(checkCode("{= ~A()^{} }P { } { }> is"), InternalError);
+        checkCode("{ }> {= ~A()^{} }P { }");
+        checkCode("{= ~A()^{} }P { } { }> is");
     }
 
     void garbageCode59() { // #6735
@@ -964,11 +968,11 @@ private:
     }
 
     void garbageCode123() {
-        checkCode("namespace pr16989 {\n"
-                  "    class C {\n"
-                  "        C tpl_mem(T *) { return }\n"
-                  "    };\n"
-                  "}");
+        ASSERT_THROW(checkCode("namespace pr16989 {\n"
+                               "    class C {\n"
+                               "        C tpl_mem(T *) { return }\n"
+                               "    };\n"
+                               "}"), InternalError);
     }
 
     void garbageCode124() {
@@ -1422,6 +1426,28 @@ private:
         //7237
         checkCode("class D00i000{:D00i000::}i", false);
     }
+
+    void garbageCode168() {
+        // 7246
+        checkCode("long foo(void) { return *bar; }", false);
+    }
+
+    void garbageCode169() {
+        // 6713
+        ASSERT_THROW(checkCode("( ) { ( ) ; { return } switch ( ) i\n"
+                               "set case break ; default: ( ) }", false), InternalError);
+    }
+
+    void garbageCode170() {
+        // 7255
+        checkCode("d i(){{f*s=typeid(()0,)}}", false);
+    }
+
+    void garbageCode171() {
+        // 7270
+        ASSERT_THROW(checkCode("(){case()?():}:", false), InternalError);
+    }
+
 };
 
 REGISTER_TEST(TestGarbage)

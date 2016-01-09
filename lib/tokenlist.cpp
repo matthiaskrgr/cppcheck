@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -396,7 +396,7 @@ bool TokenList::createTokens(std::istream &code, const std::string& file0)
     Token::assignProgressValues(_front);
 
     for (std::size_t i = 1; i < _files.size(); i++)
-        _files[i] = Path::getRelativePath(_files[i], _settings->_basePaths);
+        _files[i] = Path::getRelativePath(_files[i], _settings->basePaths);
 
     return true;
 }
@@ -444,6 +444,9 @@ static bool iscast(const Token *tok)
         return false;
 
     if (tok->previous() && tok->previous()->isName() && tok->previous()->str() != "return")
+        return false;
+
+    if (Token::simpleMatch(tok->previous(), ">") && tok->previous()->link())
         return false;
 
     if (Token::Match(tok, "( (| typeof (") && Token::Match(tok->link(), ") %num%"))

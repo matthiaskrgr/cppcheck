@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,9 +23,7 @@
 #include <QTranslator>
 #include <QObject>
 #include <QList>
-#ifndef __GNUC__
-#define __attribute__(A)
-#endif
+
 /// @addtogroup GUI
 /// @{
 

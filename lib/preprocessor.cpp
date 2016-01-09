@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -535,7 +535,7 @@ std::string Preprocessor::removeComments(const std::string &str, const std::stri
                 break;
             std::string comment(str, commentStart, i - commentStart);
 
-            if (_settings._inlineSuppressions) {
+            if (_settings.inlineSuppressions) {
                 std::istringstream iss(comment);
                 std::string word;
                 iss >> word;
@@ -572,7 +572,7 @@ std::string Preprocessor::removeComments(const std::string &str, const std::stri
                 fallThroughComment = true;
             }
 
-            if (_settings._inlineSuppressions) {
+            if (_settings.inlineSuppressions) {
                 std::istringstream iss(comment);
                 std::string word;
                 iss >> word;
@@ -641,9 +641,9 @@ std::string Preprocessor::removeComments(const std::string &str, const std::stri
                 if (!suppressionIDs.empty()) {
                     // Relative filename
                     std::string relativeFilename(filename);
-                    if (_settings._relativePaths) {
-                        for (std::size_t j = 0U; j < _settings._basePaths.size(); ++j) {
-                            const std::string bp = _settings._basePaths[j] + "/";
+                    if (_settings.relativePaths) {
+                        for (std::size_t j = 0U; j < _settings.basePaths.size(); ++j) {
+                            const std::string bp = _settings.basePaths[j] + "/";
                             if (relativeFilename.compare(0,bp.size(),bp)==0) {
                                 relativeFilename = relativeFilename.substr(bp.size());
                             }
@@ -1036,7 +1036,7 @@ void Preprocessor::preprocess(std::istream &srcCodeStream, std::string &processe
 
     std::map<std::string, std::string> defs(getcfgmap(_settings.userDefines, &_settings, filename));
 
-    if (_settings._maxConfigs == 1U) {
+    if (_settings.maxConfigs == 1U) {
         std::set<std::string> pragmaOnce;
         std::list<std::string> includes;
         processedFile = handleIncludes(processedFile, filename, includePaths, defs, pragmaOnce, includes);
@@ -1917,7 +1917,7 @@ std::string Preprocessor::getcode(const std::string &filedata, const std::string
 
         // #error => return ""
         if (match && line.compare(0, 6, "#error") == 0) {
-            if (!_settings.userDefines.empty() && !_settings._force) {
+            if (!_settings.userDefines.empty() && !_settings.force) {
                 error(Path::simplifyPath(filenames.top()), lineno, line);
             }
             return "";
@@ -2414,16 +2414,15 @@ static void skipstring(const std::string &line, std::string::size_type &pos)
 
 /**
  * Remove heading and trailing whitespaces from the input parameter.
+ * If string is all spaces/tabs, return empty string.
  * @param s The string to trim.
  */
 static std::string trim(const std::string& s)
 {
     const std::string::size_type beg = s.find_first_not_of(" \t");
     if (beg == std::string::npos)
-        return s;
+        return "";
     const std::string::size_type end = s.find_last_not_of(" \t");
-    if (end == std::string::npos)
-        return s.substr(beg);
     return s.substr(beg, end - beg + 1);
 }
 

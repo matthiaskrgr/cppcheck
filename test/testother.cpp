@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -235,7 +235,7 @@ private:
         std::list<std::string> configurations;
         std::string filedata = "";
         std::istringstream fin(precode);
-        preprocessor.preprocess(fin, filedata, configurations, filename, settings._includePaths);
+        preprocessor.preprocess(fin, filedata, configurations, filename, settings.includePaths);
         const std::string code = preprocessor.getcode(filedata, "", filename);
 
         // Tokenize..

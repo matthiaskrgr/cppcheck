@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -75,7 +75,7 @@ private:
     // Error messages..
     void tooBigBitwiseShiftError(const Token *tok, int lhsbits, const ValueFlow::Value &rhsbits);
     void integerOverflowError(const Token *tok, const ValueFlow::Value &value);
-    void signConversionError(const Token *tok);
+    void signConversionError(const Token *tok, const bool constvalue);
     void longCastAssignError(const Token *tok);
     void longCastReturnError(const Token *tok);
 
@@ -83,7 +83,7 @@ private:
         CheckType c(0, settings, errorLogger);
         c.tooBigBitwiseShiftError(0, 32, ValueFlow::Value(64));
         c.integerOverflowError(0, ValueFlow::Value(1LL<<32));
-        c.signConversionError(0);
+        c.signConversionError(0, false);
         c.longCastAssignError(0);
         c.longCastReturnError(0);
     }

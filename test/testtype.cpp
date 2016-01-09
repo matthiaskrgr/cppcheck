@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -99,20 +99,21 @@ private:
     void checkIntegerOverflow() {
         Settings settings;
         settings.platform(Settings::Unix32);
+        settings.addEnabled("warning");
 
-        check("int foo(int x) {\n"
+        check("int foo(signed int x) {\n"
               "   if (x==123456) {}\n"
               "   return x * x;\n"
               "}",&settings);
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Signed integer overflow for expression 'x*x'. See condition at line 2.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Either the condition 'x==123456' is redundant or there is signed integer overflow for expression 'x*x'.\n", errout.str());
 
-        check("int foo(int x) {\n"
+        check("int foo(signed int x) {\n"
               "   if (x==123456) {}\n"
               "   return -123456 * x;\n"
               "}",&settings);
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Signed integer overflow for expression '-123456*x'. See condition at line 2.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Either the condition 'x==123456' is redundant or there is signed integer overflow for expression '-123456*x'.\n", errout.str());
 
-        check("int foo(int x) {\n"
+        check("int foo(signed int x) {\n"
               "   if (x==123456) {}\n"
               "   return 123456U * x;\n"
               "}",&settings);
@@ -144,6 +145,11 @@ private:
               "}\n"
               "void f2() { f1(-4); }");
         ASSERT_EQUALS("", errout.str());
+
+        check("size_t foo(size_t x) {\n"
+              " return -2 * x;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Suspicious code: sign conversion of -2 in calculation because '-2' has a negative value\n", errout.str());
     }
 
     void longCastAssign() {

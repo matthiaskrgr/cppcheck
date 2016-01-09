@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -114,6 +114,7 @@ private:
         CheckBool c(0, settings, errorLogger);
 
         c.assignBoolToPointerError(0);
+        c.assignBoolToFloatError(0);
         c.comparisonOfFuncReturningBoolError(0, "func_name");
         c.comparisonOfTwoFuncsReturningBoolError(0, "func_name1", "func_name2");
         c.comparisonOfBoolWithBoolError(0, "var_name");

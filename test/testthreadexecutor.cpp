@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,7 +53,7 @@ private:
             filemap[oss.str()] = 1;
         }
 
-        settings._jobs = jobs;
+        settings.jobs = jobs;
         ThreadExecutor executor(filemap, settings, *this);
         for (std::map<std::string, std::size_t>::const_iterator i = filemap.begin(); i != filemap.end(); ++i)
             executor.addFileContent(i->first, data);

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,12 +19,13 @@
 #include "settings.h"
 #include "preprocessor.h"       // Preprocessor
 #include "utils.h"
+#include "tinyxml2.h"
 
 #include <fstream>
 #include <set>
 
 Settings::Settings()
-    : _terminate(false),
+    : _terminated(false),
       debug(false),
       debugnormal(false),
       debugwarnings(false),
@@ -34,16 +35,17 @@ Settings::Settings()
       jointSuppressionReport(false),
       experimental(false),
       quiet(false),
-      _inlineSuppressions(false),
-      _verbose(false),
-      _force(false),
-      _relativePaths(false),
-      _xml(false), _xml_version(1),
-      _jobs(1),
-      _loadAverage(0),
-      _exitCode(0),
-      _showtime(SHOWTIME_NONE),
-      _maxConfigs(12),
+      inlineSuppressions(false),
+      verbose(false),
+      force(false),
+      relativePaths(false),
+      xml(false), xml_version(1),
+      jobs(1),
+      loadAverage(0),
+      exitCode(0),
+      showtime(SHOWTIME_NONE),
+      preprocessOnly(false),
+      maxConfigs(12),
       enforcedLang(None),
       reportProgress(false),
       checkConfiguration(false),
@@ -55,7 +57,7 @@ Settings::Settings()
 #elif defined(_WIN32)
     platform(Win32A);
 #else
-    platform(Unspecified);
+    platform(Native);
 #endif
 }
 
@@ -139,7 +141,7 @@ const std::string &Settings::append() const
 bool Settings::platform(PlatformType type)
 {
     switch (type) {
-    case Unspecified: // same as system this code was compile on
+    case Unspecified:
         platformType = type;
         sizeof_bool = sizeof(bool);
         sizeof_short = sizeof(short);
@@ -152,6 +154,35 @@ bool Settings::platform(PlatformType type)
         sizeof_wchar_t = sizeof(wchar_t);
         sizeof_size_t = sizeof(std::size_t);
         sizeof_pointer = sizeof(void *);
+        defaultSign = '\0';
+        char_bit = 8;
+        short_bit = char_bit * sizeof_short;
+        int_bit = char_bit * sizeof_int;
+        long_bit = char_bit * sizeof_long;
+        long_long_bit = char_bit * sizeof_long_long;
+        return true;
+    case Native: // same as system this code was compile on
+        platformType = type;
+        sizeof_bool = sizeof(bool);
+        sizeof_short = sizeof(short);
+        sizeof_int = sizeof(int);
+        sizeof_long = sizeof(long);
+        sizeof_long_long = sizeof(long long);
+        sizeof_float = sizeof(float);
+        sizeof_double = sizeof(double);
+        sizeof_long_double = sizeof(long double);
+        sizeof_wchar_t = sizeof(wchar_t);
+        sizeof_size_t = sizeof(std::size_t);
+        sizeof_pointer = sizeof(void *);
+        {
+            int x = 2;
+            defaultSign = (-10 / x == -5) ? 's' : 'u';
+        }
+        char_bit = 8;
+        short_bit = char_bit * sizeof_short;
+        int_bit = char_bit * sizeof_int;
+        long_bit = char_bit * sizeof_long;
+        long_long_bit = char_bit * sizeof_long_long;
         return true;
     case Win32W:
     case Win32A:
@@ -167,6 +198,12 @@ bool Settings::platform(PlatformType type)
         sizeof_wchar_t = 2;
         sizeof_size_t = 4;
         sizeof_pointer = 4;
+        defaultSign = '\0';
+        char_bit = 8;
+        short_bit = char_bit * sizeof_short;
+        int_bit = char_bit * sizeof_int;
+        long_bit = char_bit * sizeof_long;
+        long_long_bit = char_bit * sizeof_long_long;
         return true;
     case Win64:
         platformType = type;
@@ -181,6 +218,12 @@ bool Settings::platform(PlatformType type)
         sizeof_wchar_t = 2;
         sizeof_size_t = 8;
         sizeof_pointer = 8;
+        defaultSign = '\0';
+        char_bit = 8;
+        short_bit = char_bit * sizeof_short;
+        int_bit = char_bit * sizeof_int;
+        long_bit = char_bit * sizeof_long;
+        long_long_bit = char_bit * sizeof_long_long;
         return true;
     case Unix32:
         platformType = type;
@@ -195,6 +238,12 @@ bool Settings::platform(PlatformType type)
         sizeof_wchar_t = 4;
         sizeof_size_t = 4;
         sizeof_pointer = 4;
+        defaultSign = '\0';
+        char_bit = 8;
+        short_bit = char_bit * sizeof_short;
+        int_bit = char_bit * sizeof_int;
+        long_bit = char_bit * sizeof_long;
+        long_long_bit = char_bit * sizeof_long_long;
         return true;
     case Unix64:
         platformType = type;
@@ -209,6 +258,12 @@ bool Settings::platform(PlatformType type)
         sizeof_wchar_t = 4;
         sizeof_size_t = 8;
         sizeof_pointer = 8;
+        defaultSign = '\0';
+        char_bit = 8;
+        short_bit = char_bit * sizeof_short;
+        int_bit = char_bit * sizeof_int;
+        long_bit = char_bit * sizeof_long;
+        long_long_bit = char_bit * sizeof_long_long;
         return true;
     }
 
@@ -218,8 +273,51 @@ bool Settings::platform(PlatformType type)
 
 bool Settings::platformFile(const std::string &filename)
 {
-    (void)filename;
-    /** @todo TBD */
+    // open file..
+    tinyxml2::XMLDocument doc;
+    if (doc.LoadFile(filename.c_str()) != tinyxml2::XML_NO_ERROR)
+        return false;
 
-    return false;
+    const tinyxml2::XMLElement * const rootnode = doc.FirstChildElement();
+
+    if (!rootnode || std::strcmp(rootnode->Name(),"platform") != 0)
+        return false;
+
+    for (const tinyxml2::XMLElement *node = rootnode->FirstChildElement(); node; node = node->NextSiblingElement()) {
+        if (std::strcmp(node->Name(), "default-sign") == 0)
+            defaultSign = *node->GetText();
+        else if (std::strcmp(node->Name(), "char_bit") == 0)
+            char_bit = std::atoi(node->GetText());
+        else if (std::strcmp(node->Name(), "sizeof") == 0) {
+            for (const tinyxml2::XMLElement *sz = node->FirstChildElement(); sz; sz = sz->NextSiblingElement()) {
+                if (std::strcmp(node->Name(), "short") == 0)
+                    sizeof_short = std::atoi(node->GetText());
+                else if (std::strcmp(node->Name(), "int") == 0)
+                    sizeof_int = std::atoi(node->GetText());
+                else if (std::strcmp(node->Name(), "long") == 0)
+                    sizeof_long = std::atoi(node->GetText());
+                else if (std::strcmp(node->Name(), "long-long") == 0)
+                    sizeof_long_long = std::atoi(node->GetText());
+                else if (std::strcmp(node->Name(), "float") == 0)
+                    sizeof_float = std::atoi(node->GetText());
+                else if (std::strcmp(node->Name(), "double") == 0)
+                    sizeof_double = std::atoi(node->GetText());
+                else if (std::strcmp(node->Name(), "long-double") == 0)
+                    sizeof_long_double = std::atoi(node->GetText());
+                else if (std::strcmp(node->Name(), "pointer") == 0)
+                    sizeof_pointer = std::atoi(node->GetText());
+                else if (std::strcmp(node->Name(), "size_t") == 0)
+                    sizeof_size_t = std::atoi(node->GetText());
+                else if (std::strcmp(node->Name(), "wchar_t") == 0)
+                    sizeof_wchar_t = std::atoi(node->GetText());
+            }
+        }
+    }
+
+    short_bit = char_bit * sizeof_short;
+    int_bit = char_bit * sizeof_int;
+    long_bit = char_bit * sizeof_long;
+    long_long_bit = char_bit * sizeof_long_long;
+
+    return true;
 }

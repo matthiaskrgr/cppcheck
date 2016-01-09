@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -94,9 +94,9 @@ bool CppCheckExecutor::parseFromArgs(CppCheck *cppcheck, int argc, const char* c
 
         if (parser.GetShowErrorMessages()) {
             errorlist = true;
-            std::cout << ErrorLogger::ErrorMessage::getXMLHeader(settings._xml_version);
+            std::cout << ErrorLogger::ErrorMessage::getXMLHeader(settings.xml_version);
             cppcheck->getErrorMessages();
-            std::cout << ErrorLogger::ErrorMessage::getXMLFooter(settings._xml_version) << std::endl;
+            std::cout << ErrorLogger::ErrorMessage::getXMLFooter(settings.xml_version) << std::endl;
         }
 
         if (parser.ExitAfterPrinting()) {
@@ -110,16 +110,17 @@ bool CppCheckExecutor::parseFromArgs(CppCheck *cppcheck, int argc, const char* c
     // Check that all include paths exist
     {
         std::list<std::string>::iterator iter;
-        for (iter = settings._includePaths.begin();
-             iter != settings._includePaths.end();
+        for (iter = settings.includePaths.begin();
+             iter != settings.includePaths.end();
             ) {
             const std::string path(Path::toNativeSeparators(*iter));
             if (FileLister::isDirectory(path))
                 ++iter;
             else {
                 // If the include path is not found, warn user and remove the non-existing path from the list.
-                std::cout << "cppcheck: warning: Couldn't find path given by -I '" << path << '\'' << std::endl;
-                iter = settings._includePaths.erase(iter);
+                if (settings.isEnabled("information"))
+                    std::cerr << "(information) Couldn't find path given by -I '" << path << '\'' << std::endl;
+                iter = settings.includePaths.erase(iter);
             }
         }
     }
@@ -800,12 +801,12 @@ int CppCheckExecutor::check_internal(CppCheck& cppcheck, int /*argc*/, const cha
     if (settings.reportProgress)
         time1 = std::time(0);
 
-    if (settings._xml) {
-        reportErr(ErrorLogger::ErrorMessage::getXMLHeader(settings._xml_version));
+    if (settings.xml) {
+        reportErr(ErrorLogger::ErrorMessage::getXMLHeader(settings.xml_version));
     }
 
     unsigned int returnValue = 0;
-    if (settings._jobs == 1) {
+    if (settings.jobs == 1) {
         // Single process
         settings.jointSuppressionReport = true;
 
@@ -878,13 +879,13 @@ int CppCheckExecutor::check_internal(CppCheck& cppcheck, int /*argc*/, const cha
         }
     }
 
-    if (settings._xml) {
-        reportErr(ErrorLogger::ErrorMessage::getXMLFooter(settings._xml_version));
+    if (settings.xml) {
+        reportErr(ErrorLogger::ErrorMessage::getXMLFooter(settings.xml_version));
     }
 
     _settings = 0;
     if (returnValue)
-        return settings._exitCode;
+        return settings.exitCode;
     else
         return 0;
 }
@@ -947,11 +948,11 @@ void CppCheckExecutor::reportStatus(std::size_t fileindex, std::size_t filecount
 void CppCheckExecutor::reportErr(const ErrorLogger::ErrorMessage &msg)
 {
     if (errorlist) {
-        reportOut(msg.toXML(false, _settings->_xml_version));
-    } else if (_settings->_xml) {
-        reportErr(msg.toXML(_settings->_verbose, _settings->_xml_version));
+        reportOut(msg.toXML(false, _settings->xml_version));
+    } else if (_settings->xml) {
+        reportErr(msg.toXML(_settings->verbose, _settings->xml_version));
     } else {
-        reportErr(msg.toString(_settings->_verbose, _settings->_outputFormat));
+        reportErr(msg.toString(_settings->verbose, _settings->outputFormat));
     }
 }
 

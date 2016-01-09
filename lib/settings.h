@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +50,7 @@ private:
     std::set<std::string> _enabled;
 
     /** @brief terminate checking */
-    bool _terminate;
+    bool _terminated;
 
 public:
     Settings();
@@ -90,57 +90,60 @@ public:
     bool quiet;
 
     /** @brief Is --inline-suppr given? */
-    bool _inlineSuppressions;
+    bool inlineSuppressions;
 
     /** @brief Is --verbose given? */
-    bool _verbose;
+    bool verbose;
 
     /** @brief Request termination of checking */
     void terminate() {
-        _terminate = true;
+        _terminated = true;
     }
 
     /** @brief termination requested? */
     bool terminated() const {
-        return _terminate;
+        return _terminated;
     }
 
     /** @brief Force checking the files with "too many" configurations (--force). */
-    bool _force;
+    bool force;
 
     /** @brief Use relative paths in output. */
-    bool _relativePaths;
+    bool relativePaths;
 
     /** @brief Paths used as base for conversion to relative paths. */
-    std::vector<std::string> _basePaths;
+    std::vector<std::string> basePaths;
 
     /** @brief write XML results (--xml) */
-    bool _xml;
+    bool xml;
 
     /** @brief XML version (--xmlver=..) */
-    int _xml_version;
+    int xml_version;
 
     /** @brief How many processes/threads should do checking at the same
         time. Default is 1. (-j N) */
-    unsigned int _jobs;
+    unsigned int jobs;
 
     /** @brief Load average value */
-    unsigned int _loadAverage;
+    unsigned int loadAverage;
 
     /** @brief If errors are found, this value is returned from main().
         Default value is 0. */
-    int _exitCode;
+    int exitCode;
 
     /** @brief The output format in which the errors are printed in text mode,
         e.g. "{severity} {file}:{line} {message} {id}" */
-    std::string _outputFormat;
+    std::string outputFormat;
 
     /** @brief show timing information (--showtime=file|summary|top5) */
-    SHOWTIME_MODES _showtime;
+    SHOWTIME_MODES showtime;
+
+    /** @brief Using -E for debugging purposes */
+    bool preprocessOnly;
 
     /** @brief List of include paths, e.g. "my/includes/" which should be used
         for finding include files inside source files. (-I) */
-    std::list<std::string> _includePaths;
+    std::list<std::string> includePaths;
 
     /** @brief assign append code (--append) */
     bool append(const std::string &filename);
@@ -150,7 +153,7 @@ public:
 
     /** @brief Maximum number of configurations to check before bailing.
         Default is 12. (--max-configs=N) */
-    unsigned int _maxConfigs;
+    unsigned int maxConfigs;
 
     /**
      * @brief Returns true if given id is in the list of
@@ -240,6 +243,12 @@ public:
     /** Struct contains standards settings */
     Standards standards;
 
+    unsigned int char_bit;       /// bits in char
+    unsigned int short_bit;      /// bits in short
+    unsigned int int_bit;        /// bits in int
+    unsigned int long_bit;       /// bits in long
+    unsigned int long_long_bit;  /// bits in long long
+
     /** size of standard types */
     unsigned int sizeof_bool;
     unsigned int sizeof_short;
@@ -253,8 +262,11 @@ public:
     unsigned int sizeof_size_t;
     unsigned int sizeof_pointer;
 
+    char defaultSign;  // unsigned:'u', signed:'s', unknown:'\0'
+
     enum PlatformType {
-        Unspecified, // whatever system this code was compiled on
+        Unspecified, // No platform specified
+        Native, // whatever system this code was compiled on
         Win32A,
         Win32W,
         Win64,
@@ -293,7 +305,6 @@ public:
         }
         return false;
     }
-
 };
 
 /// @}

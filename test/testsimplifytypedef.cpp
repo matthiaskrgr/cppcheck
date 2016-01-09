@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,7 +78,6 @@ private:
         TEST_CASE(simplifyTypedef39);
         TEST_CASE(simplifyTypedef40);
         TEST_CASE(simplifyTypedef41); // ticket #1488
-        TEST_CASE(simplifyTypedef42); // ticket #1506
         TEST_CASE(simplifyTypedef43); // ticket #1588
         TEST_CASE(simplifyTypedef44);
         TEST_CASE(simplifyTypedef45); // ticket #1613
@@ -169,7 +168,7 @@ private:
         TEST_CASE(simplifyTypedefShadow);  // #4445 - shadow variable
     }
 
-    std::string tok(const char code[], bool simplify = true, Settings::PlatformType type = Settings::Unspecified, bool debugwarnings = true) {
+    std::string tok(const char code[], bool simplify = true, Settings::PlatformType type = Settings::Native, bool debugwarnings = true) {
         errout.str("");
 
         settings0.inconclusive = true;
@@ -494,7 +493,7 @@ private:
                             "};";
 
         // Tokenize and check output..
-        tok(code, true, Settings::Unspecified, false);
+        tok(code, true, Settings::Native, false);
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -1209,23 +1208,6 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
-    void simplifyTypedef42() {
-        // ticket #1506
-        checkSimplifyTypedef("typedef struct A { } A;\n"
-                             "struct A;");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:1]: (style) The struct 'A' forward declaration is unnecessary. Type struct is already declared earlier.\n", errout.str());
-
-        checkSimplifyTypedef("typedef union A { int i; float f; } A;\n"
-                             "union A;");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:1]: (style) The union 'A' forward declaration is unnecessary. Type union is already declared earlier.\n", errout.str());
-
-        const char code [] = "typedef std::map<std::string, int> A;\n"
-                             "class A;";
-        checkSimplifyTypedef(code);
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:1]: (style) The class 'A' forward declaration is unnecessary. Type class is already declared earlier.\n", errout.str());
-        TODO_ASSERT_EQUALS("class A ;", "class std :: map < std :: string , int > ;", tok(code));
-    }
-
     void simplifyTypedef43() {
         // ticket #1588
         {
@@ -1700,7 +1682,7 @@ private:
                             "    Foo b(0);\n"
                             "    return b > Foo(10);\n"
                             "}";
-        const std::string actual(tok(code, true, Settings::Unspecified, false));
+        const std::string actual(tok(code, true, Settings::Native, false));
         ASSERT_EQUALS("int main ( ) { BAR < int > b ( 0 ) ; return b > BAR < int > ( 10 ) ; }", actual);
         ASSERT_EQUALS("", errout.str());
     }
@@ -1856,14 +1838,14 @@ private:
 
     void simplifyTypedef75() { // ticket #2426
         const char code[] = "typedef _Packed struct S { long l; };";
-        ASSERT_EQUALS("", tok(code, true, Settings::Unspecified, false));
+        ASSERT_EQUALS("", tok(code, true, Settings::Native, false));
         ASSERT_EQUALS("", errout.str());
     }
 
     void simplifyTypedef76() { // ticket #2453 segmentation fault
         const char code[] = "void f1(typedef int x) {}";
         const char expected[] = "void f1 ( typedef int x ) { }";
-        ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+        ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -2182,7 +2164,7 @@ private:
                                 "public: "
                                 "expression_error :: error_code * f ; "
                                 "} ;";
-        ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+        ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -2355,7 +2337,7 @@ private:
                                 "} ; "
                                 "} "
                                 "}";
-        ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+        ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -2704,7 +2686,7 @@ private:
                                     "C * f5 ; " // this gets simplified to a regular pointer
                                     "C * f6 ; " // this gets simplified to a regular pointer
                                     "C * f7 ;"; // this gets simplified to a regular pointer
-            ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+            ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
             ASSERT_EQUALS("", errout.str());
         }
 
@@ -2733,7 +2715,7 @@ private:
                                     "const C * f5 ; " // this gets simplified to a regular pointer
                                     "const C * f6 ; " // this gets simplified to a regular pointer
                                     "const C * f7 ;"; // this gets simplified to a regular pointer
-            ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+            ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
             ASSERT_EQUALS("", errout.str());
         }
 
@@ -2761,7 +2743,7 @@ private:
                                     "const C * f5 ; " // this gets simplified to a regular pointer
                                     "const C * f6 ; " // this gets simplified to a regular pointer
                                     "const C * f7 ;"; // this gets simplified to a regular pointer
-            ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+            ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
             ASSERT_EQUALS("", errout.str());
         }
 
@@ -2789,7 +2771,7 @@ private:
                                     "C * * f5 ; " // this gets simplified to a regular pointer
                                     "C * * f6 ; " // this gets simplified to a regular pointer
                                     "C * * f7 ;"; // this gets simplified to a regular pointer
-            ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+            ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
             ASSERT_EQUALS("", errout.str());
         }
 
@@ -2817,7 +2799,7 @@ private:
                                     "const C * * f5 ; " // this gets simplified to a regular pointer
                                     "const C * * f6 ; " // this gets simplified to a regular pointer
                                     "const C * * f7 ;"; // this gets simplified to a regular pointer
-            ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+            ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
             ASSERT_EQUALS("", errout.str());
         }
 
@@ -2846,7 +2828,7 @@ private:
                                     "const C * * f5 ; " // this gets simplified to a regular pointer
                                     "const C * * f6 ; " // this gets simplified to a regular pointer
                                     "const C * * f7 ;"; // this gets simplified to a regular pointer
-            ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+            ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
             ASSERT_EQUALS("", errout.str());
         }
     }
@@ -2991,7 +2973,7 @@ private:
                                     "B :: C * f2 ; "
                                     "B :: C * f3 ; "
                                     "B :: C * f4 ;";
-            ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+            ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
             ASSERT_EQUALS("", errout.str());
         }
 
@@ -3029,7 +3011,7 @@ private:
                                     "A :: B :: C * f2 ; "
                                     "A :: B :: C * f3 ; "
                                     "A :: B :: C * f4 ;";
-            ASSERT_EQUALS(expected, tok(code, true, Settings::Unspecified, false));
+            ASSERT_EQUALS(expected, tok(code, true, Settings::Native, false));
             ASSERT_EQUALS("", errout.str());
         }
     }

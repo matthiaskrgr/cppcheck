@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,82 +30,6 @@ namespace {
     CheckType instance;
 }
 
-static bool astIsIntResult(const Token *tok)
-{
-    if (!tok)
-        return false;
-    if (tok->astOperand1())
-        return astIsIntResult(tok->astOperand1()) && astIsIntResult(tok->astOperand2());
-    // todo: handle numbers
-    if (!tok->variable())
-        return false;
-    const Token *type = tok->variable()->typeStartToken();
-    return Token::Match(type, "char|short|int") && !type->isLong();
-}
-
-static bool astGetSizeSign(const Settings *settings, const Token *tok, unsigned int *size, char *sign)
-{
-    if (!tok)
-        return false;
-    if (tok->isArithmeticalOp()) {
-        if (!astGetSizeSign(settings, tok->astOperand1(), size, sign))
-            return false;
-        return !tok->astOperand2() || astGetSizeSign(settings, tok->astOperand2(), size, sign);
-    }
-    if (tok->isNumber() && MathLib::isInt(tok->str())) {
-        if (tok->str().find('L') != std::string::npos)
-            return false;
-        MathLib::bigint value = MathLib::toLongNumber(tok->str());
-        unsigned int sz;
-        if (value >= -(1<<7) && value <= (1<<7)-1)
-            sz = 8;
-        else if (value >= -(1<<15) && value <= (1<<15)-1)
-            sz = 16;
-        else if (value >= -(1LL<<31) && value <= (1LL<<31)-1)
-            sz = 32;
-        else
-            return false;
-        if (sz < 8 * settings->sizeof_int)
-            sz = 8 * settings->sizeof_int;
-        if (*size < sz)
-            *size = sz;
-        if (tok->str().find('U') != std::string::npos)
-            *sign = 'u';
-        if (*sign != 'u')
-            *sign = 's';
-        return true;
-    }
-    if (tok->isName()) {
-        const Variable *var = tok->variable();
-        if (!var)
-            return false;
-        unsigned int sz = 0;
-        for (const Token *type = var->typeStartToken(); type; type = type->next()) {
-            if (type->str() == "*")
-                return false;  // <- FIXME: handle pointers
-            if (Token::Match(type, "char|short|int")) {
-                sz = 8 * settings->sizeof_int;
-                if (type->isUnsigned())
-                    *sign = 'u';
-                else if (*sign != 'u')
-                    *sign = 's';
-            } else if (Token::Match(type, "float|double|long")) {
-                return false;
-            } else {
-                // TODO: try to lookup type info in library
-            }
-            if (type == var->typeEndToken())
-                break;
-        }
-        if (sz == 0)
-            return false;
-        if (*size < sz)
-            *size = sz;
-        return true;
-    }
-    return false;
-}
-
 //---------------------------------------------------------------------------
 // Checking for shift by too many bits
 //---------------------------------------------------------------------------
@@ -124,7 +48,7 @@ void CheckType::checkTooBigBitwiseShift()
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-            if (tok->str() != "<<" && tok->str() != ">>")
+            if (!Token::Match(tok, "<<|>>|<<=|>>="))
                 continue;
 
             if (!tok->astOperand1() || !tok->astOperand2())
@@ -136,11 +60,11 @@ void CheckType::checkTooBigBitwiseShift()
                 continue;
             int lhsbits = 0;
             if (lhstype->type <= ValueType::Type::INT)
-                lhsbits = 8 * _settings->sizeof_int;
+                lhsbits = _settings->int_bit;
             else if (lhstype->type == ValueType::Type::LONG)
-                lhsbits = 8 * _settings->sizeof_long;
+                lhsbits = _settings->long_bit;
             else if (lhstype->type == ValueType::Type::LONGLONG)
-                lhsbits = 8 * _settings->sizeof_long_long;
+                lhsbits = _settings->long_long_bit;
             else
                 continue;
 
@@ -181,7 +105,7 @@ void CheckType::checkIntegerOverflow()
         return;
 
     // max int value according to platform settings.
-    const MathLib::bigint maxint = (1LL << (8 * _settings->sizeof_int - 1)) - 1;
+    const MathLib::bigint maxint = (1LL << (_settings->int_bit - 1)) - 1;
 
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
     const std::size_t functions = symbolDatabase->functionScopes.size();
@@ -198,15 +122,10 @@ void CheckType::checkIntegerOverflow()
             if (!value)
                 continue;
 
-            // get size and sign of result..
-            unsigned int size = 0;
-            char sign = 0;
-            if (!astGetSizeSign(_settings, tok, &size, &sign))
-                continue;
-            if (sign != 's')  // only signed integer overflow is UB
-                continue;
-
-            integerOverflowError(tok, *value);
+            // is result signed integer?
+            const ValueType *vt = tok->valueType();
+            if (vt && vt->type == ValueType::Type::INT && vt->sign == ValueType::Sign::SIGNED)
+                integerOverflowError(tok, *value);
         }
     }
 }
@@ -214,14 +133,18 @@ void CheckType::checkIntegerOverflow()
 void CheckType::integerOverflowError(const Token *tok, const ValueFlow::Value &value)
 {
     const std::string expr(tok ? tok->expressionString() : "");
-    const std::string cond(value.condition ?
-                           ". See condition at line " + MathLib::toString(value.condition->linenr()) + "." :
-                           "");
+
+    std::string msg;
+    if (value.condition)
+        msg = ValueFlow::eitherTheConditionIsRedundant(value.condition) +
+              " or there is signed integer overflow for expression '" + expr + "'.";
+    else
+        msg = "Signed integer overflow for expression '" + expr + "'.";
 
     reportError(tok,
                 value.condition ? Severity::warning : Severity::error,
                 "integerOverflow",
-                "Signed integer overflow for expression '"+expr+"'"+cond,
+                msg,
                 0U,
                 value.inconclusive);
 }
@@ -243,15 +166,11 @@ void CheckType::checkSignConversion()
             if (!tok->isArithmeticalOp() || Token::Match(tok,"+|-"))
                 continue;
 
-            unsigned int size = 0;
-            char sign = 0;
-            if (!astGetSizeSign(_settings, tok, &size, &sign))
+            // Is result unsigned?
+            if (!(tok->valueType() && tok->valueType()->sign == ValueType::Sign::UNSIGNED))
                 continue;
 
-            if (sign != 'u')
-                continue;
-
-            // Check if there are signed operands that can be negative..
+            // Check if an operand can be negative..
             std::stack<const Token *> tokens;
             tokens.push(tok->astOperand1());
             tokens.push(tok->astOperand2());
@@ -260,42 +179,24 @@ void CheckType::checkSignConversion()
                 tokens.pop();
                 if (!tok1)
                     continue;
-                if (tok1->str() == "(")
-                    continue; // Todo: properly handle casts, function calls, etc
-                const Variable *var = tok1->variable();
-                if (var && tok1->getValueLE(-1,_settings)) {
-                    bool signedvar = true;  // assume that variable is signed since it can have a negative value
-                    for (const Token *type = var->typeStartToken();; type = type->next()) {
-                        if (type->isUnsigned()) {
-                            signedvar = false;
-                            break;
-                        }
-                        if (type->isSigned())
-                            break;
-                        if (type->isName() && !Token::Match(type, "char|short|int|long|const")) {
-                            signedvar = false;
-                            break;
-                        }
-                        if (type == var->typeEndToken())
-                            break;
-                    }
-                    if (signedvar) {
-                        signConversionError(tok1);
-                        break;
-                    }
-                }
+                if (!tok1->getValueLE(-1,_settings))
+                    continue;
+                if (tok1->valueType() && tok1->valueType()->sign != ValueType::Sign::UNSIGNED)
+                    signConversionError(tok1, tok1->isNumber());
             }
         }
     }
 }
 
-void CheckType::signConversionError(const Token *tok)
+void CheckType::signConversionError(const Token *tok, const bool constvalue)
 {
     const std::string varname(tok ? tok->str() : "var");
 
     reportError(tok,
                 Severity::warning,
                 "signConversion",
+                (constvalue) ?
+                "Suspicious code: sign conversion of " + varname + " in calculation because '" + varname + "' has a negative value" :
                 "Suspicious code: sign conversion of " + varname + " in calculation, even though " + varname + " can have a negative value");
 }
 
@@ -311,13 +212,23 @@ void CheckType::checkLongCast()
 
     // Assignments..
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
-        if (!Token::Match(tok, "%var% ="))
+        if (tok->str() != "=" || !Token::Match(tok->astOperand2(), "*|<<"))
             continue;
-        if (!tok->variable() || !tok->variable()->isConst() || tok->variable()->typeStartToken()->str() != "long")
+
+        const ValueType *lhstype = tok->astOperand1() ? tok->astOperand1()->valueType() : nullptr;
+        const ValueType *rhstype = tok->astOperand2()->valueType();
+
+        if (!lhstype || !rhstype)
             continue;
-        if (!tok->variable()->typeStartToken()->originalName().empty())
-            continue;
-        if (Token::Match(tok->next()->astOperand2(), "*|<<") && astIsIntResult(tok->next()->astOperand2()))
+
+        // assign int result to long/longlong const nonpointer?
+        if (rhstype->type == ValueType::Type::INT &&
+            rhstype->pointer == 0U &&
+            rhstype->originalTypeName.empty() &&
+            (lhstype->type == ValueType::Type::LONG || lhstype->type == ValueType::Type::LONGLONG) &&
+            lhstype->pointer == 0U &&
+            lhstype->constness == 1U &&
+            lhstype->originalTypeName.empty())
             longCastAssignError(tok);
     }
 
@@ -340,21 +251,24 @@ void CheckType::checkLongCast()
         if (!islong)
             continue;
 
-        // find return statement
-        // todo.. this is slow, we should only check last statement in each child scope
+        // return statements
         const Token *ret = nullptr;
         for (const Token *tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
             if (tok->str() == "return") {
-                if (!ret)
-                    ret = tok;
-                else {
-                    ret =  nullptr;
+                if (Token::Match(tok->astOperand1(), "<<|*")) {
+                    const ValueType *type = tok->astOperand1()->valueType();
+                    if (type && type->type == ValueType::Type::INT && type->pointer == 0U && type->originalTypeName.empty())
+                        ret = tok;
+                }
+                // All return statements must have problem otherwise no warning
+                if (ret != tok) {
+                    ret = nullptr;
                     break;
                 }
             }
         }
 
-        if (ret && Token::Match(ret->astOperand1(), "*|<<") && astIsIntResult(ret->astOperand1()))
+        if (ret)
             longCastReturnError(ret);
     }
 }

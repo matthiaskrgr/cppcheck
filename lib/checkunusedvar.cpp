@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -770,7 +770,6 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
             break;
         }
 
-
         // bailout when for_each is used
         if (Token::Match(tok, "%name% (") && Token::simpleMatch(tok->linkAt(1), ") {") && !Token::Match(tok, "if|for|while|switch")) {
             // does the name contain "for_each" or "foreach"?
@@ -861,9 +860,6 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
             }
         }
 
-        else if (Token::Match(tok->tokAt(-2), "while|if") && tok->strAt(1) == "=" && tok->varId() && tok->varId() == tok->tokAt(2)->varId()) {
-            variables.use(tok->tokAt(2)->varId(), tok);
-        }
         // assignment
         else if (Token::Match(tok, "*| ++|--| %name% ++|--| %assign%") ||
                  Token::Match(tok, "*| ( const| %type% *| ) %name% %assign%")) {
@@ -893,12 +889,25 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
             const unsigned int varid1 = tok->varId();
             const Token * const start = tok;
 
+            // assignment in while head..
+            bool inwhile = false;
+            {
+                const Token *parent = tok->astParent();
+                while (parent) {
+                    if (Token::simpleMatch(parent->previous(), "while ("))
+                        inwhile = true;
+                    parent = parent->astParent();
+                }
+            }
+
             tok = doAssignment(variables, tok, dereference, scope);
 
             if (tok && tok->isAssignmentOp() && tok->str() != "=") {
                 variables.use(varid1, tok);
-                if (Token::Match(tok, "%assign% %name%"))
+                if (Token::Match(tok, "%assign% %name%")) {
                     tok = tok->next();
+                    variables.read(tok->varId(), tok);
+                }
             }
 
             if (pre || post)
@@ -912,7 +921,7 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
                 variables.read(varid1, tok);
             } else {
                 Variables::VariableUsage *var = variables.find(varid1);
-                if (var && start->strAt(-1) == ",") {
+                if (var && (inwhile || start->strAt(-1) == ",")) {
                     variables.use(varid1, tok);
                 } else if (var && var->_type == Variables::reference) {
                     variables.writeAliases(varid1, tok);
@@ -1051,7 +1060,11 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
         }
 
         else if (tok->varId() && tok->next() && (tok->next()->str() == ")" || tok->next()->isExtendedOp())) {
-            variables.readAll(tok->varId(), tok);
+            if (Token::Match(tok->tokAt(-2), "%name% ( %var% [,)]") &&
+                !(tok->tokAt(-2)->variable() && tok->tokAt(-2)->variable()->isReference()))
+                variables.use(tok->varId(), tok);
+            else
+                variables.readAll(tok->varId(), tok);
         }
 
         else if (Token::Match(tok, "%var% ;") && Token::Match(tok->previous(), "[;{}:]")) {

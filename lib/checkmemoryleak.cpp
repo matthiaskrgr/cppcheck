@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -290,12 +290,12 @@ void CheckMemoryLeak::reportErr(const std::list<const Token *> &callstack, Sever
 
 void CheckMemoryLeak::memleakError(const Token *tok, const std::string &varname) const
 {
-    reportErr(tok, Severity::error, "memleak", "Memory leak: " + varname, 0U);
+    reportErr(tok, Severity::error, "memleak", "Memory leak: " + varname, 401U);
 }
 
 void CheckMemoryLeak::memleakUponReallocFailureError(const Token *tok, const std::string &varname) const
 {
-    reportErr(tok, Severity::error, "memleakOnRealloc", "Common realloc mistake: \'" + varname + "\' nulled but not freed upon failure", 0U);
+    reportErr(tok, Severity::error, "memleakOnRealloc", "Common realloc mistake: \'" + varname + "\' nulled but not freed upon failure", 401U);
 }
 
 void CheckMemoryLeak::resourceLeakError(const Token *tok, const std::string &varname) const
@@ -308,22 +308,22 @@ void CheckMemoryLeak::resourceLeakError(const Token *tok, const std::string &var
 
 void CheckMemoryLeak::deallocDeallocError(const Token *tok, const std::string &varname) const
 {
-    reportErr(tok, Severity::error, "deallocDealloc", "Deallocating a deallocated pointer: " + varname, 0U);
+    reportErr(tok, Severity::error, "deallocDealloc", "Deallocating a deallocated pointer: " + varname, 415U);
 }
 
 void CheckMemoryLeak::deallocuseError(const Token *tok, const std::string &varname) const
 {
-    reportErr(tok, Severity::error, "deallocuse", "Dereferencing '" + varname + "' after it is deallocated / released", 0U);
+    reportErr(tok, Severity::error, "deallocuse", "Dereferencing '" + varname + "' after it is deallocated / released", 416U);
 }
 
 void CheckMemoryLeak::mismatchSizeError(const Token *tok, const std::string &sz) const
 {
-    reportErr(tok, Severity::error, "mismatchSize", "The allocated size " + sz + " is not a multiple of the underlying type's size.", 0U);
+    reportErr(tok, Severity::error, "mismatchSize", "The allocated size " + sz + " is not a multiple of the underlying type's size.", 131U);
 }
 
 void CheckMemoryLeak::mismatchAllocDealloc(const std::list<const Token *> &callstack, const std::string &varname) const
 {
-    reportErr(callstack, Severity::error, "mismatchAllocDealloc", "Mismatching allocation and deallocation: " + varname, 0U);
+    reportErr(callstack, Severity::error, "mismatchAllocDealloc", "Mismatching allocation and deallocation: " + varname, 762U);
 }
 
 CheckMemoryLeak::AllocType CheckMemoryLeak::functionReturnType(const Function* func, std::list<const Function*> *callstack) const
@@ -487,26 +487,29 @@ bool CheckMemoryLeakInFunction::test_white_list(const std::string &funcname, con
     return ((call_func_white_list.find(funcname)!=call_func_white_list.end()) || (settings->library.leakignore.find(funcname) != settings->library.leakignore.end()) || (cpp && funcname == "delete"));
 }
 
+namespace {
+    const std::set<std::string> call_func_keywords = make_container < std::set<std::string> > ()
+            << "asprintf"
+            << "delete"
+            << "fclose"
+            << "for"
+            << "free"
+            << "if"
+            << "realloc"
+            << "return"
+            << "switch"
+            << "while"
+            << "sizeof";
+}
 
 const char * CheckMemoryLeakInFunction::call_func(const Token *tok, std::list<const Token *> callstack, const unsigned int varid, AllocType &alloctype, AllocType &dealloctype, bool &allocpar, unsigned int sz)
 {
     if (test_white_list(tok->str(), _settings, tokenizer->isCPP())) {
-        if (tok->str() == "asprintf" ||
-            tok->str() == "delete" ||
-            tok->str() == "fclose" ||
-            tok->str() == "for" ||
-            tok->str() == "free" ||
-            tok->str() == "if" ||
-            tok->str() == "realloc" ||
-            tok->str() == "return" ||
-            tok->str() == "switch" ||
-            tok->str() == "while" ||
-            tok->str() == "sizeof") {
+        if (call_func_keywords.find(tok->str())!=call_func_keywords.end())
             return 0;
-        }
 
         // is the varid a parameter?
-        for (const Token *tok2 = tok->tokAt(2); tok2 != tok->linkAt(1); tok2 = tok2->next()) {
+        for (const Token *tok2 = tok->tokAt(2); tok2 && tok2 != tok->linkAt(1); tok2 = tok2->next()) {
             if (tok2->str() == "(") {
                 tok2 = tok2->nextArgument();
                 if (!tok2)
@@ -628,7 +631,7 @@ const char * CheckMemoryLeakInFunction::call_func(const Token *tok, std::list<co
         }
         if (Token::Match(tok, "& %varid% [,()]", varid)) {
             const Function *func = functok->function();
-            if (func == 0)
+            if (func == nullptr)
                 continue;
             AllocType a;
             const char *ret = functionArgAlloc(func, par, a);
@@ -2017,7 +2020,7 @@ void CheckMemoryLeakInFunction::checkScope(const Token *startTok, const std::str
 
     simplifycode(tok);
 
-    if (_settings->debug && _settings->_verbose) {
+    if (_settings->debug && _settings->verbose) {
         tok->printOut(("Checkmemoryleak: simplifycode result for: " + varname).c_str());
     }
 

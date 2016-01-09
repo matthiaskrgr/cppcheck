@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -199,6 +199,14 @@ private:
         check("static void __iomem *f(unsigned int port_no) {\n"
               "  void __iomem *mmio = hpriv->mmio;\n"
               "  return mmio + (port_no * 0x80);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // #7247 : dont check return statements in nested functions..
+        check("int foo() {\n"
+              "  struct {\n"
+              "    const char * name() { return \"abc\"; }\n"
+              "  } table;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }

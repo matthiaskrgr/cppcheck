@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2015 Cppcheck team.
+ * Copyright (C) 2007-2016 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -249,6 +249,7 @@ private:
         TEST_CASE(findFunction5); // #6230
         TEST_CASE(findFunction6);
         TEST_CASE(findFunction7); // #6700
+        TEST_CASE(findFunction8);
 
         TEST_CASE(noexceptFunction1);
         TEST_CASE(noexceptFunction2);
@@ -2606,6 +2607,83 @@ private:
         ASSERT_EQUALS(true, callfunc && callfunc->tokAt(2)->function() && callfunc->tokAt(2)->function()->tokenDef->linenr() == 3);
     }
 
+    void findFunction8() {
+        GET_SYMBOL_DB("struct S {\n"
+                      "    void f()   { }\n"
+                      "    void f() & { }\n"
+                      "    void f() &&{ }\n"
+                      "    void f() const   { }\n"
+                      "    void f() const & { }\n"
+                      "    void f() const &&{ }\n"
+                      "    void g()   ;\n"
+                      "    void g() & ;\n"
+                      "    void g() &&;\n"
+                      "    void g() const   ;\n"
+                      "    void g() const & ;\n"
+                      "    void g() const &&;\n"
+                      "};\n"
+                      "void S::g()   { }\n"
+                      "void S::g() & { }\n"
+                      "void S::g() &&{ }\n"
+                      "void S::g() const   { }\n"
+                      "void S::g() const & { }\n"
+                      "void S::g() const &&{ }\n");
+        ASSERT_EQUALS("", errout.str());
+
+        const Token *f = Token::findsimplematch(tokenizer.tokens(), "f ( ) {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 2);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "f ( ) & {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 3);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "f ( ) && {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 4);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "f ( ) const {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 5);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "f ( ) const & {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 6);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "f ( ) const && {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 7);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "g ( ) {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 8 && f->function()->token->linenr() == 15);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "g ( ) & {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 9 && f->function()->token->linenr() == 16);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "g ( ) && {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 10 && f->function()->token->linenr() == 17);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "g ( ) const {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 11 && f->function()->token->linenr() == 18);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "g ( ) const & {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 12 && f->function()->token->linenr() == 19);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "g ( ) const && {");
+        ASSERT_EQUALS(true, db && f && f->function() && f->function()->tokenDef->linenr() == 13 && f->function()->token->linenr() == 20);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "S :: g ( ) {");
+        ASSERT_EQUALS(true, db && f && f->tokAt(2)->function() && f->tokAt(2)->function()->tokenDef->linenr() == 8 && f->tokAt(2)->function()->token->linenr() == 15);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "S :: g ( ) & {");
+        ASSERT_EQUALS(true, db && f && f->tokAt(2)->function() && f->tokAt(2)->function()->tokenDef->linenr() == 9 && f->tokAt(2)->function()->token->linenr() == 16);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "S :: g ( ) && {");
+        ASSERT_EQUALS(true, db && f && f->tokAt(2)->function() && f->tokAt(2)->function()->tokenDef->linenr() == 10 && f->tokAt(2)->function()->token->linenr() == 17);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "S :: g ( ) const {");
+        ASSERT_EQUALS(true, db && f && f->tokAt(2)->function() && f->tokAt(2)->function()->tokenDef->linenr() == 11 && f->tokAt(2)->function()->token->linenr() == 18);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "S :: g ( ) const & {");
+        ASSERT_EQUALS(true, db && f && f->tokAt(2)->function() && f->tokAt(2)->function()->tokenDef->linenr() == 12 && f->tokAt(2)->function()->token->linenr() == 19);
+
+        f = Token::findsimplematch(tokenizer.tokens(), "S :: g ( ) const && {");
+        ASSERT_EQUALS(true, db && f && f->tokAt(2)->function() && f->tokAt(2)->function()->tokenDef->linenr() == 13 && f->tokAt(2)->function()->token->linenr() == 20);
+    }
 
 
 #define FUNC(x) const Function *x = findFunctionByName(#x, &db->scopeList.front()); \
@@ -2999,15 +3077,20 @@ private:
               "}");
     }
 
-    std::string typeOf(const char code[], const char str[]) {
-        Tokenizer tokenizer(&settings, this);
+    std::string typeOf(const char code[], const char str[], const char filename[] = "test.cpp") {
+        Settings s;
+        s.platform(Settings::Unspecified);
+        Tokenizer tokenizer(&s, this);
         std::istringstream istr(code);
-        tokenizer.tokenize(istr, "test.cpp");
+        tokenizer.tokenize(istr, filename);
         const Token * const tok = Token::findsimplematch(tokenizer.tokens(),str);
-        return tok->valueType()->str();
+        return tok->valueType() ? tok->valueType()->str() : std::string();
     }
 
     void valuetype() {
+        // stringification
+        ASSERT_EQUALS("", ValueType().str());
+
         // numbers
         ASSERT_EQUALS("signed int", typeOf("1", "1"));
         ASSERT_EQUALS("unsigned int", typeOf("1U", "1U"));
@@ -3015,6 +3098,12 @@ private:
         ASSERT_EQUALS("unsigned long", typeOf("1UL", "1UL"));
         ASSERT_EQUALS("signed long long", typeOf("1LL", "1LL"));
         ASSERT_EQUALS("unsigned long long", typeOf("1ULL", "1ULL"));
+        ASSERT_EQUALS("unsigned int", typeOf("1u", "1u"));
+        ASSERT_EQUALS("signed long", typeOf("1l", "1l"));
+        ASSERT_EQUALS("unsigned long", typeOf("1ul", "1ul"));
+        ASSERT_EQUALS("signed long long", typeOf("1ll", "1ll"));
+        ASSERT_EQUALS("unsigned long long", typeOf("1ull", "1ull"));
+        ASSERT_EQUALS("float", typeOf("1.0F", "1.0F"));
         ASSERT_EQUALS("float", typeOf("1.0f", "1.0f"));
         ASSERT_EQUALS("double", typeOf("1.0", "1.0"));
 
@@ -3061,6 +3150,14 @@ private:
         ASSERT_EQUALS("long double *", typeOf("long double x; dostuff(&x,1);", "& x ,"));
         ASSERT_EQUALS("int", typeOf("struct X {int i;}; void f(struct X x) { x.i }", "."));
 
+        // shift => result has same type as lhs
+        ASSERT_EQUALS("int", typeOf("int x; a = x << 1U;", "<<"));
+        ASSERT_EQUALS("int", typeOf("int x; a = x >> 1U;", ">>"));
+        ASSERT_EQUALS("",           typeOf("a = 12 >> x;", ">>", "test.cpp")); // >> might be overloaded
+        ASSERT_EQUALS("signed int", typeOf("a = 12 >> x;", ">>", "test.c"));
+        ASSERT_EQUALS("",           typeOf("a = 12 << x;", "<<", "test.cpp")); // << might be overloaded
+        ASSERT_EQUALS("signed int", typeOf("a = 12 << x;", "<<", "test.c"));
+
         // array..
         ASSERT_EQUALS("void * *", typeOf("void * x[10]; a = x + 0;", "+"));
         ASSERT_EQUALS("int *", typeOf("int x[10]; a = x + 1;", "+"));
@@ -3074,6 +3171,7 @@ private:
         ASSERT_EQUALS("long long", typeOf("a = (long long)32;", "("));
         ASSERT_EQUALS("long double", typeOf("a = (long double)32;", "("));
         ASSERT_EQUALS("char", typeOf("a = static_cast<char>(32);", "("));
+        ASSERT_EQUALS("", typeOf("a = (unsigned x)0;", "("));
 
         // const..
         ASSERT_EQUALS("const char *", typeOf("a = \"123\";", "\"123\""));
