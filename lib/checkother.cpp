@@ -1948,7 +1948,7 @@ void CheckOther::duplicateExpressionError(const Token *tok1, const Token *tok2, 
 
 void CheckOther::duplicateExpressionTernaryError(const Token *tok, const std::string &expr)
 {
-    reportError(tok, Severity::style, "duplicateExpressionTernary", "Equivalent expressions '" + exp + "' in both branches of ternary operator.\n"
+    reportError(tok, Severity::style, "duplicateExpressionTernary", "Equivalent expressions '" + expr + "' in both branches of ternary operator.\n"
                 "Finding the same expression in both branches of ternary operator is suspicious as "
                 "the same code is executed regardless of the condition.");
 }

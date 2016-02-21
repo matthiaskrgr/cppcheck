@@ -4027,12 +4027,12 @@ private:
         check("void f() {\n"
               "    return A ? x : x;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2]: (style) Equivalent expressions in both branches of ternary operator.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (style) Equivalent expressions 'x' in both branches of ternary operator.\n", errout.str());
 
         check("void f() {\n"
               "    if( a ? (b ? false:false): false ) ;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2]: (style) Equivalent expressions in both branches of ternary operator.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (style) Equivalent expressions 'false' in both branches of ternary operator.\n", errout.str());
 
         check("void f() {\n"
               "    return A ? x : z;\n"
