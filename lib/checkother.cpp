@@ -1907,21 +1907,21 @@ void CheckOther::checkDuplicateExpression()
                                 }
                             }
                             if (styleEnabled)
-                                duplicateExpressionError(tok, tok, tok->str());
+                                duplicateExpressionError(tok, tok, tok->str(), tok->astOperand2()->expressionString());
                         }
                     }
                 } else if (!Token::Match(tok, "[-/%]")) { // These operators are not associative
                     if (styleEnabled && tok->astOperand2() && tok->str() == tok->astOperand1()->str() && isSameExpression(_tokenizer->isCPP(), true, tok->astOperand2(), tok->astOperand1()->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer->isCPP(), tok->astOperand2()))
-                        duplicateExpressionError(tok->astOperand2(), tok->astOperand2(), tok->str());
+                        duplicateExpressionError(tok->astOperand2(), tok->astOperand2(), tok->str(), tok->astOperand2()->expressionString());
                     else if (tok->astOperand2()) {
                         const Token *ast1 = tok->astOperand1();
                         while (ast1 && tok->str() == ast1->str()) {
                             if (isSameExpression(_tokenizer->isCPP(), true, ast1->astOperand1(), tok->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer->isCPP(), ast1->astOperand1()))
                                 // TODO: warn if variables are unchanged. See #5683
                                 // Probably the message should be changed to 'duplicate expressions X in condition or something like that'.
-                                ;//duplicateExpressionError(ast1->astOperand1(), tok->astOperand2(), tok->str());
+                                ;//duplicateExpressionError(ast1->astOperand1(), tok->astOperand2(), tok->str(), tok->astOperand2()->expressionString());
                             else if (styleEnabled && isSameExpression(_tokenizer->isCPP(), true, ast1->astOperand2(), tok->astOperand2(), _settings->library.functionpure) && isWithoutSideEffects(_tokenizer->isCPP(), ast1->astOperand2()))
-                                duplicateExpressionError(ast1->astOperand2(), tok->astOperand2(), tok->str());
+                                duplicateExpressionError(ast1->astOperand2(), tok->astOperand2(), tok->str(), tok->astOperand2()->expressionString());
                             if (!isConstExpression(ast1->astOperand2(), _settings->library.functionpure))
                                 break;
                             ast1 = ast1->astOperand1();
@@ -1930,25 +1930,25 @@ void CheckOther::checkDuplicateExpression()
                 }
             } else if (styleEnabled && tok->astOperand1() && tok->astOperand2() && tok->str() == ":" && tok->astParent() && tok->astParent()->str() == "?") {
                 if (isSameExpression(_tokenizer->isCPP(), true, tok->astOperand1(), tok->astOperand2(), temp))
-                    duplicateExpressionTernaryError(tok);
+                    duplicateExpressionTernaryError(tok, tok->astOperand1()->expressionString());
             }
         }
     }
 }
 
-void CheckOther::duplicateExpressionError(const Token *tok1, const Token *tok2, const std::string &op)
+void CheckOther::duplicateExpressionError(const Token *tok1, const Token *tok2, const std::string &op, const std::string &expr)
 {
     const std::list<const Token *> toks = make_container< std::list<const Token *> >() << tok2 << tok1;
 
-    reportError(toks, Severity::style, "duplicateExpression", "Same expression on both sides of \'" + op + "\'.\n"
+    reportError(toks, Severity::style, "duplicateExpression", "Equivalent expressions '" + expr + "' on both sides of \'" + op + "\'.\n"
                 "Finding the same expression on both sides of an operator is suspicious and might "
                 "indicate a cut and paste or logic error. Please examine this code carefully to "
                 "determine if it is correct.");
 }
 
-void CheckOther::duplicateExpressionTernaryError(const Token *tok)
+void CheckOther::duplicateExpressionTernaryError(const Token *tok, const std::string &expr)
 {
-    reportError(tok, Severity::style, "duplicateExpressionTernary", "Same expression in both branches of ternary operator.\n"
+    reportError(tok, Severity::style, "duplicateExpressionTernary", "Equivalent expressions '" + exp + "' in both branches of ternary operator.\n"
                 "Finding the same expression in both branches of ternary operator is suspicious as "
                 "the same code is executed regardless of the condition.");
 }

@@ -239,7 +239,7 @@ private:
     void memsetFloatError(const Token *tok, const std::string &var_value);
     void memsetValueOutOfRangeError(const Token *tok, const std::string &value);
     void duplicateBranchError(const Token *tok1, const Token *tok2);
-    void duplicateExpressionError(const Token *tok1, const Token *tok2, const std::string &op);
+    void duplicateExpressionError(const Token *tok1, const Token *tok2, const std::string &op, const std::string &exp);
     void duplicateExpressionTernaryError(const Token *tok);
     void duplicateBreakError(const Token *tok, bool inconclusive);
     void unreachableCodeError(const Token* tok, bool inconclusive);
@@ -297,7 +297,7 @@ private:
         c.clarifyCalculationError(0, "+");
         c.clarifyStatementError(0);
         c.duplicateBranchError(0, 0);
-        c.duplicateExpressionError(0, 0, "&&");
+        c.duplicateExpressionError(0, 0, "&&", "varname");
         c.duplicateExpressionTernaryError(0);
         c.duplicateBreakError(0, false);
         c.unreachableCodeError(0, false);

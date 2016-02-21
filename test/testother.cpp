@@ -3601,7 +3601,7 @@ private:
         check("void foo(int a) {\n"
               "    if (a == a) { }\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '=='.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'a' on both sides of '=='.\n", errout.str());
 
         check("void fun(int b) {\n"
               "    return  a && a ||\n"
@@ -3610,45 +3610,45 @@ private:
               "            e < e &&\n"
               "            f ;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&&'.\n"
-                      "[test.cpp:3] -> [test.cpp:3]: (style) Same expression on both sides of '=='.\n"
-                      "[test.cpp:4] -> [test.cpp:4]: (style) Same expression on both sides of '>'.\n"
-                      "[test.cpp:5] -> [test.cpp:5]: (style) Same expression on both sides of '<'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'a' on both sides of '&&'.\n"
+                      "[test.cpp:3] -> [test.cpp:3]: (style) Equivalent expressions 'b' on both sides of '=='.\n"
+                      "[test.cpp:4] -> [test.cpp:4]: (style) Equivalent expressions 'd' on both sides of '>'.\n"
+                      "[test.cpp:5] -> [test.cpp:5]: (style) Equivalent expressions 'e' on both sides of '<'.\n", errout.str());
 
         check("void foo() {\n"
               "    return a && a;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'a' on both sides of '&&'.\n", errout.str());
 
         check("void foo() {\n"
               "    a = b && b;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'b' on both sides of '&&'.\n", errout.str());
 
         check("void foo(int b) {\n"
               "    f(a,b == b);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '=='.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'b' on both sides of '=='.\n", errout.str());
 
         check("void foo(int b) {\n"
               "    f(b == b, a);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '=='.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'b' on both sides of '=='.\n", errout.str());
 
         check("void foo() {\n"
               "    if (x!=2 || x!=2) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'x!=2' on both sides of '||'.\n", errout.str());
 
         check("void foo(int a, int b) {\n"
               "    if ((a < b) && (b > a)) { }\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'b>a' on both sides of '&&'.\n", errout.str());
 
         check("void foo(int a, int b) {\n"
               "    if ((a <= b) && (b >= a)) { }\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'b>=a' on both sides of '&&'.\n", errout.str());
 
         check("void foo() {\n"
               "    if (x!=2 || y!=3 || x!=2) {}\n"
@@ -3663,7 +3663,7 @@ private:
         check("void foo() {\n"
               "    if (a && b || a && b) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'a&&b' on both sides of '||'.\n", errout.str());
 
         check("void foo() {\n"
               "    if (a && b || b && c) {}\n"
@@ -3673,22 +3673,22 @@ private:
         check("void foo() {\n"
               "    if (a && b | b && c) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '|'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'b' on both sides of '|'.\n", errout.str());
 
         check("void foo() {\n"
               "    if ((a + b) | (a + b)) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '|'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'a+b' on both sides of '|'.\n", errout.str());
 
         check("void foo() {\n"
               "    if ((a | b) & (a | b)) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'a|b' on both sides of '&'.\n", errout.str());
 
         check("void foo(int a, int b) {\n"
               "    if ((a | b) == (a | b)) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '=='.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'a|b' on both sides of '=='.\n", errout.str());
 
         check("void foo() {\n"
               "    if (a1[a2[c & 0xff] & 0xff]) {}\n"
@@ -3712,12 +3712,14 @@ private:
         check("void foo() {\n"
               "    if (a && b && b) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'b' on both sides of '&&'.\n", errout.str());
 
         check("void foo() {\n"
               "    if (a || b || b) {}\n"
+              "    if (a || b || b || b) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'b' on both sides of '||'.\n"
+                      "[test.cpp:3] -> [test.cpp:3]: (style) Equivalent expressions 'b' on both sides of '||'.\n", errout.str());
 
         check("void foo() {\n"
               "    if (a / 1000 / 1000) {}\n"
@@ -3727,7 +3729,7 @@ private:
         check("int foo(int i) {\n"
               "    return i/i;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '/'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'i' on both sides of '/'.\n", errout.str());
 
         check("void foo() {\n"
               "    if (a << 1 << 1) {}\n"
@@ -3766,13 +3768,13 @@ private:
               "    bool a = bar.isSet() && bar->isSet();\n"
               "    bool b = bar.isSet() && bar.isSet();\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:3]: (style) Same expression on both sides of '&&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:3]: (style) Equivalent expressions 'bar.isSet()' on both sides of '&&'.\n", errout.str());
 
 
         check("void foo() {\n"
               "    if ((b + a) | (a + b)) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '|'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'a+b' on both sides of '|'.\n", errout.str());
 
         check("void foo(std::string a, std::string b) {\n"
               "  return a.find(b+\"&\") || a.find(\"&\"+b);\n"
@@ -3787,13 +3789,13 @@ private:
         check("void foo() {\n"
               "    if ((b + a) > (a + b)) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '>'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'a+b' on both sides of '>'.\n", errout.str());
 
         check("void f(int x) {\n"
               "    if ((x == 1) && (x == 0x00000001))\n"
               "        a++;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'x==1' on both sides of '&&'.\n", errout.str());
 
         check("void f() {\n"
               "    enum { Four = 4 };\n"
@@ -3831,7 +3833,7 @@ private:
               "    if (sizeof(a) == sizeof(a)) { }\n"
               "    if (sizeof(a) == sizeof(b)) { }\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '=='.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'sizeof(a)' on both sides of '=='.\n", errout.str());
 
         check("float bar(int) __attribute__((pure));\n"
               "char foo(int) __attribute__((pure));\n"
@@ -3840,7 +3842,7 @@ private:
               "    if (unknown(a) == unknown(a)) { }\n"
               "    if (foo(a) == foo(a)) { }\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:6] -> [test.cpp:6]: (style) Same expression on both sides of '=='.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:6] -> [test.cpp:6]: (style) Equivalent expressions 'foo(a)' on both sides of '=='.\n", errout.str());
     }
 
     void duplicateExpression2() { // check if float is NaN or Inf
@@ -3864,7 +3866,7 @@ private:
 
         check("struct X { int i; };\n"
               "int f(struct X x) { return x.i == x.i; }");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '=='.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'x.i' on both sides of '=='.\n", errout.str());
 
         // #5284 - when type is unknown, assume it's float
         check("int f() { return x==x; }");
@@ -3897,7 +3899,7 @@ private:
               "void A::foo() const {\n"
               "    if (bar() && bar()) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:6] -> [test.cpp:6]: (style) Same expression on both sides of '&&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:6] -> [test.cpp:6]: (style) Equivalent expressions 'bar()' on both sides of '&&'.\n", errout.str());
 
         check("struct A {\n"
               "  void foo();\n"
@@ -3921,7 +3923,7 @@ private:
               "    if (b.bar(1) && b.bar(1)) {}\n"
               "    if (a.bar(1) && a.bar(1)) {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:11] -> [test.cpp:11]: (style) Same expression on both sides of '&&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:11] -> [test.cpp:11]: (style) Equivalent expressions 'a.bar(1)' on both sides of '&&'.\n", errout.str());
 
         check("class D { void strcmp(); };\n"
               "void foo() {\n"
@@ -3933,7 +3935,7 @@ private:
         check("void foo() {\n"
               "    if ((mystrcmp(a, b) == 0) || (mystrcmp(a, b) == 0)) {}\n"
               "}", "test.cpp", false, false, true, &settings);
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'mystrcmp(a,b)==0' on both sides of '||'.\n", errout.str());
 
         check("void GetValue() { return rand(); }\n"
               "void foo() {\n"
@@ -3945,19 +3947,19 @@ private:
               "void foo() {\n"
               "    if ((GetValue() == 0) || (GetValue() == 0)) { dostuff(); }\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:3]: (style) Same expression on both sides of '||'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:3]: (style) Equivalent expressions 'GetValue()==0' on both sides of '||'.\n", errout.str());
 
         check("void GetValue() __attribute__((const));\n"
               "void GetValue() { return X; }\n"
               "void foo() {\n"
               "    if ((GetValue() == 0) || (GetValue() == 0)) { dostuff(); }\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:4] -> [test.cpp:4]: (style) Same expression on both sides of '||'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:4] -> [test.cpp:4]: (style) Equivalent expressions 'GetValue()==0' on both sides of '||'.\n", errout.str());
 
         check("void foo() {\n"
               "    if (str == \"(\" || str == \"(\") {}\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'str==\"(\"' on both sides of '||'.\n", errout.str());
 
         check("void foo() {\n"
               "    if (bar(a) && !strcmp(a, b) && bar(a) && !strcmp(a, b)) {}\n"
@@ -3974,7 +3976,7 @@ private:
         check("void f(A *src) {\n"
               "    if (dynamic_cast<B*>(src) || dynamic_cast<B*>(src)) {}\n"
               "}\n", "test.cpp", false, false, false); // don't run simplifications
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'dynamic_cast<B*>(src)' on both sides of '||'.\n", errout.str());
 
         // #5819
         check("Vector func(Vector vec1) {\n"
@@ -3985,7 +3987,7 @@ private:
         check("Vector func(int vec1) {\n"
               "    return fabs(vec1 & vec1 & vec1);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '&'.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions 'vec1' on both sides of '&'.\n", errout.str());
 
     }
 
@@ -4025,12 +4027,12 @@ private:
         check("void f() {\n"
               "    return A ? x : x;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2]: (style) Same expression in both branches of ternary operator.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (style) Equivalent expressions in both branches of ternary operator.\n", errout.str());
 
         check("void f() {\n"
               "    if( a ? (b ? false:false): false ) ;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2]: (style) Same expression in both branches of ternary operator.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (style) Equivalent expressions in both branches of ternary operator.\n", errout.str());
 
         check("void f() {\n"
               "    return A ? x : z;\n"
@@ -5746,7 +5748,7 @@ private:
               "    if (ull == 0x89504e470d0a1a0a || ull == 0x8a4d4e470d0a1a0a) ;\n"
               "}\n");
 #ifdef _MSC_VER
-        TODO_ASSERT_EQUALS("", "[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '||'.\n", errout.str());
+        TODO_ASSERT_EQUALS("", "[test.cpp:2] -> [test.cpp:2]: (style) Equivalent expressions on both sides of '||'.\n", errout.str());
 #else
         ASSERT_EQUALS("", errout.str());
 #endif
@@ -5813,7 +5815,7 @@ private:
         check("bool isInUnoIncludeFile(StringRef name) {"
               "   return  name.startswith(SRCDIR \"/com/\") || name.startswith(SRCDIR \"/uno/\");\n"
               "};", "test.cpp", false, false);
-        TODO_ASSERT_EQUALS("", "[test.cpp:1] -> [test.cpp:1]: (style) Same expression on both sides of '||'.\n", errout.str());
+        TODO_ASSERT_EQUALS("", "[test.cpp:1] -> [test.cpp:1]: (style) Equivalent expressions 'name.startswith(SRCDIR\"/uno/\")' on both sides of '||'.\n", errout.str());
     }
 
     void raceAfterInterlockedDecrement() {
