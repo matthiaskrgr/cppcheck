@@ -45,6 +45,7 @@ private:
         TEST_CASE(uninitvar_switch);    // handling switch
         TEST_CASE(uninitvar_references); // references
         TEST_CASE(uninitvar_return);    // return
+        TEST_CASE(uninitvar_assign);    // = {..}
         TEST_CASE(uninitvar_strncpy);   // strncpy doesn't always null-terminate
         TEST_CASE(func_uninit_var);     // analyse function calls for: 'int a(int x) { return x+x; }'
         TEST_CASE(func_uninit_pointer); // analyse function calls for: 'void a(int *p) { *p = 0; }'
@@ -70,8 +71,8 @@ private:
         TEST_CASE(uninitvar_cpp11ArrayInit); // #7010
         TEST_CASE(uninitvar_rangeBasedFor); // #7078
         TEST_CASE(trac_4871);
-
         TEST_CASE(syntax_error); // Ticket #5073
+        TEST_CASE(trac_5970);
 
         // dead pointer
         TEST_CASE(deadPointer);
@@ -486,16 +487,6 @@ private:
                        "}");
         ASSERT_EQUALS("[test.cpp:4]: (error) Uninitialized variable: s\n", errout.str());
 
-        // #1533
-        checkUninitVar("char a()\n"
-                       "{\n"
-                       "    char key;\n"
-                       "    struct A msg = { .buf = {&key} };\n"
-                       "    init(&msg);\n"
-                       "    key++;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
         checkUninitVar("void foo()\n"
                        "{\n"
                        "   char *buf = malloc(100);\n"
@@ -773,6 +764,17 @@ private:
                        "    if (x)\n"
                        "        i = 22;\n"
                        "    else\n"
+                       "        i = 33;\n"
+                       "    return i;\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+
+        checkUninitVar("int foo(int x)\n" // #5503
+                       "{\n"
+                       "    int i;\n"
+                       "    if (x < 2)\n"
+                       "        i = 22;\n"
+                       "    else if (x >= 2)\n" // condition is always true
                        "        i = 33;\n"
                        "    return i;\n"
                        "}");
@@ -1881,6 +1883,18 @@ private:
                            "}");
             ASSERT_EQUALS("[test.cpp:3]: (error) Uninitialized variable: i\n", errout.str());
         }
+    }
+
+    void uninitvar_assign() {  // = { .. }
+        // #1533
+        checkUninitVar("char a()\n"
+                       "{\n"
+                       "    char key;\n"
+                       "    struct A msg = { .buf = {&key} };\n"
+                       "    init(&msg);\n"
+                       "    key++;\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
 
         // Ticket #5660 - False positive
         checkUninitVar("int f() {\n"
@@ -1890,6 +1904,25 @@ private:
                        "    return result;\n"
                        "}");
         ASSERT_EQUALS("", errout.str());
+
+        // #6873
+        checkUninitVar("int f() {\n"
+                       "    char a[10];\n"
+                       "    char *b[] = {a};\n"
+                       "    foo(b);\n"
+                       "    return atoi(a);\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // = { .. }
+        checkUninitVar("int f() {\n"
+                       "    int a;\n"
+                       "    int *p[] = { &a };\n"
+                       "    *p[0] = 0;\n"
+                       "    return a;\n"
+                       "}");
+        ASSERT_EQUALS("", errout.str());
+
     }
 
     // strncpy doesn't always null-terminate..
@@ -2125,15 +2158,6 @@ private:
                        "    int x;\n"
                        "    if (a==3) { x=2; }\n"
                        "    y = (a==3) ? x : a;\n"
-                       "}");
-        ASSERT_EQUALS("", errout.str());
-
-        // = { .. }
-        checkUninitVar("int f() {\n"
-                       "    int a;\n"
-                       "    int *p[] = { &a };\n"
-                       "    *p[0] = 0;\n"
-                       "    return a;\n"
                        "}");
         ASSERT_EQUALS("", errout.str());
 
@@ -3745,6 +3769,17 @@ private:
                             "}";
         ASSERT_THROW(checkUninitVar(code), InternalError);
     }
+
+    void trac_5970() { // Ticket #5073
+        checkUninitVar("void DES_ede3_ofb64_encrypt() {\n"
+                       "  DES_cblock d; \n"
+                       "  char *dp; \n"
+                       "  dp=(char *)d; \n"
+                       "  init(dp); \n"
+                       "}", "test.c");
+        ASSERT_EQUALS("", errout.str());
+    }
+
 
     void checkDeadPointer(const char code[]) {
         // Clear the error buffer..

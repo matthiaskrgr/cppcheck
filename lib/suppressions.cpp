@@ -198,7 +198,7 @@ bool Suppressions::FileMatcher::isSuppressed(const std::string &file, unsigned i
 
 bool Suppressions::FileMatcher::isSuppressedLocal(const std::string &file, unsigned int line)
 {
-    std::map<std::string, std::map<unsigned int, bool> >::iterator f = _files.find(file);
+    std::map<std::string, std::map<unsigned int, bool> >::iterator f = _files.find(Path::fromNativeSeparators(file));
     if (f != _files.end()) {
         std::map<unsigned int, bool>::iterator l = f->second.find(0U);
         if (l != f->second.end()) {
@@ -222,11 +222,6 @@ std::string Suppressions::addSuppression(const std::string &errorId, const std::
         return "Failed to add suppression. No id.";
     }
     if (errorId != "*") {
-        // Support "stlBoundries", as that was the name of the errorId until v1.59.
-        if (errorId == "stlBoundries") {
-            return _suppressions["stlBoundaries"].addFile(file, line);
-        }
-
         for (std::string::size_type pos = 0; pos < errorId.length(); ++pos) {
             if (errorId[pos] < 0 || (!std::isalnum(errorId[pos]) && errorId[pos] != '_')) {
                 return "Failed to add suppression. Invalid id \"" + errorId + "\"";
@@ -273,7 +268,7 @@ std::list<Suppressions::SuppressionEntry> Suppressions::getUnmatchedLocalSuppres
         if (!unusedFunctionChecking && i->first == "unusedFunction")
             continue;
 
-        std::map<std::string, std::map<unsigned int, bool> >::const_iterator f = i->second._files.find(file);
+        std::map<std::string, std::map<unsigned int, bool> >::const_iterator f = i->second._files.find(Path::fromNativeSeparators(file));
         if (f != i->second._files.end()) {
             for (std::map<unsigned int, bool>::const_iterator l = f->second.begin(); l != f->second.end(); ++l) {
                 if (!l->second) {

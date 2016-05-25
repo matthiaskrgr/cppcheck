@@ -39,6 +39,7 @@
 #include "printablereport.h"
 #include "applicationlist.h"
 #include "checkstatistics.h"
+#include "path.h"
 
 ResultsView::ResultsView(QWidget * parent) :
     QWidget(parent),
@@ -230,6 +231,11 @@ void ResultsView::SetCheckDirectory(const QString &dir)
     mUI.mTree->SetCheckDirectory(dir);
 }
 
+QString ResultsView::GetCheckDirectory(void)
+{
+    return mUI.mTree->GetCheckDirectory();
+}
+
 void ResultsView::CheckingStarted(int count)
 {
     mUI.mProgress->setVisible(true);
@@ -369,7 +375,7 @@ void ResultsView::UpdateDetails(const QModelIndex &index)
                            .arg(tr("Message")).arg(message);
 
     const QString file0 = data["file0"].toString();
-    if (file0 != "" && file0 != data["file"].toString())
+    if (file0 != "" && Path::isHeader(data["file"].toString().toStdString()))
         formattedMsg += QString("\n\n%1: %2").arg(tr("First included by")).arg(QDir::toNativeSeparators(file0));
 
     if (mUI.mTree->ShowIdColumn())

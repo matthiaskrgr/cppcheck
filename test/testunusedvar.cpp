@@ -119,6 +119,7 @@ private:
         TEST_CASE(localvararray1);  // ticket #2780
         TEST_CASE(localvararray2);  // ticket #3438
         TEST_CASE(localvararray3);  // ticket #3980
+        TEST_CASE(localvararray4);  // ticket #4839
         TEST_CASE(localvarstring1);
         TEST_CASE(localvarstring2); // ticket #2929
         TEST_CASE(localvarconst1);
@@ -156,6 +157,8 @@ private:
         TEST_CASE(localvarUnusedGoto);    // #4447, #4558 goto
         TEST_CASE(localvarRangeBasedFor); // #7075
         TEST_CASE(localvarAssignInWhile);
+        TEST_CASE(localvarTemplate); // #4955 - variable is used as template parameter
+        TEST_CASE(localvarFuncPtr); // #7194
 
         TEST_CASE(localvarCppInitialization);
         TEST_CASE(localvarCpp11Initialization);
@@ -3652,6 +3655,16 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void localvararray4() {
+        functionVariableUsage("void foo() {\n"
+                              "    int p[1];\n"
+                              "    int *pp[0];\n"
+                              "    p[0] = 1;\n"
+                              "    *pp[0] = p[0];\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void localvarstring1() { // ticket #1597
         functionVariableUsage("void foo() {\n"
                               "    std::string s;\n"
@@ -3871,6 +3884,45 @@ private:
         functionVariableUsage("int foo() {\n"
                               "    int var = 1;\n"
                               "    while (var = var >> 1) { }\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void localvarTemplate() {
+        functionVariableUsage("template<int A> void f() {}\n"
+                              "void foo() {\n"
+                              "  const int x = 0;\n"
+                              "  f<x>();\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        functionVariableUsage("void f() {\n"
+                              "  constexpr std::size_t ArraySize(5);\n"
+                              "  std::array<int, ArraySize> X; X.dostuff();\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void localvarFuncPtr() {
+        functionVariableUsage("int main() {\n"
+                              "    void(*funcPtr)(void)(x);\n"
+                              "}");
+        TODO_ASSERT_EQUALS("[test.cpp:2]: (style) Variable 'funcPtr' is assigned a value never used.\n", "", errout.str());
+
+        functionVariableUsage("int main() {\n"
+                              "    void(*funcPtr)(void);\n"
+                              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (style) Unused variable: funcPtr\n", errout.str());
+
+        functionVariableUsage("int main() {\n"
+                              "    void(*funcPtr)(void)(x);\n"
+                              "    funcPtr();\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        functionVariableUsage("int main() {\n"
+                              "    void(*funcPtr)(void) = x;\n"
+                              "    funcPtr();\n"
                               "}");
         ASSERT_EQUALS("", errout.str());
     }

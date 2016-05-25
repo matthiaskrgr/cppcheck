@@ -33,6 +33,41 @@
 #include <set>
 #include <stack>
 
+/**
+ * Remove heading and trailing whitespaces from the input parameter.
+ * If string is all spaces/tabs, return empty string.
+ * @param s The string to trim.
+ */
+static std::string trim(const std::string& s)
+{
+    const std::string::size_type beg = s.find_first_not_of(" \t");
+    if (beg == std::string::npos)
+        return "";
+    const std::string::size_type end = s.find_last_not_of(" \t");
+    return s.substr(beg, end - beg + 1);
+}
+
+Directive::Directive(const std::string &_file, const int _linenr, const std::string &_str):
+    file(_file),
+    linenr(_linenr),
+    str(_str)
+{
+    // strip C++ comment if there is one
+    std::size_t pos = str.find("//");
+    if (pos != std::string::npos)
+        str.erase(pos);
+    // strip any C comments
+    while ((pos = str.find("/*")) != std::string::npos) {
+        std::size_t end = str.find("*/", pos+2);
+        if (end != std::string::npos) {
+            str.erase(pos, end + 2 - pos);
+        } else { // treat '/*' as '//' if '*/' is missing
+            str.erase(pos);
+        }
+    }
+    str = trim(str);
+}
+
 bool Preprocessor::missingIncludeFlag;
 bool Preprocessor::missingSystemIncludeFlag;
 
@@ -515,7 +550,7 @@ std::string Preprocessor::removeComments(const std::string &str, const std::stri
             continue;
         }
 
-        if ((ch == '#') && (str.compare(i, 7, "#error ") == 0 || str.compare(i, 9, "#warning ") == 0)) {
+        if ((ch == '#') && (str.compare(i+1, 6, "error ") == 0 || str.compare(i+1, 8, "warning ") == 0)) {
             if (str.compare(i, 6, "#error") == 0)
                 code << "#error";
 
@@ -1091,20 +1126,20 @@ std::string Preprocessor::getdef(std::string line, bool def)
         return "";
 
     // If def is true, the line must start with "#ifdef"
-    if (def && line.compare(0, 7, "#ifdef ") != 0 && line.compare(0, 4, "#if ") != 0
-        && (line.compare(0, 6, "#elif ") != 0 || line.compare(0, 7, "#elif !") == 0)) {
+    if (def && line.compare(1, 6, "ifdef ") != 0 && line.compare(1, 3, "if ") != 0
+        && (line.compare(1, 5, "elif ") != 0 || line.compare(1, 6, "elif !") == 0)) {
         return "";
     }
 
     // If def is false, the line must start with "#ifndef"
-    if (!def && line.compare(0, 8, "#ifndef ") != 0 && line.compare(0, 7, "#elif !") != 0) {
+    if (!def && line.compare(1, 7, "ifndef ") != 0 && line.compare(1, 6, "elif !") != 0) {
         return "";
     }
 
     // Remove the "#ifdef" or "#ifndef"
-    if (line.compare(0, 12, "#if defined ") == 0)
+    if (line.compare(1, 11, "if defined ") == 0)
         line.erase(0, 11);
-    else if (line.compare(0, 15, "#elif !defined(") == 0) {
+    else if (line.compare(1, 14, "elif !defined(") == 0) {
         line.erase(0, 15);
         std::string::size_type pos = line.find(')');
         // if pos == ::npos then another part of the code will complain
@@ -1311,11 +1346,10 @@ std::list<std::string> Preprocessor::getcfgs(const std::string &filedata, const 
                 }
             }
             if (par != 0) {
-                std::ostringstream lineStream;
-                lineStream << __LINE__;
-                const std::string errorId = "preprocessor" + lineStream.str();
+                std::ostringstream errorId;
+                errorId << "preprocessor" <<  __LINE__;
                 const std::string errorText = "mismatching number of '(' and ')' in this line: " + def;
-                writeError(filename, linenr, _errorLogger, errorId, errorText);
+                writeError(filename, linenr, _errorLogger, errorId.str(), errorText);
                 ret.clear();
                 return ret;
             }
@@ -1420,8 +1454,7 @@ std::list<std::string> Preprocessor::getcfgs(const std::string &filedata, const 
                 deflist.back() = ndeflist.back();
                 ndeflist.pop_back();
             } else {
-                std::string tempDef((deflist.back() == "1") ? "0" : "1");
-                deflist.back() = tempDef;
+                deflist.back() = (deflist.back() == "1") ? "0" : "1";
             }
         }
 
@@ -1529,6 +1562,17 @@ std::list<std::string> Preprocessor::getcfgs(const std::string &filedata, const 
     // Remove duplicates from the ret list..
     ret.sort();
     ret.unique();
+
+    // C code => remove __cplusplus configurations..
+    if (!cplusplus(&_settings, filename) && Path::isC(filename)) {
+        for (std::list<std::string>::iterator it = ret.begin(); it != ret.end();) {
+            if (it->find("__cplusplus") != std::string::npos) {
+                ret.erase(it++);
+            } else {
+                ++it;
+            }
+        }
+    }
 
     // cleanup unhandled configurations..
     for (std::list<std::string>::iterator it = ret.begin(); it != ret.end();) {
@@ -1749,7 +1793,9 @@ bool Preprocessor::match_cfg_def(std::map<std::string, std::string> cfg, std::st
 
 std::string Preprocessor::getcode(const std::string &filedata, const std::string &cfg, const std::string &filename)
 {
-    // For the error report
+    // For the error report and preprocessor dump:
+    // line number relative to current (included) file
+    // (may decrease when popping back from an included file)
     unsigned int lineno = 0;
 
     std::ostringstream ret;
@@ -1766,8 +1812,27 @@ std::string Preprocessor::getcode(const std::string &filedata, const std::string
     std::stack<unsigned int> lineNumbers;
     std::istringstream istr(filedata);
     std::string line;
+    directives.clear();
     while (std::getline(istr, line)) {
         ++lineno;
+
+        if (line.empty()) {
+            ret << '\n';
+            continue;
+        }
+
+        // record directive for addons / checkers
+        if ((line[0] == '#')
+            && (line.compare(0, 6, "#line ") != 0)
+            && (line.compare(0, 8, "#endfile") != 0)) {
+            // for clarity, turn "#file ..." back into "#include ..."
+            std::string orig_line = line;
+            if (orig_line.compare(0, 6, "#file ")==0)
+                orig_line.replace(1, 4, "include");
+            // record directive and extra
+            directives.push_back(Directive(filenames.top(), lineno,
+                                           orig_line));
+        }
 
         if (_settings.terminated())
             return "";
@@ -2229,7 +2294,8 @@ std::string Preprocessor::handleIncludes(const std::string &code, const std::str
                     continue;
                 }
 
-                includes.push_back(filename);
+                // #6913 - simplify Path to avoid strange recursion
+                includes.push_back(Path::simplifyPath(filename));
 
                 // Don't include header if it's already included and contains #pragma once
                 if (pragmaOnce.find(filename) != pragmaOnce.end()) {
@@ -2410,20 +2476,6 @@ static void skipstring(const std::string &line, std::string::size_type &pos)
             ++pos;
         ++pos;
     }
-}
-
-/**
- * Remove heading and trailing whitespaces from the input parameter.
- * If string is all spaces/tabs, return empty string.
- * @param s The string to trim.
- */
-static std::string trim(const std::string& s)
-{
-    const std::string::size_type beg = s.find_first_not_of(" \t");
-    if (beg == std::string::npos)
-        return "";
-    const std::string::size_type end = s.find_last_not_of(" \t");
-    return s.substr(beg, end - beg + 1);
 }
 
 /**
@@ -2761,10 +2813,10 @@ public:
                         if (tok->strAt(-1) != "##") {
                             const std::map<std::string, PreprocessorMacro *>::const_iterator it = macros.find(str);
                             if (it != macros.end() && it->second->_macro.find('(') == std::string::npos) {
-                                str = it->second->_macro;
-                                const std::string::size_type whitespacePos = str.find(' ');
+                                const std::string& macro = it->second->_macro;
+                                const std::string::size_type whitespacePos = macro.find(' ');
                                 if (whitespacePos != std::string::npos)
-                                    str.erase(0, whitespacePos);
+                                    str = macro.substr(whitespacePos);
                                 else
                                     str = "";
                             }
@@ -2965,7 +3017,7 @@ std::string Preprocessor::expandMacros(const std::string &code, std::string file
         // Preprocessor directive
         if (line[0] == '#') {
             // defining a macro..
-            if (line.compare(0, 8, "#define ") == 0) {
+            if (line.compare(1, 7, "define ") == 0) {
                 PreprocessorMacro *macro = new PreprocessorMacro(line.substr(8), &settings);
                 if (macro->name().empty() || macro->name() == "NULL") {
                     delete macro;
@@ -2983,7 +3035,7 @@ std::string Preprocessor::expandMacros(const std::string &code, std::string file
             }
 
             // undefining a macro..
-            else if (line.compare(0, 7, "#undef ") == 0) {
+            else if (line.compare(1, 6, "undef ") == 0) {
                 std::map<std::string, PreprocessorMacro *>::iterator it;
                 it = macros.find(line.substr(7));
                 if (it != macros.end()) {
@@ -2994,7 +3046,7 @@ std::string Preprocessor::expandMacros(const std::string &code, std::string file
             }
 
             // entering a file, update position..
-            else if (line.compare(0, 7, "#file \"") == 0) {
+            else if (line.compare(1, 6, "file \"") == 0) {
                 fileinfo.push(std::pair<unsigned int, std::string>(linenr, filename));
                 filename = line.substr(7, line.length() - 8);
                 linenr = 0;
@@ -3270,4 +3322,24 @@ void Preprocessor::getErrorMessages(ErrorLogger *errorLogger, const Settings *se
     preprocessor.missingInclude("", 1, "", SystemHeader);
     preprocessor.validateCfgError("X", "X");
     preprocessor.error("", 1, "#error message");   // #error ..
+}
+
+void Preprocessor::dump(std::ostream &out) const
+{
+    // Create a xml directive dump.
+    // The idea is not that this will be readable for humans. It's a
+    // data dump that 3rd party tools could load and get useful info from.
+    std::list<Directive>::const_iterator it;
+
+    out << "  <directivelist>" << std::endl;
+
+    for (it = directives.begin(); it != directives.end(); ++it) {
+        out << "    <directive "
+            << "file=\"" << it->file << "\" "
+            << "linenr=\"" << it->linenr << "\" "
+            // str might contain characters such as '"', '<' or '>' which
+            // could result in invalid XML, so run it through toxml().
+            << "str=\"" << ErrorLogger::toxml(it->str) << "\"/>" << std::endl;
+    }
+    out << "  </directivelist>" << std::endl;
 }

@@ -34,6 +34,7 @@ static const char ErrorElementName[] = "error";
 static const char ErrorsElementName[] = "errors";
 static const char LocationElementName[] = "location";
 static const char FilenameAttribute[] = "file";
+static const char IncludedFromFilenameAttribute[] = "file0";
 static const char LineAttribute[] = "line";
 static const char IdAttribute[] = "id";
 static const char SeverityAttribute[] = "severity";
@@ -120,6 +121,9 @@ void XmlReportV2::WriteError(const ErrorItem &error)
         mXmlWriter->writeStartElement(LocationElementName);
 
         QString file = QDir::toNativeSeparators(error.files[i]);
+        if (!error.file0.isEmpty() && file != error.file0) {
+            mXmlWriter->writeAttribute(IncludedFromFilenameAttribute, quoteMessage(error.file0));
+        }
         file = XmlReport::quoteMessage(file);
         mXmlWriter->writeAttribute(FilenameAttribute, file);
         const QString line = QString::number(error.lines[i]);
@@ -206,9 +210,12 @@ ErrorItem XmlReportV2::ReadError(QXmlStreamReader *reader)
             if (mXmlReader->name() == LocationElementName) {
                 QXmlStreamAttributes attribs = mXmlReader->attributes();
                 QString file = attribs.value("", FilenameAttribute).toString();
+                QString file0 = attribs.value("", IncludedFromFilenameAttribute).toString();
                 file = XmlReport::unquoteMessage(file);
                 if (item.file.isEmpty())
                     item.file = file;
+                if (!file0.isEmpty())
+                    item.file0 = XmlReport::unquoteMessage(file0);
                 item.files.push_back(file);
                 const int line = attribs.value("", LineAttribute).toString().toUInt();
                 item.lines.push_back(line);

@@ -21,6 +21,7 @@
 #include "cppcheck.h"
 #include "tokenlist.h"
 #include "token.h"
+#include "utils.h"
 
 #include <tinyxml2.h>
 
@@ -58,8 +59,40 @@ ErrorLogger::ErrorMessage::ErrorMessage(const std::list<FileLocation> &callStack
     setmsg(msg);
 }
 
+
+
+ErrorLogger::ErrorMessage::ErrorMessage(const std::list<FileLocation> &callStack, Severity::SeverityType severity, const std::string &msg, const std::string &id, const CWE &cwe, bool inconclusive) :
+    _callStack(callStack), // locations for this error message
+    _id(id),               // set the message id
+    _severity(severity),   // severity for this error message
+    _cwe(cwe.id),
+    _inconclusive(inconclusive)
+{
+    // set the summary and verbose messages
+    setmsg(msg);
+}
+
 ErrorLogger::ErrorMessage::ErrorMessage(const std::list<const Token*>& callstack, const TokenList* list, Severity::SeverityType severity, const std::string& id, const std::string& msg, bool inconclusive)
     : _id(id), _severity(severity), _cwe(0U), _inconclusive(inconclusive)
+{
+    // Format callstack
+    for (std::list<const Token *>::const_iterator it = callstack.begin(); it != callstack.end(); ++it) {
+        // --errorlist can provide null values here
+        if (!(*it))
+            continue;
+
+        _callStack.push_back(ErrorLogger::ErrorMessage::FileLocation(*it, list));
+    }
+
+    if (list && !list->getFiles().empty())
+        file0 = list->getFiles()[0];
+
+    setmsg(msg);
+}
+
+
+ErrorLogger::ErrorMessage::ErrorMessage(const std::list<const Token*>& callstack, const TokenList* list, Severity::SeverityType severity, const std::string& id, const std::string& msg, const CWE &cwe, bool inconclusive)
+    : _id(id), _severity(severity), _cwe(cwe.id), _inconclusive(inconclusive)
 {
     // Format callstack
     for (std::list<const Token *>::const_iterator it = callstack.begin(); it != callstack.end(); ++it) {
@@ -104,7 +137,7 @@ std::string ErrorLogger::ErrorMessage::serialize() const
     std::ostringstream oss;
     oss << _id.length() << " " << _id;
     oss << Severity::toString(_severity).length() << " " << Severity::toString(_severity);
-    oss << MathLib::toString(_cwe).length() << " " << MathLib::toString(_cwe);
+    oss << MathLib::toString(_cwe.id).length() << " " << MathLib::toString(_cwe.id);
     if (_inconclusive) {
         const std::string inconclusive("inconclusive");
         oss << inconclusive.length() << " " << inconclusive;
@@ -161,7 +194,7 @@ bool ErrorLogger::ErrorMessage::deserialize(const std::string &data)
     _id = results[0];
     _severity = Severity::fromString(results[1]);
     std::istringstream scwe(results[2]);
-    scwe >> _cwe;
+    scwe >> _cwe.id;
     _shortMessage = results[3];
     _verboseMessage = results[4];
 
@@ -177,13 +210,17 @@ bool ErrorLogger::ErrorMessage::deserialize(const std::string &data)
         iss.get();
         std::string temp;
         for (unsigned int i = 0; i < len && iss.good(); ++i) {
-            char c = static_cast<char>(iss.get());
+            const char c = static_cast<char>(iss.get());
             temp.append(1, c);
         }
 
+        const std::string::size_type colonPos = temp.find(':');
+        if (colonPos == std::string::npos)
+            throw InternalError(0, "Internal Error: No colon found in <filename:line> pattern");
+
         ErrorLogger::ErrorMessage::FileLocation loc;
-        loc.setfile(temp.substr(temp.find(':') + 1));
-        temp = temp.substr(0, temp.find(':'));
+        loc.setfile(temp.substr(colonPos + 1));
+        temp = temp.substr(0, colonPos);
         std::istringstream fiss(temp);
         fiss >> loc.line;
 
@@ -238,12 +275,7 @@ std::string ErrorLogger::ErrorMessage::fixInvalidChars(const std::string& raw)
             std::ostringstream es;
             // straight cast to (unsigned) doesn't work out.
             const unsigned uFrom = (unsigned char)*from;
-#if 0
-            if (uFrom<0x20)
-                es << "\\XXX";
-            else
-#endif
-                es << '\\' << std::setbase(8) << std::setw(3) << std::setfill('0') << uFrom;
+            es << '\\' << std::setbase(8) << std::setw(3) << std::setfill('0') << uFrom;
             result += es.str();
         }
         ++from;
@@ -267,7 +299,7 @@ std::string ErrorLogger::ErrorMessage::toXML(bool verbose, int version) const
         }
         printer.PushAttribute("id", _id.c_str());
         printer.PushAttribute("severity", (_severity == Severity::error ? "error" : "style"));
-        printer.PushAttribute("msg", (verbose ? _verboseMessage : _shortMessage).c_str());
+        printer.PushAttribute("msg", fixInvalidChars(verbose ? _verboseMessage : _shortMessage).c_str());
         printer.CloseElement(false);
         return printer.CStr();
     }
@@ -280,13 +312,15 @@ std::string ErrorLogger::ErrorMessage::toXML(bool verbose, int version) const
         printer.PushAttribute("severity", Severity::toString(_severity).c_str());
         printer.PushAttribute("msg", fixInvalidChars(_shortMessage).c_str());
         printer.PushAttribute("verbose", fixInvalidChars(_verboseMessage).c_str());
-        if (_cwe)
-            printer.PushAttribute("cwe", _cwe);
+        if (_cwe.id)
+            printer.PushAttribute("cwe", _cwe.id);
         if (_inconclusive)
             printer.PushAttribute("inconclusive", "true");
 
         for (std::list<FileLocation>::const_reverse_iterator it = _callStack.rbegin(); it != _callStack.rend(); ++it) {
             printer.OpenElement("location", false);
+            if (!file0.empty() && (*it).getfile() != file0)
+                printer.PushAttribute("file0", Path::toNativeSeparators(file0).c_str());
             printer.PushAttribute("file", (*it).getfile().c_str());
             printer.PushAttribute("line", (*it).line);
             printer.CloseElement(false);
@@ -377,8 +411,8 @@ void ErrorLogger::reportUnmatchedSuppressions(const std::list<Suppressions::Supp
         if (suppressed)
             continue;
 
-        std::list<ErrorLogger::ErrorMessage::FileLocation> callStack;
-        callStack.push_back(ErrorLogger::ErrorMessage::FileLocation(i->file, i->line));
+        const std::list<ErrorLogger::ErrorMessage::FileLocation> callStack = make_container< std::list<ErrorLogger::ErrorMessage::FileLocation> > ()
+                << ErrorLogger::ErrorMessage::FileLocation(i->file, i->line);
         reportErr(ErrorLogger::ErrorMessage(callStack, Severity::information, "Unmatched suppression: " + i->id, "unmatchedSuppression", false));
     }
 }

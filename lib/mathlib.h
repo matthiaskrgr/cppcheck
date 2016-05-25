@@ -31,6 +31,8 @@
 /** @brief simple math functions that uses operands stored in std::string. useful when performing math on tokens. */
 
 class CPPCHECKLIB MathLib {
+    friend class TestMathLib;
+
 public:
     /** @brief value class */
     class value {
@@ -59,6 +61,8 @@ public:
         static value calc(char op, const value &v1, const value &v2);
         int compare(const value &v) const;
         value add(int v) const;
+        value shiftLeft(const value &v) const;
+        value shiftRight(const value &v) const;
     };
 
     typedef long long bigint;
@@ -112,8 +116,18 @@ public:
      * @return true if given character is octal digit.
      */
     static bool isOctalDigit(char c);
+    /*
+     * \param str character literal
+     * @return Number of internal representation of the character literal
+     * */
     static MathLib::bigint characterLiteralToLongNumber(const std::string& str);
 
+private:
+    /*
+     * \param iLiteral A character literal
+     * \return The equivalent character literal with all escapes interpreted
+     */
+    static std::string normalizeCharacterLiteral(const std::string& iLiteral);
 };
 
 MathLib::value operator+(const MathLib::value &v1, const MathLib::value &v2);
@@ -124,6 +138,8 @@ MathLib::value operator%(const MathLib::value &v1, const MathLib::value &v2);
 MathLib::value operator&(const MathLib::value &v1, const MathLib::value &v2);
 MathLib::value operator|(const MathLib::value &v1, const MathLib::value &v2);
 MathLib::value operator^(const MathLib::value &v1, const MathLib::value &v2);
+MathLib::value operator<<(const MathLib::value &v1, const MathLib::value &v2);
+MathLib::value operator>>(const MathLib::value &v1, const MathLib::value &v2);
 
 template<> CPPCHECKLIB std::string MathLib::toString(double value); // Declare specialization to avoid linker problems
 

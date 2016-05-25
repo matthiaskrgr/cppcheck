@@ -25,9 +25,13 @@
 #include "config.h"
 #include "check.h"
 #include "mathlib.h"
+
 #include <list>
 #include <vector>
 #include <string>
+
+// CWE ids used
+static const struct CWE CWE119(119U); // Improper Restriction of Operations within the Bounds of a Memory Buffer
 
 class Variable;
 
@@ -168,6 +172,8 @@ public:
 
     /** Check for buffer overruns (based on ArrayInfo) */
     void checkScope(const Token *tok, const ArrayInfo &arrayInfo);
+    void checkScope(const Token *tok, std::map<unsigned int, ArrayInfo> arrayInfo);
+    void checkScope_inner(const Token *tok, const ArrayInfo &arrayInfo);
 
     /** Check for buffer overruns */
     void checkScope(const Token *tok, const std::vector<std::string> &varname, const ArrayInfo &arrayInfo);
@@ -175,11 +181,11 @@ public:
     /**
      * Helper function for checkFunctionCall - check a function parameter
      * \param tok token for the function name
-     * \param par on what parameter is the array used
+     * \param paramIndex on what parameter is the array used
      * \param arrayInfo the array information
      * \param callstack call stack. This is used to prevent recursion and to provide better error messages. Pass a empty list from checkScope etc.
      */
-    void checkFunctionParameter(const Token &tok, const unsigned int par, const ArrayInfo &arrayInfo, const std::list<const Token *>& callstack);
+    void checkFunctionParameter(const Token &tok, const unsigned int paramIndex, const ArrayInfo &arrayInfo, const std::list<const Token *>& callstack);
 
     /**
      * Helper function that checks if the array is used and if so calls the checkFunctionCall
@@ -239,24 +245,24 @@ private:
 
 public:
     void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
-        CheckBufferOverrun c(0, settings, errorLogger);
+        CheckBufferOverrun c(nullptr, settings, errorLogger);
         const std::vector<MathLib::bigint> indexes(2, 1);
-        c.arrayIndexOutOfBoundsError(0, ArrayInfo(0, "array", 1, 2), indexes);
-        c.bufferOverrunError(0, std::string("buffer"));
-        c.strncatUsageError(0);
-        c.outOfBoundsError(0, "index", true, 2, 1);
-        c.sizeArgumentAsCharError(0);
-        c.terminateStrncpyError(0, "buffer");
-        c.bufferNotZeroTerminatedError(0, "buffer", "strncpy");
-        c.negativeIndexError(0, -1);
-        c.cmdLineArgsError(0);
+        c.arrayIndexOutOfBoundsError(nullptr, ArrayInfo(0, "array", 1, 2), indexes);
+        c.bufferOverrunError(nullptr, std::string("buffer"));
+        c.strncatUsageError(nullptr);
+        c.outOfBoundsError(nullptr, "index", true, 2, 1);
+        c.sizeArgumentAsCharError(nullptr);
+        c.terminateStrncpyError(nullptr, "buffer");
+        c.bufferNotZeroTerminatedError(nullptr, "buffer", "strncpy");
+        c.negativeIndexError(nullptr, -1);
+        c.cmdLineArgsError(nullptr);
         c.pointerOutOfBoundsError(nullptr, nullptr, 0);
-        c.arrayIndexThenCheckError(0, "index");
-        c.possibleBufferOverrunError(0, "source", "destination", false);
-        c.argumentSizeError(0, "function", "array");
-        c.negativeMemoryAllocationSizeError(0);
-        c.negativeArraySizeError(0);
-        c.reportError(nullptr, Severity::warning, "arrayIndexOutOfBoundsCond", "Array 'x[10]' accessed at index 20, which is out of bounds. Otherwise condition 'y==20' is redundant.");
+        c.arrayIndexThenCheckError(nullptr, "index");
+        c.possibleBufferOverrunError(nullptr, "source", "destination", false);
+        c.argumentSizeError(nullptr, "function", "array");
+        c.negativeMemoryAllocationSizeError(nullptr);
+        c.negativeArraySizeError(nullptr);
+        c.reportError(nullptr, Severity::warning, "arrayIndexOutOfBoundsCond", "Array 'x[10]' accessed at index 20, which is out of bounds. Otherwise condition 'y==20' is redundant.", CWE119, false);
     }
 private:
 

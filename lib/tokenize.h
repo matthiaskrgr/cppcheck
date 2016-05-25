@@ -72,7 +72,7 @@ public:
     bool IsScopeNoReturn(const Token *endScopeToken, bool *unknown = nullptr) const;
 
     bool createTokens(std::istream &code,
-                      const char FileName[]);
+                      const std::string& FileName);
 
     bool simplifyTokens1(const std::string &configuration,
                          bool noSymbolDB_AST = false);
@@ -111,6 +111,8 @@ public:
 
     /** Set variable id */
     void setVarId();
+    void setVarIdPass1();
+    void setVarIdPass2();
 
     /**
     * Basic simplification of tokenlist
@@ -170,11 +172,6 @@ public:
      * @return true if the parameter is passed by value. if unsure, false is returned
      */
     bool isFunctionParameterPassedByValue(const Token *fpar) const;
-
-    /**
-     * get error messages that the tokenizer generate
-     */
-    static void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings);
 
     /** Simplify assignment in function call "f(x=g());" => "x=g();f(x);"
      */
@@ -285,12 +282,6 @@ public:
      * Example: ";a+=b;" => ";a=a+b;"
      */
     void simplifyCompoundAssignment();
-
-
-    /**
-     * Simplify "* const" to "*"
-     */
-    void simplifyPointerConst();
 
     /**
      * Simplify the location of "static" and "const" qualifiers in
@@ -556,11 +547,6 @@ private:
     void simplifyFuncInWhile();
 
     /**
-     * Replace enum with constant value
-     */
-    void simplifyEnum();
-
-    /**
      * Remove "std::" before some function names
      */
     void simplifyStd();
@@ -701,7 +687,7 @@ private:
     /**
      * check for duplicate enum definition
      */
-    bool duplicateDefinition(Token **tokPtr, const Token *name) const;
+    bool duplicateDefinition(Token **tokPtr) const;
 
     /**
      * report error message
@@ -709,13 +695,7 @@ private:
     void reportError(const Token* tok, const Severity::SeverityType severity, const std::string& id, const std::string& msg, bool inconclusive = false) const;
     void reportError(const std::list<const Token*>& callstack, Severity::SeverityType severity, const std::string& id, const std::string& msg, bool inconclusive = false) const;
 
-    /**
-     * duplicate enum definition error
-     */
-    void duplicateEnumError(const Token *tok1, const Token *tok2, const std::string & type) const;
-
-    bool duplicateTypedef(Token **tokPtr, const Token *name, const Token *typeDef, const std::set<std::string>& structs) const;
-    void duplicateTypedefError(const Token *tok1, const Token *tok2, const std::string & type) const;
+    bool duplicateTypedef(Token **tokPtr, const Token *name, const Token *typeDef) const;
 
     void unsupportedTypedef(const Token *tok) const;
 
@@ -822,6 +802,14 @@ public:
     */
     static const Token * startOfExecutableScope(const Token * tok);
 
+    bool isMaxTime() const {
+#ifdef MAXTIME
+        return (std::time(0) > maxtime);
+#else
+        return false;
+#endif
+    }
+
 private:
     /** Disable copy constructor, no implementation */
     Tokenizer(const Tokenizer &);
@@ -863,6 +851,7 @@ private:
      * TimerResults
      */
     TimerResults *m_timerResults;
+
 #ifdef MAXTIME
     /** Tokenizer maxtime */
     std::time_t maxtime;

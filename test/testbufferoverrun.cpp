@@ -227,8 +227,6 @@ private:
 
         TEST_CASE(getErrorMessages);
 
-        TEST_CASE(unknownMacroNoDecl);    // #2638 - not variable declaration: 'AAA a[0] = 0;'
-
         // Access array and then check if the used index is within bounds
         TEST_CASE(arrayIndexThenCheck);
 
@@ -3749,15 +3747,6 @@ private:
         c.getErrorMessages(this, 0);
     }
 
-    void unknownMacroNoDecl() {
-        check("void f() {\n"
-              "    int a[10];\n"
-              "    AAA a[0] = 0;\n"   // <- not a valid array declaration
-              "    a[1] = 1;\n"
-              "}");
-        ASSERT_EQUALS("", errout.str());
-    }
-
     void arrayIndexThenCheck() {
         check("void f(const char s[]) {\n"
               "    if (s[i] == 'x' && i < y) {\n"
@@ -3801,6 +3790,11 @@ private:
               "    }\n"
               "}");
         TODO_ASSERT_EQUALS("[test.cpp:2]: (style) Array index 'i' is used before limits check.\n", "", errout.str());
+
+        check("void f(int i) {\n" // sizeof
+              "  sizeof(a)/sizeof(a[i]) && i < 10;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void bufferNotZeroTerminated() {

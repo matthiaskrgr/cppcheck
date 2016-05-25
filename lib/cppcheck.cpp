@@ -40,6 +40,9 @@ static const char ExtraVersion[] = "";
 
 static TimerResults S_timerResults;
 
+// CWE ids used
+static const CWE CWE398(398U);  // Indicator of Poor Code Quality
+
 CppCheck::CppCheck(ErrorLogger &errorLogger, bool useGlobalSuppressions)
     : _errorLogger(errorLogger), exitcode(0), _useGlobalSuppressions(useGlobalSuppressions), tooManyConfigs(false), _simplify(true)
 {
@@ -211,7 +214,7 @@ unsigned int CppCheck::processFile(const std::string& filename, std::istream& fi
                 // Create tokens, skip rest of iteration if failed
                 std::istringstream istr(codeWithoutCfg);
                 Timer timer("Tokenizer::createTokens", _settings.showtime, &S_timerResults);
-                bool result = _tokenizer.createTokens(istr, filename.c_str());
+                bool result = _tokenizer.createTokens(istr, filename);
                 timer.Stop();
                 if (!result)
                     continue;
@@ -233,6 +236,7 @@ unsigned int CppCheck::processFile(const std::string& filename, std::istream& fi
                 // dump xml if --dump
                 if (_settings.dump && fdump.is_open()) {
                     fdump << "<dump cfg=\"" << cfg << "\">" << std::endl;
+                    preprocessor.dump(fdump);
                     _tokenizer.dump(fdump);
                     fdump << "</dump>" << std::endl;
                 }
@@ -356,6 +360,9 @@ void CppCheck::checkNormalTokens(const Tokenizer &tokenizer)
         if (_settings.terminated())
             return;
 
+        if (tokenizer.isMaxTime())
+            return;
+
         Timer timerRunChecks((*it)->name() + "::runChecks", _settings.showtime, &S_timerResults);
         (*it)->runChecks(&tokenizer, &_settings, this);
     }
@@ -379,6 +386,9 @@ void CppCheck::checkSimplifiedTokens(const Tokenizer &tokenizer)
     // call all "runSimplifiedChecks" in all registered Check classes
     for (std::list<Check *>::const_iterator it = Check::instances().begin(); it != Check::instances().end(); ++it) {
         if (_settings.terminated())
+            return;
+
+        if (tokenizer.isMaxTime())
             return;
 
         Timer timerSimpleChecks((*it)->name() + "::runSimplifiedChecks", _settings.showtime, &S_timerResults);
@@ -516,7 +526,7 @@ void CppCheck::tooManyConfigsError(const std::string &file, const std::size_t nu
     ErrorLogger::ErrorMessage errmsg(loclist,
                                      Severity::information,
                                      msg.str(),
-                                     "toomanyconfigs",
+                                     "toomanyconfigs", CWE398,
                                      false);
 
     reportErr(errmsg);
@@ -635,7 +645,6 @@ void CppCheck::getErrorMessages()
     for (std::list<Check *>::const_iterator it = Check::instances().begin(); it != Check::instances().end(); ++it)
         (*it)->getErrorMessages(this, &s);
 
-    Tokenizer::getErrorMessages(this, &s);
     Preprocessor::getErrorMessages(this, &s);
 }
 

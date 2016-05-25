@@ -129,9 +129,7 @@ void TokenList::addtoken(std::string str, const unsigned int lineno, const unsig
 
     // Replace hexadecimal value with decimal
     if (MathLib::isIntHex(str) || MathLib::isOct(str) || MathLib::isBin(str)) {
-        std::ostringstream str2stream;
-        str2stream << MathLib::toULongNumber(str);
-        str = str2stream.str();
+        str = MathLib::value(str).str();
     } else if (str.compare(0, 5, "_Bool") == 0) {
         str = "bool";
     }
@@ -438,9 +436,29 @@ struct AST_state {
     explicit AST_state(bool cpp_) : depth(0), inArrayAssignment(0), cpp(cpp_), assign(0U) {}
 };
 
+static Token * skipDecl(Token *tok)
+{
+    if (!Token::Match(tok->previous(), "( %name%"))
+        return tok;
+
+    Token *vartok = tok;
+    while (Token::Match(vartok, "%name%|*|&|::|<")) {
+        if (vartok->str() == "<") {
+            if (vartok->link())
+                vartok = vartok->link();
+            else
+                return tok;
+        } else if (Token::Match(vartok, "%name% [:=]")) {
+            return vartok;
+        }
+        vartok = vartok->next();
+    }
+    return tok;
+}
+
 static bool iscast(const Token *tok)
 {
-    if (!Token::Match(tok, "( %name%"))
+    if (!Token::Match(tok, "( ::| %name%"))
         return false;
 
     if (tok->previous() && tok->previous()->isName() && tok->previous()->str() != "return")
@@ -577,6 +595,7 @@ static void compileTerm(Token *&tok, AST_state& state)
             if (tok->str() == "<")
                 tok = tok->link()->next();
         } else if (!state.cpp || !Token::Match(tok, "new|delete %name%|*|&|::|(|[")) {
+            tok = skipDecl(tok);
             while (tok->next() && tok->next()->isName())
                 tok = tok->next();
             state.op.push(tok);
@@ -960,7 +979,7 @@ static void compileExpression(Token *&tok, AST_state& state)
 static Token * createAstAtToken(Token *tok, bool cpp)
 {
     if (Token::simpleMatch(tok, "for (")) {
-        Token *tok2 = tok->tokAt(2);
+        Token *tok2 = skipDecl(tok->tokAt(2));
         Token *init1 = nullptr;
         Token * const endPar = tok->next()->link();
         while (tok2 && tok2 != endPar && tok2->str() != ";") {
@@ -1077,8 +1096,8 @@ void TokenList::createAst()
 
 void TokenList::validateAst()
 {
-    std::set < const Token* > astTokens;
-    // Verify that ast looks ok
+    // Check for some known issues in AST to avoid crash/hang later on
+    std::set < const Token* > safeAstTokens; // list of "safe" AST tokens without endless recursion
     for (const Token *tok = _front; tok; tok = tok->next()) {
         // Syntax error if binary operator only has 1 operand
         if ((tok->isAssignmentOp() || tok->isComparisonOp() || Token::Match(tok,"[|^/%]")) && tok->astOperand1() && !tok->astOperand2())
@@ -1088,16 +1107,21 @@ void TokenList::validateAst()
         if (tok->astOperand2() && tok->str() == "?" && tok->astOperand2()->str() != ":")
             throw InternalError(tok, "Syntax Error: AST broken, ternary operator lacks ':'.", InternalError::SYNTAX);
 
-        // check for endless recursion
-        const Token* parent=tok;
-        while ((parent = parent->astParent()) != nullptr) {
-            if (parent==tok)
-                throw InternalError(tok, "AST broken: endless recursion from '" + tok->str() + "'", InternalError::SYNTAX);
-            if (astTokens.find(parent)!= astTokens.end()) {
-                break;
-            }
-            astTokens.insert(parent);
-        }
+        // Check for endless recursion
+        const Token* parent=tok->astParent();
+        if (parent) {
+            std::set < const Token* > astTokens; // list of anchestors
+            astTokens.insert(tok);
+            do {
+                if (safeAstTokens.find(parent) != safeAstTokens.end())
+                    break;
+                if (astTokens.find(parent) != astTokens.end())
+                    throw InternalError(tok, "AST broken: endless recursion from '" + tok->str() + "'", InternalError::SYNTAX);
+                astTokens.insert(parent);
+            } while ((parent = parent->astParent()) != nullptr);
+            safeAstTokens.insert(astTokens.begin(), astTokens.end());
+        } else
+            safeAstTokens.insert(tok);
     }
 }
 
@@ -1115,7 +1139,7 @@ bool TokenList::validateToken(const Token* tok) const
 {
     if (!tok)
         return true;
-    for (Token *t = _front; t; t = t->next()) {
+    for (const Token *t = _front; t; t = t->next()) {
         if (tok==t)
             return true;
     }

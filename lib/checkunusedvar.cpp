@@ -490,6 +490,8 @@ static const Token* doAssignment(Variables &variables, const Token *tok, bool de
                     tok = tok->next();
 
                 tok = tok->tokAt(2);
+                if (!tok)
+                    return tokOld;
                 if (tok->str() == "&") {
                     addressOf = true;
                     tok = tok->next();
@@ -704,6 +706,8 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
             if (type == Variables::none || isPartOfClassStructUnion(i->typeStartToken()))
                 continue;
             const Token* defValTok = i->nameToken()->next();
+            if (Token::Match(i->nameToken()->previous(), "* %var% ) (")) // function pointer. Jump behind parameter list.
+                defValTok = defValTok->linkAt(1)->next();
             for (; defValTok; defValTok = defValTok->next()) {
                 if (defValTok->str() == "[")
                     defValTok = defValTok->link();
@@ -770,6 +774,14 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
             break;
         }
 
+        // templates
+        if (tok->isName() && tok->str().back() == '>') {
+            // TODO: This is a quick fix to handle when constants are used
+            // as template parameters. Try to handle this better, perhaps
+            // only remove constants.
+            variables.clear();
+        }
+
         // bailout when for_each is used
         if (Token::Match(tok, "%name% (") && Token::simpleMatch(tok->linkAt(1), ") {") && !Token::Match(tok, "if|for|while|switch")) {
             // does the name contain "for_each" or "foreach"?
@@ -813,19 +825,30 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
         else if (Token::Match(tok->previous(), "[;{}]")) {
             for (const Token* tok2 = tok->next(); tok2; tok2 = tok2->next()) {
                 if (tok2->varId()) {
+                    // Is this a variable declaration?
                     const Variable *var = tok2->variable();
-                    if (var && var->nameToken() == tok2) { // Declaration: Skip
-                        tok = tok2->next();
-                        if (Token::Match(tok, "( %name% )")) // Simple initialization through copy ctor
-                            tok = tok->next();
-                        else if (Token::Match(tok, "= %var% ;")) { // Simple initialization
-                            tok = tok->next();
-                            if (!var->isReference())
-                                variables.read(tok->varId(), tok);
-                        } else if (var->typeEndToken()->str() == ">") // Be careful with types like std::vector
-                            tok = tok->previous();
-                        break;
+                    if (!var || var->nameToken() != tok2)
+                        continue;
+
+                    // Mark template parameters used in declaration as use..
+                    if (tok2->strAt(-1) == ">") {
+                        for (const Token *tok3 = tok; tok3 != tok2; tok3 = tok3->next()) {
+                            if (tok3->varId() > 0U)
+                                variables.use(tok3->varId(), tok3);
+                        }
                     }
+
+                    // Skip variable declaration..
+                    tok = tok2->next();
+                    if (Token::Match(tok, "( %name% )")) // Simple initialization through copy ctor
+                        tok = tok->next();
+                    else if (Token::Match(tok, "= %var% ;")) { // Simple initialization
+                        tok = tok->next();
+                        if (!var->isReference())
+                            variables.read(tok->varId(), tok);
+                    } else if (var->typeEndToken()->str() == ">") // Be careful with types like std::vector
+                        tok = tok->previous();
+                    break;
                 } else if (Token::Match(tok2, "[;({=]"))
                     break;
             }
@@ -990,6 +1013,12 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
         // assignment
         else if ((Token::Match(tok, "%name% [") && Token::simpleMatch(skipBracketsAndMembers(tok->next()), "=")) ||
                  (Token::simpleMatch(tok, "* (") && Token::simpleMatch(tok->next()->link(), ") ="))) {
+            const Token *eq = tok;
+            while (eq && !eq->isAssignmentOp())
+                eq = eq->astParent();
+
+            const bool deref = eq && eq->astOperand1() && eq->astOperand1()->valueType() && eq->astOperand1()->valueType()->pointer == 0U;
+
             if (tok->str() == "*") {
                 tok = tok->tokAt(2);
                 if (tok->str() == "(")
@@ -1008,7 +1037,7 @@ void CheckUnusedVar::checkFunctionVariableUsage_iterateScopes(const Scope* const
                     variables.read(varid, tok);
                     variables.writeAliases(varid, tok);
                 } else if (var->_type == Variables::pointerArray) {
-                    tok = doAssignment(variables, tok, false, scope);
+                    tok = doAssignment(variables, tok, deref, scope);
                 } else
                     variables.writeAll(varid, tok);
             }
@@ -1184,96 +1213,64 @@ void CheckUnusedVar::checkStructMemberUsage()
     if (!_settings->isEnabled("style"))
         return;
 
-    std::string structname;
-    for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
-        if (tok->fileIndex() != 0)
+    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
+
+    for (std::list<Scope>::const_iterator scope = symbolDatabase->scopeList.cbegin(); scope != symbolDatabase->scopeList.cend(); ++scope) {
+        if (scope->type != Scope::eStruct && scope->type != Scope::eUnion)
             continue;
 
-        if (Token::Match(tok, "struct|union %type% {")) {
-            structname = tok->strAt(1);
+        if (scope->classStart->fileIndex() != 0 || scope->className.empty())
+            continue;
 
-            // Bail out if struct/union contain any functions
-            for (const Token *tok2 = tok->tokAt(2); tok2; tok2 = tok2->next()) {
-                if (tok2->str() == "(") {
-                    structname.clear();
-                    break;
-                }
+        // Bail out if struct/union contains any functions
+        if (!scope->functionList.empty())
+            continue;
 
-                if (tok2->str() == "}")
-                    break;
-            }
-
-            // bail out if struct is inherited
-            if (!structname.empty() && Token::findmatch(tok, (",|private|protected|public " + structname).c_str())) {
-                structname.clear();
-                continue;
-            }
-
-            // Bail out if some data is casted to struct..
-            const std::string castPattern("( struct| " + tok->next()->str() + " * ) & %name% [");
-            if (Token::findmatch(tok, castPattern.c_str()))
-                structname.clear();
-
-            // Bail out if instance is initialized with {}..
-            if (!structname.empty()) {
-                const std::string pattern1(structname + " %name% ;");
-                const Token *tok2 = tok;
-                while (nullptr != (tok2 = Token::findmatch(tok2->next(), pattern1.c_str()))) {
-                    if (Token::simpleMatch(tok2->tokAt(3), (tok2->strAt(1) + " = {").c_str())) {
-                        structname.clear();
+        // bail out if struct is inherited
+        bool bailout = false;
+        for (std::list<Scope>::const_iterator i = symbolDatabase->scopeList.cbegin(); i != symbolDatabase->scopeList.cend(); ++i) {
+            if (i->definedType) {
+                for (size_t j = 0; j < i->definedType->derivedFrom.size(); j++) {
+                    if (i->definedType->derivedFrom[j].type == scope->definedType) {
+                        bailout = true;
                         break;
                     }
                 }
             }
-
-            if (structname.empty())
-                continue;
-
-            // bail out for extern/global struct
-            const std::string definitionPattern(structname + " %name%");
-            for (const Token *tok2 = Token::findmatch(tok, definitionPattern.c_str());
-                 tok2 && tok2->next();
-                 tok2 = Token::findmatch(tok2->next(), definitionPattern.c_str())) {
-
-                const Variable *var = tok2->next()->variable();
-                if (var && (var->isExtern() || (var->isGlobal() && !var->isStatic()))) {
-                    structname.clear();
-                    break;
-                }
-            }
-            if (structname.empty())
-                continue;
-
-            // Try to prevent false positives when struct members are not used directly.
-            if (Token::findmatch(tok, (structname + " %type%| *").c_str()))
-                structname.clear();
         }
+        if (bailout)
+            continue;
 
-        if (tok->str() == "}")
-            structname.clear();
+        // bail out for extern/global struct
+        for (size_t i = 0; i < symbolDatabase->getVariableListSize(); i++) {
+            const Variable* var = symbolDatabase->getVariableFromVarId(i);
+            if (var && (var->isExtern() || (var->isGlobal() && !var->isStatic())) && var->typeEndToken()->str() == scope->className) {
+                bailout = true;
+                break;
+            }
+        }
+        if (bailout)
+            continue;
 
-        if (!structname.empty() && Token::Match(tok, "[{;]")) {
+        // Bail out if some data is casted to struct..
+        const std::string castPattern("( struct| " + scope->className + " * ) & %name% [");
+        if (Token::findmatch(scope->classEnd, castPattern.c_str()))
+            continue;
+
+        // Try to prevent false positives when struct members are not used directly.
+        if (Token::findmatch(scope->classEnd, (scope->className + " %type%| *").c_str()))
+            continue;
+
+        for (std::list<Variable>::const_iterator var = scope->varlist.cbegin(); var != scope->varlist.cend(); ++var) {
             // declaring a POD member variable?
-            if (!tok->next()->isStandardType())
-                continue;
-
-            // Declaring struct member variable..
-            const std::string* memberVarName;
-
-            if (Token::Match(tok->next(), "%type% %name% [;[]"))
-                memberVarName = &tok->strAt(2);
-            else if (Token::Match(tok->next(), "%type% %type%|* %name% [;[]"))
-                memberVarName = &tok->strAt(3);
-            else if (Token::Match(tok->next(), "%type% %type% * %name% [;[]"))
-                memberVarName = &tok->strAt(4);
-            else
+            if (!var->typeStartToken()->isStandardType() && !var->isPointer())
                 continue;
 
             // Check if the struct member variable is used anywhere in the file
-            if (Token::findsimplematch(_tokenizer->tokens(), (". " + *memberVarName).c_str()))
+            if (Token::findsimplematch(_tokenizer->tokens(), (". " + var->name()).c_str()))
                 continue;
 
-            unusedStructMemberError(tok->next(), structname, *memberVarName, tok->scope()->type == Scope::eUnion);
+            unusedStructMemberError(var->nameToken(), scope->className, var->name(), scope->type == Scope::eUnion);
         }
     }
 }

@@ -27,6 +27,17 @@
 #include <list>
 #include <string>
 
+/**
+ * CWE id (Common Weakness Enumeration)
+ * See https://cwe.mitre.org/ for further reference.
+ * */
+struct CWE {
+    explicit CWE(unsigned short ID) : id(ID) {}
+    unsigned short id;
+};
+
+
+
 class Token;
 class TokenList;
 
@@ -119,7 +130,7 @@ public:
         case debug:
             return "debug";
         };
-        throw InternalError(NULL, "Unknown severity");
+        throw InternalError(nullptr, "Unknown severity");
     }
     static SeverityType fromString(const std::string &severity) {
         if (severity.empty())
@@ -192,13 +203,15 @@ public:
             std::string stringify() const;
 
             unsigned int line;
+
         private:
             std::string _file;
-
         };
 
         ErrorMessage(const std::list<FileLocation> &callStack, Severity::SeverityType severity, const std::string &msg, const std::string &id, bool inconclusive);
+        ErrorMessage(const std::list<FileLocation> &callStack, Severity::SeverityType severity, const std::string &msg, const std::string &id, const CWE &cwe, bool inconclusive);
         ErrorMessage(const std::list<const Token*>& callstack, const TokenList* list, Severity::SeverityType severity, const std::string& id, const std::string& msg, bool inconclusive);
+        ErrorMessage(const std::list<const Token*>& callstack, const TokenList* list, Severity::SeverityType severity, const std::string& id, const std::string& msg, const CWE &cwe, bool inconclusive);
         ErrorMessage();
 
         /**
@@ -230,7 +243,7 @@ public:
         std::string file0;
 
         Severity::SeverityType _severity;
-        unsigned int _cwe;
+        CWE _cwe;
         bool _inconclusive;
 
         /** set short and verbose messages */

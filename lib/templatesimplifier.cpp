@@ -276,7 +276,7 @@ unsigned int TemplateSimplifier::templateParameters(const Token *tok)
             return 0;
 
         // * / const
-        while (Token::Match(tok, "*|&|const"))
+        while (Token::Match(tok, "*|&|&&|const"))
             tok = tok->next();
 
         if (!tok)
@@ -430,7 +430,7 @@ std::set<std::string> TemplateSimplifier::expandSpecialized(Token *tokens)
                     ostr << " ";
                 ostr << tok3->str();
             }
-            if (!Token::Match(tok3, "> (|{"))
+            if (!Token::Match(tok3, "> (|{|:"))
                 continue;
             s = ostr.str();
         }
@@ -815,9 +815,7 @@ void TemplateSimplifier::expandTemplate(
 
             // copy
             tokenlist.addtoken(tok3, tok3->linenr(), tok3->fileIndex());
-            if (Token::Match(tok3, "%type% <")) {
-                //if (!Token::simpleMatch(tok3, (name + " <").c_str()))
-                //done = false;
+            if (Token::Match(tok3, "%type% <") && Token::Match(tok3->next()->findClosingBracket(), ">|>> !!&")) {
                 templateInstantiations.push_back(tokenlist.back());
             }
 
@@ -893,48 +891,6 @@ static bool isLowerEqualThanMulDiv(const Token* lower)
     return isLowerThanMulDiv(lower) || Token::Match(lower, "[*/%]");
 }
 
-static std::string ShiftInt(const char cop, const Token* left, const Token* right)
-{
-    if (cop == '&' || cop == '|' || cop == '^')
-        return MathLib::calculate(left->str(), right->str(), cop);
-
-    const MathLib::bigint leftInt = MathLib::toLongNumber(left->str());
-    const MathLib::bigint rightInt = MathLib::toLongNumber(right->str());
-    const bool rightIntIsPositive = rightInt >= 0;
-
-    if (cop == '<') {
-        const bool leftOperationIsNotLeftShift = left->previous()->str() != "<<";
-        const bool operandIsLeftShift = right->previous()->str() == "<<";
-
-        // Ensure that its not a shift operator as used for streams
-        if (leftOperationIsNotLeftShift && operandIsLeftShift && rightIntIsPositive) {
-            const bool leftIntIsPositive = leftInt >= 0;
-            if (!leftIntIsPositive) { // In case the left integer is negative, e.g. -1000 << 16. Do not simplify.
-                return left->str() + " << " + right->str();
-            }
-            return MathLib::toString(leftInt << rightInt);
-        }
-    } else if (rightIntIsPositive) {
-        return MathLib::toString(leftInt >> rightInt);
-    }
-    return "";
-}
-
-static std::string ShiftUInt(const char cop, const Token* left, const Token* right)
-{
-    if (cop == '&' || cop == '|' || cop == '^')
-        return MathLib::calculate(left->str(), right->str(), cop);
-
-    const MathLib::biguint leftInt=MathLib::toULongNumber(left->str());
-    const MathLib::biguint rightInt=MathLib::toULongNumber(right->str());
-    if (cop == '<') {
-        if (left->previous()->str() != "<<") // Ensure that its not a shift operator as used for streams
-            return MathLib::toString(leftInt << rightInt);
-    } else {
-        return MathLib::toString(leftInt >> rightInt);
-    }
-    return "";
-}
 
 bool TemplateSimplifier::simplifyNumericCalculations(Token *tok)
 {
@@ -970,15 +926,34 @@ bool TemplateSimplifier::simplifyNumericCalculations(Token *tok)
             if (MathLib::isNegative(tok->str()) || MathLib::isNegative(tok->strAt(2)))
                 continue;
 
-            const char cop = op->str()[0];
-            std::string result;
-            if (tok->str().find_first_of("uU") != std::string::npos)
-                result = ShiftUInt(cop, tok, tok->tokAt(2));
-            else
-                result = ShiftInt(cop, tok, tok->tokAt(2));
-            if (result.empty())
+            const MathLib::value v1(tok->str());
+            const MathLib::value v2(tok->strAt(2));
+
+            if (!v1.isInt() || !v2.isInt())
+                continue;
+
+            switch (op->str()[0]) {
+            case '<':
+                tok->str((v1 << v2).str());
+                ret = true;
                 break;
-            tok->str(result);
+            case '>':
+                tok->str((v1 >> v2).str());
+                ret = true;
+                break;
+            case '&':
+                tok->str((v1 & v2).str());
+                ret = true;
+                break;
+            case '|':
+                tok->str((v1 | v2).str());
+                ret = true;
+                break;
+            case '^':
+                tok->str((v1 ^ v2).str());
+                ret = true;
+                break;
+            };
         }
 
         // Logical operations
@@ -1224,6 +1199,7 @@ bool TemplateSimplifier::simplifyTemplateInstantiations(
     ErrorLogger* errorlogger,
     const Settings *_settings,
     const Token *tok,
+    const std::time_t maxtime,
     std::list<Token *> &templateInstantiations,
     std::set<std::string> &expandedtemplates)
 {
@@ -1274,6 +1250,14 @@ bool TemplateSimplifier::simplifyTemplateInstantiations(
             }
         }
         Token * const tok2 = *iter2;
+        if (errorlogger && !tokenlist.getFiles().empty())
+            errorlogger->reportProgress(tokenlist.getFiles()[0], "TemplateSimplifier::simplifyTemplateInstantiations()", tok2->progressValue());
+#ifdef MAXTIME
+        if (std::time(0) > maxtime)
+            return false;
+#else
+        (void)maxtime;
+#endif
         assert(tokenlist.validateToken(tok2)); // that assertion fails on examples from #6021
         if (tok2->str() != name)
             continue;
@@ -1404,6 +1388,7 @@ void TemplateSimplifier::simplifyTemplates(
     TokenList& tokenlist,
     ErrorLogger* errorlogger,
     const Settings *_settings,
+    const std::time_t maxtime,
     bool &_codeWithTemplates
 )
 {
@@ -1450,6 +1435,7 @@ void TemplateSimplifier::simplifyTemplates(
                                 errorlogger,
                                 _settings,
                                 *iter1,
+                                maxtime,
                                 templateInstantiations,
                                 expandedtemplates);
             if (instantiated)

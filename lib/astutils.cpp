@@ -24,9 +24,24 @@
 #include "tokenize.h"
 #include <set>
 
+static bool astIsCharWithSign(const Token *tok, ValueType::Sign sign)
+{
+    if (!tok)
+        return false;
+    const ValueType *valueType = tok->valueType();
+    if (!valueType)
+        return false;
+    return valueType->type == ValueType::Type::CHAR && valueType->pointer == 0U && valueType->sign == sign;
+}
+
 bool astIsSignedChar(const Token *tok)
 {
-    return tok && tok->valueType() && tok->valueType()->sign == ValueType::Sign::SIGNED && tok->valueType()->type == ValueType::Type::CHAR && tok->valueType()->pointer == 0U;
+    return astIsCharWithSign(tok, ValueType::Sign::SIGNED);
+}
+
+bool astIsUnknownSignChar(const Token *tok)
+{
+    return astIsCharWithSign(tok, ValueType::Sign::UNKNOWN_SIGN);
 }
 
 bool astIsIntegral(const Token *tok, bool unknown)
@@ -43,6 +58,11 @@ bool astIsFloat(const Token *tok, bool unknown)
     if (!vt)
         return unknown;
     return vt->type >= ValueType::Type::FLOAT && vt->pointer == 0U;
+}
+
+bool astIsBool(const Token *tok)
+{
+    return tok && (tok->isBoolean() || (tok->valueType() && tok->valueType()->type == ValueType::Type::BOOL && !tok->valueType()->pointer));
 }
 
 std::string astCanonicalType(const Token *expr)
@@ -110,7 +130,7 @@ bool isSameExpression(bool cpp, bool macro, const Token *tok1, const Token *tok2
         if (tok2->str() == "." && tok2->astOperand1() && tok2->astOperand1()->str() == "this")
             tok2 = tok2->astOperand2();
     }
-    if (tok1->varId() != tok2->varId() || tok1->str() != tok2->str()) {
+    if (tok1->varId() != tok2->varId() || tok1->str() != tok2->str() || tok1->originalName() != tok2->originalName()) {
         if ((Token::Match(tok1,"<|>")   && Token::Match(tok2,"<|>")) ||
             (Token::Match(tok1,"<=|>=") && Token::Match(tok2,"<=|>="))) {
             return isSameExpression(cpp, macro, tok1->astOperand1(), tok2->astOperand2(), constFunctions) &&
@@ -118,8 +138,6 @@ bool isSameExpression(bool cpp, bool macro, const Token *tok1, const Token *tok2
         }
         return false;
     }
-    if (tok1->str() == "." && tok1->originalName() != tok2->originalName())
-        return false;
     if (macro && (tok1->isExpandedMacro() || tok2->isExpandedMacro()))
         return false;
     if (tok1->isName() && tok1->next()->str() == "(" && tok1->str() != "sizeof") {
@@ -269,6 +287,44 @@ bool isWithoutSideEffects(bool cpp, const Token* tok)
         return var && (!var->isClass() || var->isPointer() || var->isStlType());
     }
     return true;
+}
+
+bool isReturnScope(const Token * const endToken)
+{
+    if (!endToken || endToken->str() != "}")
+        return false;
+
+    const Token *prev = endToken->previous();
+    while (prev && Token::simpleMatch(prev->previous(), "; ;"))
+        prev = prev->previous();
+    if (prev && Token::simpleMatch(prev->previous(), "} ;"))
+        prev = prev->previous();
+
+    if (Token::simpleMatch(prev, "}")) {
+        if (Token::simpleMatch(prev->link()->tokAt(-2), "} else {"))
+            return isReturnScope(prev) && isReturnScope(prev->link()->tokAt(-2));
+        if (Token::simpleMatch(prev->link()->previous(), ") {") &&
+            Token::simpleMatch(prev->link()->linkAt(-1)->previous(), "switch (") &&
+            !Token::findsimplematch(prev->link(), "break", prev)) {
+            return true;
+        }
+        if (Token::simpleMatch(prev->link()->previous(), ") {") &&
+            Token::simpleMatch(prev->link()->linkAt(-1)->previous(), "return (")) {
+            return true;
+        }
+        if (Token::Match(prev->link()->previous(), "[;{}] {"))
+            return isReturnScope(prev);
+    } else if (Token::simpleMatch(prev, ";")) {
+        // noreturn function
+        if (Token::simpleMatch(prev->previous(), ") ;") && Token::Match(prev->linkAt(-1)->tokAt(-2), "[;{}] %name% ("))
+            return true;
+        // return/goto statement
+        prev = prev->previous();
+        while (prev && !Token::Match(prev, ";|{|}|return|goto|throw|continue|break"))
+            prev = prev->previous();
+        return prev && prev->isName();
+    }
+    return false;
 }
 
 bool isVariableChanged(const Token *start, const Token *end, const unsigned int varid)

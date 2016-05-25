@@ -29,10 +29,14 @@ class Token;
 
 /** Is expression a 'signed char' if no promotion is used */
 bool astIsSignedChar(const Token *tok);
+/** Is expression a 'char' if no promotion is used? */
+bool astIsUnknownSignChar(const Token *tok);
 /** Is expression of integral type? */
 bool astIsIntegral(const Token *tok, bool unknown);
 /** Is expression of floating point type? */
 bool astIsFloat(const Token *tok, bool unknown);
+/** Is expression of boolean type? */
+bool astIsBool(const Token *tok);
 
 /**
  * Get canonical type of expression. const/static/etc are not included and neither *&.
@@ -63,6 +67,9 @@ bool isOppositeCond(bool isNot, bool cpp, const Token * const cond1, const Token
 bool isConstExpression(const Token *tok, const std::set<std::string> &constFunctions);
 
 bool isWithoutSideEffects(bool cpp, const Token* tok);
+
+/** Is scope a return scope (scope will unconditionally return) */
+bool isReturnScope(const Token *endToken);
 
 /** Is variable changed in block of code? */
 bool isVariableChanged(const Token *start, const Token *end, const unsigned int varid);

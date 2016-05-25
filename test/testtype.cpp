@@ -39,6 +39,8 @@ private:
         TEST_CASE(signConversion);
         TEST_CASE(longCastAssign);
         TEST_CASE(longCastReturn);
+        TEST_CASE(enumMismatchAssign);
+        TEST_CASE(enumMismatchCompare);
     }
 
     void check(const char code[], Settings* settings = 0) {
@@ -94,6 +96,12 @@ private:
               "const int h = hoo<100>(1);", &settings);
         ASSERT_EQUALS("[test.cpp:4]: (error) Shifting 32-bit value by 32 bits is undefined behaviour\n"
                       "[test.cpp:1]: (error) Shifting 32-bit value by 100 bits is undefined behaviour\n", errout.str());
+
+        // #7266: C++, shift in macro
+        check("void f(int x) {\n"
+              "    UINFO(x << 1234);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void checkIntegerOverflow() {
@@ -193,6 +201,48 @@ private:
               "}\n", &settings);
         ASSERT_EQUALS("", errout.str());
     }
+
+    void enumMismatchAssign() {
+        Settings settings;
+        settings.addEnabled("style");
+
+        check("enum ABC {A,B,C};\n"
+              "void f() {\n"
+              "  enum ABC abc = 5;\n"
+              "}", &settings);
+        ASSERT_EQUALS("[test.cpp:3]: (style) Assigning mismatching value 5 to enum variable.\n", errout.str());
+
+        check("enum ABC {A=X,B,C};\n" // #7493 => enum constants for ABC has unknown values
+              "void f() {\n"
+              "  enum ABC abc = 5;\n"
+              "}", &settings);
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void enumMismatchCompare() {
+        Settings settings;
+        settings.addEnabled("style");
+
+        check("enum ABC {A,B,C};\n"
+              "void f(enum ABC abc) {\n"
+              "  if (abc==5) {}\n"
+              "}", &settings);
+        ASSERT_EQUALS("[test.cpp:3]: (style) Comparing mismatching value 5 with enum variable.\n", errout.str());
+
+        check("enum ABC {A,B,C};\n"
+              "void f(enum ABC abc) {\n"
+              "  if (5==abc) {}\n"
+              "}", &settings);
+        ASSERT_EQUALS("[test.cpp:3]: (style) Comparing mismatching value 5 with enum variable.\n", errout.str());
+
+        check("enum ABC {NEG1=-2,NEG2=-1,POS1=1,POS2=2};\n" // #7491
+              "void f(enum ABC abc) {\n"
+              "  if (abc>0) {}\n"
+              "}", &settings);
+        ASSERT_EQUALS("", errout.str());
+
+    }
+
 };
 
 REGISTER_TEST(TestType)

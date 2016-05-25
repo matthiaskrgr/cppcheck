@@ -571,6 +571,11 @@ private:
     bool mExiting;
 
     /**
+    * @brief Set to true in case of loading log file.
+    */
+    bool mIsLogfileLoaded;
+
+    /**
      * @brief Project MRU menu actions.
      * List of MRU menu actions. Needs also to store the separator.
      */

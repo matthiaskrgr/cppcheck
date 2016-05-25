@@ -218,7 +218,8 @@ private:
     void invalidPointerCastError(const Token* tok, const std::string& from, const std::string& to, bool inconclusive);
     void passedByValueError(const Token *tok, const std::string &parname);
     void constStatementError(const Token *tok, const std::string &type);
-    void charArrayIndexError(const Token *tok);
+    void signedCharArrayIndexError(const Token *tok);
+    void unknownSignCharArrayIndexError(const Token *tok);
     void charBitOpError(const Token *tok);
     void variableScopeError(const Token *tok, const std::string &varname);
     void zerodivError(const Token *tok, bool inconclusive);
@@ -234,7 +235,7 @@ private:
     void suspiciousEqualityComparisonError(const Token* tok);
     void selfAssignmentError(const Token *tok, const std::string &varname);
     void misusedScopeObjectError(const Token *tok, const std::string &varname);
-    void memsetZeroBytesError(const Token *tok, const std::string &varname);
+    void memsetZeroBytesError(const Token *tok);
     void memsetFloatError(const Token *tok, const std::string &var_value);
     void memsetValueOutOfRangeError(const Token *tok, const std::string &value);
     void duplicateBranchError(const Token *tok1, const Token *tok2);
@@ -254,63 +255,65 @@ private:
     void commaSeparatedReturnError(const Token *tok);
     void redundantPointerOpError(const Token* tok, const std::string& varname, bool inconclusive);
     void raceAfterInterlockedDecrementError(const Token* tok);
-    void unusedLabelError(const Token* tok);
+    void unusedLabelError(const Token* tok, bool inSwitch);
     void unknownEvaluationOrder(const Token* tok);
 
     void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
-        CheckOther c(0, settings, errorLogger);
+        CheckOther c(nullptr, settings, errorLogger);
 
         // error
-        c.zerodivError(0, false);
-        c.zerodivcondError(0,0,false);
-        c.misusedScopeObjectError(NULL, "varname");
-        c.invalidPointerCastError(0, "float", "double", false);
-        c.negativeBitwiseShiftError(0,1);
-        c.checkPipeParameterSizeError(0, "varname", "dimension");
-        c.raceAfterInterlockedDecrementError(0);
+        c.zerodivError(nullptr,  false);
+        c.zerodivcondError(nullptr, 0,false);
+        c.misusedScopeObjectError(nullptr, "varname");
+        c.invalidPointerCastError(nullptr,  "float", "double", false);
+        c.negativeBitwiseShiftError(nullptr, 1);
+        c.checkPipeParameterSizeError(nullptr,  "varname", "dimension");
+        c.raceAfterInterlockedDecrementError(nullptr);
 
         //performance
-        c.redundantCopyError(0, "varname");
-        c.redundantCopyError(0, 0, "var");
-        c.redundantAssignmentError(0, 0, "var", false);
+        c.redundantCopyError(nullptr,  "varname");
+        c.redundantCopyError(nullptr,  0, "var");
+        c.redundantAssignmentError(nullptr,  0, "var", false);
 
         // style/warning
-        c.checkComparisonFunctionIsAlwaysTrueOrFalseError(0,"isless","varName",false);
-        c.checkCastIntToCharAndBackError(0,"func_name");
-        c.cstyleCastError(0);
-        c.passedByValueError(0, "parametername");
-        c.constStatementError(0, "type");
-        c.charArrayIndexError(0);
-        c.charBitOpError(0);
-        c.variableScopeError(0, "varname");
-        c.redundantAssignmentInSwitchError(0, 0, "var");
-        c.redundantCopyInSwitchError(0, 0, "var");
-        c.switchCaseFallThrough(0);
-        c.suspiciousCaseInSwitchError(0, "||");
-        c.suspiciousEqualityComparisonError(0);
-        c.selfAssignmentError(0, "varname");
-        c.memsetZeroBytesError(0, "varname");
-        c.memsetFloatError(0, "varname");
-        c.memsetValueOutOfRangeError(0, "varname");
-        c.clarifyCalculationError(0, "+");
-        c.clarifyStatementError(0);
-        c.duplicateBranchError(0, 0);
-        c.duplicateExpressionError(0, 0, "&&");
-        c.duplicateExpressionTernaryError(0);
-        c.duplicateBreakError(0, false);
-        c.unreachableCodeError(0, false);
-        c.unsignedLessThanZeroError(0, "varname", false);
-        c.unsignedPositiveError(0, "varname", false);
-        c.pointerLessThanZeroError(0, false);
-        c.pointerPositiveError(0, false);
-        c.SuspiciousSemicolonError(0);
-        c.incompleteArrayFillError(0, "buffer", "memset", false);
-        c.varFuncNullUBError(0);
-        c.nanInArithmeticExpressionError(0);
-        c.commaSeparatedReturnError(0);
-        c.redundantPointerOpError(0, "varname", false);
-        c.unusedLabelError(0);
-        c.unknownEvaluationOrder(0);
+        c.checkComparisonFunctionIsAlwaysTrueOrFalseError(nullptr, "isless","varName",false);
+        c.checkCastIntToCharAndBackError(nullptr, "func_name");
+        c.cstyleCastError(nullptr);
+        c.passedByValueError(nullptr,  "parametername");
+        c.constStatementError(nullptr,  "type");
+        c.signedCharArrayIndexError(nullptr);
+        c.unknownSignCharArrayIndexError(nullptr);
+        c.charBitOpError(nullptr);
+        c.variableScopeError(nullptr,  "varname");
+        c.redundantAssignmentInSwitchError(nullptr,  0, "var");
+        c.redundantCopyInSwitchError(nullptr,  0, "var");
+        c.switchCaseFallThrough(nullptr);
+        c.suspiciousCaseInSwitchError(nullptr,  "||");
+        c.suspiciousEqualityComparisonError(nullptr);
+        c.selfAssignmentError(nullptr,  "varname");
+        c.memsetZeroBytesError(nullptr);
+        c.memsetFloatError(nullptr,  "varname");
+        c.memsetValueOutOfRangeError(nullptr,  "varname");
+        c.clarifyCalculationError(nullptr,  "+");
+        c.clarifyStatementError(nullptr);
+        c.duplicateBranchError(nullptr,  0);
+        c.duplicateExpressionError(nullptr,  0, "&&");
+        c.duplicateExpressionTernaryError(nullptr);
+        c.duplicateBreakError(nullptr,  false);
+        c.unreachableCodeError(nullptr,  false);
+        c.unsignedLessThanZeroError(nullptr,  "varname", false);
+        c.unsignedPositiveError(nullptr,  "varname", false);
+        c.pointerLessThanZeroError(nullptr,  false);
+        c.pointerPositiveError(nullptr,  false);
+        c.SuspiciousSemicolonError(nullptr);
+        c.incompleteArrayFillError(nullptr,  "buffer", "memset", false);
+        c.varFuncNullUBError(nullptr);
+        c.nanInArithmeticExpressionError(nullptr);
+        c.commaSeparatedReturnError(nullptr);
+        c.redundantPointerOpError(nullptr,  "varname", false);
+        c.unusedLabelError(nullptr,  true);
+        c.unusedLabelError(nullptr,  false);
+        c.unknownEvaluationOrder(nullptr);
     }
 
     static std::string myName() {

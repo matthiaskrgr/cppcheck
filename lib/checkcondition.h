@@ -51,6 +51,7 @@ public:
         checkCondition.oppositeInnerCondition();
         checkCondition.checkIncorrectLogicOperator();
         checkCondition.checkInvalidTestForOverflow();
+        checkCondition.alwaysTrueFalse();
     }
 
     /** @brief Run checks against the simplified token list */
@@ -60,7 +61,6 @@ public:
         checkCondition.checkBadBitmaskCheck();
         checkCondition.comparison();
         checkCondition.checkModuloAlwaysTrueFalse();
-        checkCondition.alwaysTrueFalse();
     }
 
     /** mismatching assignment / comparison */
@@ -117,8 +117,8 @@ private:
 
     void oppositeInnerConditionError(const Token *tok1, const Token* tok2);
 
-    void incorrectLogicOperatorError(const Token *tok, const std::string &condition, bool always);
-    void redundantConditionError(const Token *tok, const std::string &text);
+    void incorrectLogicOperatorError(const Token *tok, const std::string &condition, bool always, bool inconclusive);
+    void redundantConditionError(const Token *tok, const std::string &text, bool inconclusive);
 
     void moduloAlwaysTrueFalseError(const Token* tok, const std::string& maxVal);
 
@@ -129,20 +129,20 @@ private:
     void invalidTestForOverflow(const Token* tok, bool result);
 
     void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
-        CheckCondition c(0, settings, errorLogger);
+        CheckCondition c(nullptr, settings, errorLogger);
 
-        c.assignIfError(0, 0, "", false);
-        c.badBitmaskCheckError(0);
-        c.comparisonError(0, "&", 6, "==", 1, false);
-        c.multiConditionError(0,1);
-        c.mismatchingBitAndError(0, 0xf0, 0, 1);
-        c.oppositeInnerConditionError(0, 0);
-        c.incorrectLogicOperatorError(0, "foo > 3 && foo < 4", true);
-        c.redundantConditionError(0, "If x > 11 the condition x > 10 is always true.");
-        c.moduloAlwaysTrueFalseError(0, "1");
-        c.clarifyConditionError(0, true, false);
-        c.alwaysTrueFalseError(0, true);
-        c.invalidTestForOverflow(0, false);
+        c.assignIfError(nullptr, 0, "", false);
+        c.badBitmaskCheckError(nullptr);
+        c.comparisonError(nullptr, "&", 6, "==", 1, false);
+        c.multiConditionError(nullptr,1);
+        c.mismatchingBitAndError(nullptr, 0xf0, 0, 1);
+        c.oppositeInnerConditionError(nullptr, 0);
+        c.incorrectLogicOperatorError(nullptr, "foo > 3 && foo < 4", true, false);
+        c.redundantConditionError(nullptr, "If x > 11 the condition x > 10 is always true.", false);
+        c.moduloAlwaysTrueFalseError(nullptr, "1");
+        c.clarifyConditionError(nullptr, true, false);
+        c.alwaysTrueFalseError(nullptr, true);
+        c.invalidTestForOverflow(nullptr, false);
     }
 
     static std::string myName() {

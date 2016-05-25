@@ -33,6 +33,12 @@ namespace {
 //---------------------------------------------------------------------------
 // Checking for shift by too many bits
 //---------------------------------------------------------------------------
+//
+
+// CWE ids used:
+static const struct CWE CWE758(758U);
+static const struct CWE CWE190(190U);
+
 
 void CheckType::checkTooBigBitwiseShift()
 {
@@ -47,11 +53,15 @@ void CheckType::checkTooBigBitwiseShift()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-            if (!Token::Match(tok, "<<|>>|<<=|>>="))
-                continue;
+        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
+            // C++ and macro: OUT(x<<y)
+            if (_tokenizer->isCPP() && Token::Match(tok, "[;{}] %name% (") && Token::simpleMatch(tok->linkAt(2), ") ;") && tok->next()->isUpperCaseName() && !tok->next()->function())
+                tok = tok->linkAt(2);
 
             if (!tok->astOperand1() || !tok->astOperand2())
+                continue;
+
+            if (!Token::Match(tok, "<<|>>|<<=|>>="))
                 continue;
 
             // get number of bits of lhs
@@ -91,7 +101,7 @@ void CheckType::tooBigBitwiseShiftError(const Token *tok, int lhsbits, const Val
     errmsg << "Shifting " << lhsbits << "-bit value by " << rhsbits.intvalue << " bits is undefined behaviour";
     if (rhsbits.condition)
         errmsg << ". See condition at line " << rhsbits.condition->linenr() << ".";
-    reportError(callstack, rhsbits.condition ? Severity::warning : Severity::error, "shiftTooManyBits", errmsg.str(), 0U, rhsbits.inconclusive);
+    reportError(callstack, rhsbits.condition ? Severity::warning : Severity::error, "shiftTooManyBits", errmsg.str(), CWE758, rhsbits.inconclusive);
 }
 
 //---------------------------------------------------------------------------
@@ -115,16 +125,16 @@ void CheckType::checkIntegerOverflow()
             if (!tok->isArithmeticalOp())
                 continue;
 
+            // is result signed integer?
+            const ValueType *vt = tok->valueType();
+            if (!vt || vt->type != ValueType::Type::INT || vt->sign != ValueType::Sign::SIGNED)
+                continue;
+
             // is there a overflow result value
             const ValueFlow::Value *value = tok->getValueGE(maxint + 1, _settings);
             if (!value)
                 value = tok->getValueLE(-maxint - 2, _settings);
-            if (!value)
-                continue;
-
-            // is result signed integer?
-            const ValueType *vt = tok->valueType();
-            if (vt && vt->type == ValueType::Type::INT && vt->sign == ValueType::Sign::SIGNED)
+            if (value)
                 integerOverflowError(tok, *value);
         }
     }
@@ -145,7 +155,7 @@ void CheckType::integerOverflowError(const Token *tok, const ValueFlow::Value &v
                 value.condition ? Severity::warning : Severity::error,
                 "integerOverflow",
                 msg,
-                0U,
+                CWE190,
                 value.inconclusive);
 }
 
@@ -289,4 +299,76 @@ void CheckType::longCastReturnError(const Token *tok)
                 "truncLongCastReturn",
                 "int result is returned as long value. If the return value is long to avoid loss of information, then you have loss of information.\n"
                 "int result is returned as long value. If the return value is long to avoid loss of information, then there is loss of information. To avoid loss of information you must cast a calculation operand to long, for example 'return a*b;' => 'return (long)a*b'.");
+}
+
+static const ValueFlow::Value *mismatchingValue(const ValueType *enumType, const std::list<ValueFlow::Value> &values)
+{
+    if (!enumType || !enumType->typeScope || enumType->typeScope->type != Scope::eEnum)
+        return nullptr;
+    const Scope * const enumScope = enumType->typeScope;
+    for (unsigned int i = 0; i < enumScope->enumeratorList.size(); ++i) {
+        if (!enumScope->enumeratorList[i].value_known)
+            return nullptr;
+    }
+    for (std::list<ValueFlow::Value>::const_iterator it = values.begin(); it != values.end(); ++it) {
+        if (it->tokvalue)
+            continue;
+        bool found = false;
+        for (unsigned int i = 0; i < enumScope->enumeratorList.size(); ++i) {
+            if (enumScope->enumeratorList[i].value == it->intvalue) {
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            return &(*it);
+    }
+    return nullptr;
+}
+
+void CheckType::checkEnumMismatch()
+{
+    if (!_settings->isEnabled("style"))
+        return;
+    for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
+        // Assigning mismatching value to enum variable
+        if (tok->str() == "=") {
+            if (!tok->astOperand1() || !tok->astOperand2())
+                continue;
+
+            const ValueFlow::Value *v = mismatchingValue(tok->astOperand1()->valueType(), tok->astOperand2()->values);
+            if (v)
+                enumMismatchAssignError(tok, *v);
+        }
+
+        // Comparing enum variable against mismatching value
+        else if (Token::Match(tok, "==|!=")) {
+            if (!tok->astOperand1() || !tok->astOperand2())
+                continue;
+
+            const ValueFlow::Value * const v1 = mismatchingValue(tok->astOperand1()->valueType(), tok->astOperand2()->values);
+            if (v1 && v1->isKnown())
+                enumMismatchCompareError(tok, *v1);
+
+            const ValueFlow::Value * const v2 = mismatchingValue(tok->astOperand2()->valueType(), tok->astOperand1()->values);
+            if (v2 && v2->isKnown())
+                enumMismatchCompareError(tok, *v2);
+        }
+    }
+}
+
+void CheckType::enumMismatchAssignError(const Token *tok, const ValueFlow::Value &value)
+{
+    reportError(tok,
+                Severity::style,
+                "enumMismatch",
+                "Assigning mismatching value " + MathLib::toString(value.intvalue) + " to enum variable.");
+}
+
+void CheckType::enumMismatchCompareError(const Token *tok, const ValueFlow::Value &value)
+{
+    reportError(tok,
+                Severity::style,
+                "enumMismatch",
+                "Comparing mismatching value " + MathLib::toString(value.intvalue) + " with enum variable.");
 }

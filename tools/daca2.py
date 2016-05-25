@@ -116,7 +116,10 @@ def removeLargeFiles(path):
             removeLargeFiles(g + '/')
         elif os.path.isfile(g) and g[-4:] != '.txt':
             statinfo = os.stat(g)
-            if path.find('/clang/INPUTS/') > 0 or statinfo.st_size > 100000:
+            # Remove gcc torture tests, that is not meant to be valid code
+            if path.find('/gcc/testsuite/') > 0:
+                os.remove(g)
+            if path.find('/clang/INPUTS/') > 0 or statinfo.st_size > 1000000:
                 os.remove(g)
 
 
@@ -142,20 +145,6 @@ def scanarchive(filepath, jobs):
         subprocess.call(['tar', 'xJvf', filename])
     elif filename[-4:] == '.bz2':
         subprocess.call(['tar', 'xjvf', filename])
-
-#
-# List of skipped packages - which trigger known yet unresolved problems with cppcheck.
-# The issues on trac (http://trac.cppcheck.net) are given for reference
-# boost #3654 (?)
-# flite #5975
-# insight#5184
-#
-
-    if filename[:5] == 'flite' or filename[:5] == 'boost' or filename[:7] == 'insight':
-        results = open('results.txt', 'at')
-        results.write('fixme: skipped package to avoid hang\n')
-        results.close()
-        return
 
     removeLargeFiles('')
 

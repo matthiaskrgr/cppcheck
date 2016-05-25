@@ -33,6 +33,9 @@ namespace {
     static CheckAutoVariables instance;
 }
 
+static const CWE CWE398(398U);  // Indicator of Poor Code Quality
+static const CWE CWE562(562U);  // Return of Stack Variable Address
+static const CWE CWE590(590U);  // Free of Memory not on the Heap
 
 bool CheckAutoVariables::isPtrArg(const Token *tok)
 {
@@ -115,7 +118,7 @@ bool CheckAutoVariables::isAutoVarArray(const Token *tok)
         return true;
 
     // ValueFlow
-    if (var->isPointer()) {
+    if (var->isPointer() && !var->isArgument()) {
         for (std::list<ValueFlow::Value>::const_iterator it = tok->values.begin(); it != tok->values.end(); ++it) {
             const ValueFlow::Value &val = *it;
             if (val.tokvalue && isAutoVarArray(val.tokvalue))
@@ -287,12 +290,12 @@ void CheckAutoVariables::returnPointerToLocalArray()
 
 void CheckAutoVariables::errorReturnAddressToAutoVariable(const Token *tok)
 {
-    reportError(tok, Severity::error, "returnAddressOfAutoVariable", "Address of an auto-variable returned.");
+    reportError(tok, Severity::error, "returnAddressOfAutoVariable", "Address of an auto-variable returned.", CWE562, false);
 }
 
 void CheckAutoVariables::errorReturnPointerToLocalArray(const Token *tok)
 {
-    reportError(tok, Severity::error, "returnLocalVariable", "Pointer to local array variable returned.");
+    reportError(tok, Severity::error, "returnLocalVariable", "Pointer to local array variable returned.", CWE562, false);
 }
 
 void CheckAutoVariables::errorAutoVariableAssignment(const Token *tok, bool inconclusive)
@@ -303,7 +306,7 @@ void CheckAutoVariables::errorAutoVariableAssignment(const Token *tok, bool inco
                     "Dangerous assignment - the function parameter is assigned the address of a local "
                     "auto-variable. Local auto-variables are reserved from the stack which "
                     "is freed when the function ends. So the pointer to a local variable "
-                    "is invalid after the function ends.");
+                    "is invalid after the function ends.", CWE562, false);
     } else {
         reportError(tok, Severity::error, "autoVariables",
                     "Address of local auto-variable assigned to a function parameter.\n"
@@ -311,7 +314,7 @@ void CheckAutoVariables::errorAutoVariableAssignment(const Token *tok, bool inco
                     "Local auto-variables are reserved from the stack which is freed when "
                     "the function ends. The address is invalid after the function ends and it "
                     "might 'leak' from the function through the parameter.",
-                    0U,
+                    CWE562,
                     true);
     }
 }
@@ -322,7 +325,7 @@ void CheckAutoVariables::errorReturnAddressOfFunctionParameter(const Token *tok,
                 "Address of function parameter '" + varname + "' returned.\n"
                 "Address of the function parameter '" + varname + "' becomes invalid after the function exits because "
                 "function parameters are stored on the stack which is freed when the function exits. Thus the returned "
-                "value is invalid.");
+                "value is invalid.", CWE562, false);
 }
 
 void CheckAutoVariables::errorUselessAssignmentArg(const Token *tok)
@@ -330,7 +333,7 @@ void CheckAutoVariables::errorUselessAssignmentArg(const Token *tok)
     reportError(tok,
                 Severity::style,
                 "uselessAssignmentArg",
-                "Assignment of function parameter has no effect outside the function.");
+                "Assignment of function parameter has no effect outside the function.", CWE398, false);
 }
 
 void CheckAutoVariables::errorUselessAssignmentPtrArg(const Token *tok)
@@ -338,7 +341,7 @@ void CheckAutoVariables::errorUselessAssignmentPtrArg(const Token *tok)
     reportError(tok,
                 Severity::warning,
                 "uselessAssignmentPtrArg",
-                "Assignment of function parameter has no effect outside the function. Did you forget dereferencing it?");
+                "Assignment of function parameter has no effect outside the function. Did you forget dereferencing it?", CWE398, false);
 }
 
 //---------------------------------------------------------------------------
@@ -420,6 +423,33 @@ static bool astHasAutoResult(const Token *tok)
     return false;
 }
 
+/*!
+ * Skip over a lambda expression
+ * \return next token - or next token beyond lambda
+ * \todo handle explicit return type
+ */
+static const Token* skipLambda(const Token* first)
+{
+    if (!first)
+        return nullptr;
+    if (first->str() != "[")
+        return first;
+    const Token* tok = first->link()->next();
+    if (!tok)
+        return nullptr;
+    if (tok->str() == "(") {
+        tok = tok->link()->next();
+    }
+    if (tok->str() == "constexpr")
+        tok = tok->next();
+    if (tok->str() == "mutable")
+        tok = tok->next();
+    if (tok->str() == "{") {
+        tok = tok->link()->next();
+    }
+    return tok;
+}
+
 void CheckAutoVariables::returnReference()
 {
     if (_tokenizer->isC())
@@ -444,10 +474,9 @@ void CheckAutoVariables::returnReference()
                 }
 
                 // Skip over lambdas
-                if (tok2->str() == "[" && tok2->link()->strAt(1) == "(" && tok2->link()->linkAt(1)->strAt(1) == "{")
-                    tok2 = tok2->link()->linkAt(1)->linkAt(1);
+                tok2 = skipLambda(tok2);
 
-                if (tok2->str() != "return")
+                if (!tok2 || tok2->str() != "return")
                     continue;
 
                 // return..
@@ -492,12 +521,12 @@ void CheckAutoVariables::returnReference()
 
 void CheckAutoVariables::errorReturnReference(const Token *tok)
 {
-    reportError(tok, Severity::error, "returnReference", "Reference to auto variable returned.");
+    reportError(tok, Severity::error, "returnReference", "Reference to auto variable returned.", CWE562, false);
 }
 
 void CheckAutoVariables::errorReturnTempReference(const Token *tok)
 {
-    reportError(tok, Severity::error, "returnTempReference", "Reference to temporary returned.");
+    reportError(tok, Severity::error, "returnTempReference", "Reference to temporary returned.", CWE562, false);
 }
 
 void CheckAutoVariables::errorInvalidDeallocation(const Token *tok)
@@ -507,5 +536,5 @@ void CheckAutoVariables::errorInvalidDeallocation(const Token *tok)
                 "autovarInvalidDeallocation",
                 "Deallocation of an auto-variable results in undefined behaviour.\n"
                 "The deallocation of an auto-variable results in undefined behaviour. You should only free memory "
-                "that has been allocated dynamically.");
+                "that has been allocated dynamically.", CWE590, false);
 }

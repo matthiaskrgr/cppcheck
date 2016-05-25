@@ -392,6 +392,17 @@ private:
               "    };\n"
               "};");
         ASSERT_EQUALS("", errout.str());
+
+        check("class A {\n"  // #6968 - outer definition
+              "public:\n"
+              "  class B;\n"
+              "private:\n"
+              "  void f() {}\n"
+              "}\n"
+              "class A::B {"
+              "  B() { A a; a.f(); }\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
     }
 
 
@@ -468,6 +479,24 @@ private:
               "class Derived2: public Derived1 {\n"
               "private:\n"
               "    void func() {}\n"
+              "};");
+        ASSERT_EQUALS("", errout.str());
+
+        check("class Base {\n"
+              "public:\n"
+              "    void dostuff() {\n"
+              "      f();\n"
+              "    }\n"
+              "\n"
+              "private:\n"
+              "    virtual Base* f() = 0;\n"
+              "};\n"
+              "\n"
+              "class Derived : public Base {\n"
+              "private:\n"
+              "    Derived* f() {\n"
+              "      return 0;\n"
+              "    }\n"
               "};");
         ASSERT_EQUALS("", errout.str());
     }

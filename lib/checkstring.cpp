@@ -28,6 +28,10 @@ namespace {
     CheckString instance;
 }
 
+// CWE ids used:
+static const struct CWE CWE628(628U);
+static const struct CWE CWE665(665U);
+
 
 //---------------------------------------------------------------------------
 // Writing string literal is UB
@@ -81,11 +85,12 @@ void CheckString::checkAlwaysTrueOrFalseStringCompare()
         return;
 
     for (const Token* tok = _tokenizer->tokens(); tok; tok = tok->next()) {
-        if (tok->isName() && Token::Match(tok, "memcmp|strncmp|strcmp|stricmp|strverscmp|bcmp|strcmpi|strcasecmp|strncasecmp|strncasecmp_l|strcasecmp_l|wcsncasecmp|wcscasecmp|wmemcmp|wcscmp|wcscasecmp_l|wcsncasecmp_l|wcsncmp|_mbscmp|_memicmp|_memicmp_l|_stricmp|_wcsicmp|_mbsicmp|_stricmp_l|_wcsicmp_l|_mbsicmp_l (")) {
+        if (tok->isName() && tok->strAt(1) == "(" && Token::Match(tok, "memcmp|strncmp|strcmp|stricmp|strverscmp|bcmp|strcmpi|strcasecmp|strncasecmp|strncasecmp_l|strcasecmp_l|wcsncasecmp|wcscasecmp|wmemcmp|wcscmp|wcscasecmp_l|wcsncasecmp_l|wcsncmp|_mbscmp|_memicmp|_memicmp_l|_stricmp|_wcsicmp|_mbsicmp|_stricmp_l|_wcsicmp_l|_mbsicmp_l")) {
             if (Token::Match(tok->tokAt(2), "%str% , %str% ,|)")) {
                 const std::string &str1 = tok->strAt(2);
                 const std::string &str2 = tok->strAt(4);
-                alwaysTrueFalseStringCompareError(tok, str1, str2);
+                if (!tok->isExpandedMacro() && !tok->tokAt(2)->isExpandedMacro() && !tok->tokAt(4)->isExpandedMacro())
+                    alwaysTrueFalseStringCompareError(tok, str1, str2);
                 tok = tok->tokAt(5);
             } else if (Token::Match(tok->tokAt(2), "%name% , %name% ,|)")) {
                 const std::string &str1 = tok->strAt(2);
@@ -243,7 +248,7 @@ void CheckString::strPlusChar()
 
 void CheckString::strPlusCharError(const Token *tok)
 {
-    reportError(tok, Severity::error, "strPlusChar", "Unusual pointer arithmetic. A value of type 'char' is added to a string literal.");
+    reportError(tok, Severity::error, "strPlusChar", "Unusual pointer arithmetic. A value of type 'char' is added to a string literal.", CWE665, false);
 }
 
 //---------------------------------------------------------------------------
@@ -359,5 +364,5 @@ void CheckString::sprintfOverlappingDataError(const Token *tok, const std::strin
                 "s[n]printf(). The origin and destination buffers overlap. Quote from glibc (C-library) "
                 "documentation (http://www.gnu.org/software/libc/manual/html_mono/libc.html#Formatted-Output-Functions): "
                 "\"If copying takes place between objects that overlap as a result of a call "
-                "to sprintf() or snprintf(), the results are undefined.\"");
+                "to sprintf() or snprintf(), the results are undefined.\"", CWE628, false);
 }
