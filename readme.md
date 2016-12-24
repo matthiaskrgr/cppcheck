@@ -2,6 +2,7 @@
 
 |Linux Build Status|Windows Build Status|Coverity Scan Build Status|
 |:--:|:--:|:--:|
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/67beb65577fb49c38c6297ffc87fcbee)](https://www.codacy.com/app/matthias-krueger/cppcheck?utm_source=github.com&utm_medium=referral&utm_content=matthiaskrgr/cppcheck&utm_campaign=badger)
 |[![Linux Build Status](https://img.shields.io/travis/danmar/cppcheck/master.svg?label=Linux%20build)](https://travis-ci.org/danmar/cppcheck)|[![Windows Build Status](https://img.shields.io/appveyor/ci/danmar/cppcheck/master.svg?label=Windows%20build)](https://ci.appveyor.com/project/danmar/cppcheck/branch/master)|[![Coverity Scan Build Status](https://img.shields.io/coverity/scan/512.svg)](https://scan.coverity.com/projects/512)|
 
 ## Donations
