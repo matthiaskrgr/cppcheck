@@ -27,6 +27,8 @@
 #include <set>
 #include "config.h"
 #include "library.h"
+#include "platform.h"
+#include "importproject.h"
 #include "suppressions.h"
 #include "standards.h"
 #include "errorlogger.h"
@@ -35,13 +37,12 @@
 /// @addtogroup Core
 /// @{
 
-
 /**
  * @brief This is just a container for general settings so that we don't need
  * to pass individual values to functions or constructors now or in the
  * future when we might have even more detailed settings.
  */
-class CPPCHECKLIB Settings {
+class CPPCHECKLIB Settings : public cppcheck::Platform {
 private:
     /** @brief Code to append in the checks */
     std::string _append;
@@ -50,10 +51,13 @@ private:
     std::set<std::string> _enabled;
 
     /** @brief terminate checking */
-    bool _terminated;
+    static bool _terminated;
 
 public:
     Settings();
+
+    /** @brief --cppcheck-build-dir */
+    std::string buildDir;
 
     /** @brief Is --debug given? */
     bool debug;
@@ -96,13 +100,13 @@ public:
     bool verbose;
 
     /** @brief Request termination of checking */
-    void terminate() {
-        _terminated = true;
+    void terminate(bool t = true) {
+        Settings::_terminated = t;
     }
 
     /** @brief termination requested? */
     bool terminated() const {
-        return _terminated;
+        return Settings::_terminated;
     }
 
     /** @brief Force checking the files with "too many" configurations (--force). */
@@ -243,58 +247,10 @@ public:
     /** Struct contains standards settings */
     Standards standards;
 
-    unsigned int char_bit;       /// bits in char
-    unsigned int short_bit;      /// bits in short
-    unsigned int int_bit;        /// bits in int
-    unsigned int long_bit;       /// bits in long
-    unsigned int long_long_bit;  /// bits in long long
-
-    /** size of standard types */
-    unsigned int sizeof_bool;
-    unsigned int sizeof_short;
-    unsigned int sizeof_int;
-    unsigned int sizeof_long;
-    unsigned int sizeof_long_long;
-    unsigned int sizeof_float;
-    unsigned int sizeof_double;
-    unsigned int sizeof_long_double;
-    unsigned int sizeof_wchar_t;
-    unsigned int sizeof_size_t;
-    unsigned int sizeof_pointer;
-
-    char defaultSign;  // unsigned:'u', signed:'s', unknown:'\0'
-
-    enum PlatformType {
-        Unspecified, // No platform specified
-        Native, // whatever system this code was compiled on
-        Win32A,
-        Win32W,
-        Win64,
-        Unix32,
-        Unix64
-    };
-
-    /** platform type */
-    PlatformType platformType;
-
-    /** set the platform type for predefined platforms */
-    bool platform(PlatformType type);
-
-    /** set the platform type for user specified platforms */
-    bool platformFile(const std::string &filename);
+    ImportProject project;
 
     /**
-     * @brief Returns true if platform type is Windows
-     * @return true if Windows platform type.
-     */
-    bool isWindowsPlatform() const {
-        return platformType == Win32A ||
-               platformType == Win32W ||
-               platformType == Win64;
-    }
-
-    /**
-     * @brief return true if a file is to be excluded from configuration checking
+     * @brief return true if a included file is to be excluded in Preprocessor::getConfigs
      * @return true for the file to be excluded.
      */
     bool configurationExcluded(const std::string &file) const {

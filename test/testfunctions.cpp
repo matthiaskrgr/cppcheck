@@ -249,6 +249,12 @@ private:
         check("void f()\n"
               "{\n"
               "    char *x = alloca(10);\n"
+              "}", "test.c"); // #7558 - no alternative to alloca in C89
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f()\n"
+              "{\n"
+              "    char *x = alloca(10);\n"
               "}", "test.c");
         ASSERT_EQUALS("", errout.str());
         settings.standards.c = Standards::C11;
@@ -887,6 +893,18 @@ private:
         check("void foo(size_t size) {\n"
               "   void * res{malloc(size)};\n"
               "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // #7447
+        check("void foo() {\n"
+              "   int x{mystrcmp(a,b)};\n"
+              "}", "test.cpp", &settings2);
+        ASSERT_EQUALS("", errout.str());
+
+        // #7905
+        check("void foo() {\n"
+              "   int x({mystrcmp(a,b)});\n"
+              "}", "test.cpp", &settings2);
         ASSERT_EQUALS("", errout.str());
     }
 };

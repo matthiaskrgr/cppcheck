@@ -51,27 +51,35 @@ class CPPCHECKLIB CheckBufferOverrun : public Check {
 public:
 
     /** This constructor is used when registering the CheckClass */
-    CheckBufferOverrun() : Check(myName()) {
+    CheckBufferOverrun() : Check(myName()), symbolDatabase(nullptr) {
     }
 
     /** This constructor is used when running checks. */
     CheckBufferOverrun(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger)
-        : Check(myName(), tokenizer, settings, errorLogger) {
+        : Check(myName(), tokenizer, settings, errorLogger)
+        , symbolDatabase(tokenizer?tokenizer->getSymbolDatabase():nullptr) {
     }
 
     void runSimplifiedChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
         CheckBufferOverrun checkBufferOverrun(tokenizer, settings, errorLogger);
-        checkBufferOverrun.bufferOverrun();
-        checkBufferOverrun.bufferOverrun2();
+        checkBufferOverrun.checkGlobalAndLocalVariable();
+        if (tokenizer && tokenizer->isMaxTime())
+            return;
+        checkBufferOverrun.checkStructVariable();
+        checkBufferOverrun.checkBufferAllocatedWithStrlen();
+        checkBufferOverrun.checkInsecureCmdLineArgs();
         checkBufferOverrun.arrayIndexThenCheck();
         checkBufferOverrun.negativeArraySize();
     }
 
-    /** @brief %Check for buffer overruns */
-    void bufferOverrun();
+    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
+        CheckBufferOverrun checkBufferOverrun(tokenizer, settings, errorLogger);
+        checkBufferOverrun.bufferOverrun();
+        checkBufferOverrun.checkStringArgument();
+    }
 
-    /** @brief %Check for buffer overruns #2 (single pass, use ast and valueflow) */
-    void bufferOverrun2();
+    /** @brief %Check for buffer overruns (single pass, use ast and valueflow) */
+    void bufferOverrun();
 
     /** @brief Using array index before bounds check */
     void arrayIndexThenCheck();
@@ -119,7 +127,7 @@ public:
 
     public:
         ArrayInfo();
-        ArrayInfo(const Variable *var, const Tokenizer *tokenizer, const Library *library, const unsigned int forcedeclid = 0);
+        ArrayInfo(const Variable *var, const SymbolDatabase *symbolDatabase, const unsigned int forcedeclid = 0);
 
         /**
          * Create array info with specified data
@@ -201,6 +209,8 @@ public:
     /* data for multifile checking */
     class MyFileInfo : public Check::FileInfo {
     public:
+        std::string toString() const;
+
         struct ArrayUsage {
             MathLib::bigint   index;
             std::string       fileName;
@@ -220,7 +230,15 @@ public:
     /** @brief Analyse all file infos for all TU */
     void analyseWholeProgram(const std::list<Check::FileInfo*> &fileInfo, const Settings& settings, ErrorLogger &errorLogger);
 
+    /**
+     * Calculates sizeof value for given type.
+     * @param type Token which will contain e.g. "int", "*", or string.
+     * @return sizeof for given type, or 0 if it can't be calculated.
+     */
+    unsigned int sizeOfType(const Token *type) const;
+
 private:
+    const SymbolDatabase *symbolDatabase;
 
     static bool isArrayOfStruct(const Token* tok, int &position);
     void arrayIndexOutOfBoundsError(const std::list<const Token *> &callstack, const ArrayInfo &arrayInfo, const std::vector<MathLib::bigint> &index);

@@ -25,6 +25,7 @@
 #include "settings.h"
 #include "errorlogger.h"
 #include "check.h"
+#include "analyzerinfo.h"
 
 #include <string>
 #include <list>
@@ -68,6 +69,7 @@ public:
       *  settings()).
       */
     unsigned int check(const std::string &path);
+    unsigned int check(const ImportProject::FileSettings &fs);
 
     /**
       * @brief Check the file.
@@ -124,12 +126,18 @@ public:
         _simplify = false;
     }
 
-    /** analyse whole program, run this after all TUs has been scanned. */
+    /** Analyse whole program, run this after all TUs has been scanned.
+     * This is deprecated and the plan is to remove this when
+     * .analyzeinfo is good enough
+     */
     void analyseWholeProgram();
+
+    /** analyse whole program use .analyzeinfo files */
+    void analyseWholeProgram(const std::string &buildDir, const std::map<std::string, std::size_t> &files);
 
     /** Check if the user wants to check for unused functions
      * and if it's possible at all */
-    bool unusedFunctionCheckIsEnabled() const;
+    bool isUnusedFunctionCheckEnabled() const;
 
 private:
 
@@ -139,10 +147,11 @@ private:
     /**
      * @brief Process one file.
      * @param filename file name
+     * @param cfgname  cfg name
      * @param fileStream stream the file content can be read from
      * @return amount of errors found
      */
-    unsigned int processFile(const std::string& filename, std::istream& fileStream);
+    unsigned int processFile(const std::string& filename, const std::string &cfgname, std::istream& fileStream);
 
     /**
      * @brief Check raw tokens
@@ -212,6 +221,8 @@ private:
 
     /** File info used for whole program analysis */
     std::list<Check::FileInfo*> fileInfo;
+
+    AnalyzerInformation analyzerInformation;
 };
 
 /// @}

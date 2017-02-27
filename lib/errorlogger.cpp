@@ -48,9 +48,10 @@ ErrorLogger::ErrorMessage::ErrorMessage()
 {
 }
 
-ErrorLogger::ErrorMessage::ErrorMessage(const std::list<FileLocation> &callStack, Severity::SeverityType severity, const std::string &msg, const std::string &id, bool inconclusive) :
+ErrorLogger::ErrorMessage::ErrorMessage(const std::list<FileLocation> &callStack, const std::string& file0_, Severity::SeverityType severity, const std::string &msg, const std::string &id, bool inconclusive) :
     _callStack(callStack), // locations for this error message
     _id(id),               // set the message id
+    file0(file0_),
     _severity(severity),   // severity for this error message
     _cwe(0U),
     _inconclusive(inconclusive)
@@ -61,9 +62,10 @@ ErrorLogger::ErrorMessage::ErrorMessage(const std::list<FileLocation> &callStack
 
 
 
-ErrorLogger::ErrorMessage::ErrorMessage(const std::list<FileLocation> &callStack, Severity::SeverityType severity, const std::string &msg, const std::string &id, const CWE &cwe, bool inconclusive) :
+ErrorLogger::ErrorMessage::ErrorMessage(const std::list<FileLocation> &callStack, const std::string& file0_, Severity::SeverityType severity, const std::string &msg, const std::string &id, const CWE &cwe, bool inconclusive) :
     _callStack(callStack), // locations for this error message
     _id(id),               // set the message id
+    file0(file0_),
     _severity(severity),   // severity for this error message
     _cwe(cwe.id),
     _inconclusive(inconclusive)
@@ -107,6 +109,25 @@ ErrorLogger::ErrorMessage::ErrorMessage(const std::list<const Token*>& callstack
         file0 = list->getFiles()[0];
 
     setmsg(msg);
+}
+
+ErrorLogger::ErrorMessage::ErrorMessage(const tinyxml2::XMLElement * const errmsg)
+    : _id(errmsg->Attribute("id")),
+      _severity(Severity::fromString(errmsg->Attribute("severity"))),
+      _cwe(0U),
+      _inconclusive(false),
+      _shortMessage(errmsg->Attribute("msg")),
+      _verboseMessage(errmsg->Attribute("verbose"))
+{
+    const char *attr = errmsg->Attribute("cwe");
+    std::istringstream(attr ? attr : "0") >> _cwe.id;
+    attr = errmsg->Attribute("inconclusive");
+    _inconclusive = attr && (std::strcmp(attr, "true") == 0);
+    for (const tinyxml2::XMLElement *e = errmsg->FirstChildElement(); e; e = e->NextSiblingElement()) {
+        if (std::strcmp(e->Name(),"location")==0) {
+            _callStack.push_back(ErrorLogger::ErrorMessage::FileLocation(e->Attribute("file"), std::atoi(e->Attribute("line"))));
+        }
+    }
 }
 
 void ErrorLogger::ErrorMessage::setmsg(const std::string &msg)
@@ -413,7 +434,7 @@ void ErrorLogger::reportUnmatchedSuppressions(const std::list<Suppressions::Supp
 
         const std::list<ErrorLogger::ErrorMessage::FileLocation> callStack = make_container< std::list<ErrorLogger::ErrorMessage::FileLocation> > ()
                 << ErrorLogger::ErrorMessage::FileLocation(i->file, i->line);
-        reportErr(ErrorLogger::ErrorMessage(callStack, Severity::information, "Unmatched suppression: " + i->id, "unmatchedSuppression", false));
+        reportErr(ErrorLogger::ErrorMessage(callStack, emptyString, Severity::information, "Unmatched suppression: " + i->id, "unmatchedSuppression", false));
     }
 }
 

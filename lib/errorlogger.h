@@ -40,6 +40,9 @@ struct CWE {
 
 class Token;
 class TokenList;
+namespace tinyxml2 {
+    class XMLElement;
+}
 
 /// @addtogroup Core
 /// @{
@@ -208,11 +211,12 @@ public:
             std::string _file;
         };
 
-        ErrorMessage(const std::list<FileLocation> &callStack, Severity::SeverityType severity, const std::string &msg, const std::string &id, bool inconclusive);
-        ErrorMessage(const std::list<FileLocation> &callStack, Severity::SeverityType severity, const std::string &msg, const std::string &id, const CWE &cwe, bool inconclusive);
+        ErrorMessage(const std::list<FileLocation> &callStack, const std::string& file0, Severity::SeverityType severity, const std::string &msg, const std::string &id, bool inconclusive);
+        ErrorMessage(const std::list<FileLocation> &callStack, const std::string& file0, Severity::SeverityType severity, const std::string &msg, const std::string &id, const CWE &cwe, bool inconclusive);
         ErrorMessage(const std::list<const Token*>& callstack, const TokenList* list, Severity::SeverityType severity, const std::string& id, const std::string& msg, bool inconclusive);
         ErrorMessage(const std::list<const Token*>& callstack, const TokenList* list, Severity::SeverityType severity, const std::string& id, const std::string& msg, const CWE &cwe, bool inconclusive);
         ErrorMessage();
+        explicit ErrorMessage(const tinyxml2::XMLElement * const errmsg);
 
         /**
          * Format the error message in XML format
@@ -328,7 +332,7 @@ public:
     /**
      * Convert XML-sensitive characters into XML entities
      * @param str The input string containing XML-sensitive characters
-     * @return The ouput string containing XML entities
+     * @return The output string containing XML entities
      */
     static std::string toxml(const std::string &str);
 };

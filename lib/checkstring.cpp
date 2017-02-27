@@ -29,9 +29,12 @@ namespace {
 }
 
 // CWE ids used:
-static const struct CWE CWE628(628U);
-static const struct CWE CWE665(665U);
-
+static const struct CWE CWE570(570U);   // Expression is Always False
+static const struct CWE CWE571(571U);   // Expression is Always True
+static const struct CWE CWE595(595U);   // Comparison of Object References Instead of Object Contents
+static const struct CWE CWE628(628U);   // Function Call with Incorrectly Specified Arguments
+static const struct CWE CWE665(665U);   // Improper Initialization
+static const struct CWE CWE758(758U);   // Reliance on Undefined, Unspecified, or Implementation-Defined Behavior
 
 //---------------------------------------------------------------------------
 // Writing string literal is UB
@@ -72,7 +75,7 @@ void CheckString::stringLiteralWriteError(const Token *tok, const Token *strValu
     }
     errmsg += " directly or indirectly is undefined behaviour.";
 
-    reportError(callstack, Severity::error, "stringLiteralWrite", errmsg);
+    reportError(callstack, Severity::error, "stringLiteralWrite", errmsg, CWE758, false);
 }
 
 //---------------------------------------------------------------------------
@@ -130,7 +133,7 @@ void CheckString::alwaysTrueFalseStringCompareError(const Token *tok, const std:
     reportError(tok, Severity::warning, "staticStringCompare",
                 "Unnecessary comparison of static strings.\n"
                 "The compared strings, '" + string1 + "' and '" + string2 + "', are always " + (str1==str2?"identical":"unequal") + ". "
-                "Therefore the comparison is unnecessary and looks suspicious.");
+                "Therefore the comparison is unnecessary and looks suspicious.", (str1==str2)?CWE571:CWE570, false);
 }
 
 void CheckString::alwaysTrueStringVariableCompareError(const Token *tok, const std::string& str1, const std::string& str2)
@@ -138,7 +141,7 @@ void CheckString::alwaysTrueStringVariableCompareError(const Token *tok, const s
     reportError(tok, Severity::warning, "stringCompare",
                 "Comparison of identical string variables.\n"
                 "The compared strings, '" + str1 + "' and '" + str2 + "', are identical. "
-                "This could be a logic bug.");
+                "This could be a logic bug.", CWE571, false);
 }
 
 
@@ -163,9 +166,9 @@ void CheckString::checkSuspiciousStringCompare()
             const Token* litTok = tok->astOperand2();
             if (!varTok || !litTok)  // <- failed to create AST for comparison
                 continue;
-            if (varTok->tokType() == Token::eString || varTok->tokType() == Token::eNumber)
+            if (Token::Match(varTok, "%char%|%num%|%str%"))
                 std::swap(varTok, litTok);
-            else if (litTok->tokType() != Token::eString && litTok->tokType() != Token::eNumber)
+            else if (!Token::Match(litTok, "%char%|%num%|%str%"))
                 continue;
 
             // Pointer addition?
@@ -197,10 +200,11 @@ void CheckString::checkSuspiciousStringCompare()
                 varTok = varTok->astParent();
             const std::string varname = varTok->expressionString();
 
+            const bool ischar(litTok->tokType() == Token::eChar);
             if (litTok->tokType() == Token::eString) {
                 if (_tokenizer->isC() || (var && var->isArrayOrPointer()))
                     suspiciousStringCompareError(tok, varname);
-            } else if (litTok->originalName() == "'\\0'" && var && var->isPointer()) {
+            } else if (ischar && var && var->isPointer()) {
                 suspiciousStringCompareError_char(tok, varname);
             }
         }
@@ -210,13 +214,13 @@ void CheckString::checkSuspiciousStringCompare()
 void CheckString::suspiciousStringCompareError(const Token* tok, const std::string& var)
 {
     reportError(tok, Severity::warning, "literalWithCharPtrCompare",
-                "String literal compared with variable '" + var + "'. Did you intend to use strcmp() instead?");
+                "String literal compared with variable '" + var + "'. Did you intend to use strcmp() instead?", CWE595, false);
 }
 
 void CheckString::suspiciousStringCompareError_char(const Token* tok, const std::string& var)
 {
     reportError(tok, Severity::warning, "charLiteralWithCharPtrCompare",
-                "Char literal compared with pointer '" + var + "'. Did you intend to dereference it?");
+                "Char literal compared with pointer '" + var + "'. Did you intend to dereference it?", CWE595, false);
 }
 
 
@@ -306,12 +310,12 @@ void CheckString::checkIncorrectStringCompare()
 
 void CheckString::incorrectStringCompareError(const Token *tok, const std::string& func, const std::string &string)
 {
-    reportError(tok, Severity::warning, "incorrectStringCompare", "String literal " + string + " doesn't match length argument for " + func + "().");
+    reportError(tok, Severity::warning, "incorrectStringCompare", "String literal " + string + " doesn't match length argument for " + func + "().", CWE570, false);
 }
 
 void CheckString::incorrectStringBooleanError(const Token *tok, const std::string& string)
 {
-    reportError(tok, Severity::warning, "incorrectStringBooleanError", "Conversion of string literal " + string + " to bool always evaluates to true.");
+    reportError(tok, Severity::warning, "incorrectStringBooleanError", "Conversion of string literal " + string + " to bool always evaluates to true.", CWE571, false);
 }
 
 //---------------------------------------------------------------------------

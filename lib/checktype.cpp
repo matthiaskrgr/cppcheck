@@ -36,8 +36,10 @@ namespace {
 //
 
 // CWE ids used:
-static const struct CWE CWE758(758U);
-static const struct CWE CWE190(190U);
+static const struct CWE CWE195(195U);   // Signed to Unsigned Conversion Error
+static const struct CWE CWE197(197U);   // Numeric Truncation Error
+static const struct CWE CWE758(758U);   // Reliance on Undefined, Unspecified, or Implementation-Defined Behavior
+static const struct CWE CWE190(190U);   // Integer Overflow or Wraparound
 
 
 void CheckType::checkTooBigBitwiseShift()
@@ -111,7 +113,7 @@ void CheckType::tooBigBitwiseShiftError(const Token *tok, int lhsbits, const Val
 void CheckType::checkIntegerOverflow()
 {
     // unknown sizeof(int) => can't run this checker
-    if (_settings->platformType == Settings::Unspecified)
+    if (_settings->platformType == Settings::Unspecified || _settings->int_bit >= 64)
         return;
 
     // max int value according to platform settings.
@@ -134,8 +136,14 @@ void CheckType::checkIntegerOverflow()
             const ValueFlow::Value *value = tok->getValueGE(maxint + 1, _settings);
             if (!value)
                 value = tok->getValueLE(-maxint - 2, _settings);
-            if (value)
-                integerOverflowError(tok, *value);
+            if (!value)
+                continue;
+
+            // For left shift, it's common practice to shift into the sign bit
+            if (tok->str() == "<<" && value->intvalue > 0 && value->intvalue < (1LL << _settings->int_bit))
+                continue;
+
+            integerOverflowError(tok, *value);
         }
     }
 }
@@ -207,7 +215,7 @@ void CheckType::signConversionError(const Token *tok, const bool constvalue)
                 "signConversion",
                 (constvalue) ?
                 "Suspicious code: sign conversion of " + varname + " in calculation because '" + varname + "' has a negative value" :
-                "Suspicious code: sign conversion of " + varname + " in calculation, even though " + varname + " can have a negative value");
+                "Suspicious code: sign conversion of " + varname + " in calculation, even though " + varname + " can have a negative value", CWE195, false);
 }
 
 
@@ -289,7 +297,7 @@ void CheckType::longCastAssignError(const Token *tok)
                 Severity::style,
                 "truncLongCastAssignment",
                 "int result is assigned to long variable. If the variable is long to avoid loss of information, then you have loss of information.\n"
-                "int result is assigned to long variable. If the variable is long to avoid loss of information, then there is loss of information. To avoid loss of information you must cast a calculation operand to long, for example 'l = a * b;' => 'l = (long)a * b;'.");
+                "int result is assigned to long variable. If the variable is long to avoid loss of information, then there is loss of information. To avoid loss of information you must cast a calculation operand to long, for example 'l = a * b;' => 'l = (long)a * b;'.", CWE197, false);
 }
 
 void CheckType::longCastReturnError(const Token *tok)
@@ -298,77 +306,74 @@ void CheckType::longCastReturnError(const Token *tok)
                 Severity::style,
                 "truncLongCastReturn",
                 "int result is returned as long value. If the return value is long to avoid loss of information, then you have loss of information.\n"
-                "int result is returned as long value. If the return value is long to avoid loss of information, then there is loss of information. To avoid loss of information you must cast a calculation operand to long, for example 'return a*b;' => 'return (long)a*b'.");
+                "int result is returned as long value. If the return value is long to avoid loss of information, then there is loss of information. To avoid loss of information you must cast a calculation operand to long, for example 'return a*b;' => 'return (long)a*b'.", CWE197, false);
 }
 
-static const ValueFlow::Value *mismatchingValue(const ValueType *enumType, const std::list<ValueFlow::Value> &values)
+//---------------------------------------------------------------------------
+// Checking for float to integer overflow
+//---------------------------------------------------------------------------
+
+void CheckType::checkFloatToIntegerOverflow()
 {
-    if (!enumType || !enumType->typeScope || enumType->typeScope->type != Scope::eEnum)
-        return nullptr;
-    const Scope * const enumScope = enumType->typeScope;
-    for (unsigned int i = 0; i < enumScope->enumeratorList.size(); ++i) {
-        if (!enumScope->enumeratorList[i].value_known)
-            return nullptr;
-    }
-    for (std::list<ValueFlow::Value>::const_iterator it = values.begin(); it != values.end(); ++it) {
-        if (it->tokvalue)
-            continue;
-        bool found = false;
-        for (unsigned int i = 0; i < enumScope->enumeratorList.size(); ++i) {
-            if (enumScope->enumeratorList[i].value == it->intvalue) {
-                found = true;
-                break;
+    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
+    const std::size_t functions = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < functions; ++i) {
+        const Scope * scope = symbolDatabase->functionScopes[i];
+        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+            if (tok->str() != "(")
+                continue;
+
+            if (!tok->astOperand1() || tok->astOperand2())
+                continue;
+
+            // is result integer?
+            const ValueType *vt = tok->valueType();
+            if (!vt || !vt->isIntegral())
+                continue;
+
+            // is value float?
+            const ValueType *vt1 = tok->astOperand1()->valueType();
+            if (!vt1 || !vt1->isFloat())
+                continue;
+
+            const Token *op1 = tok->astOperand1();
+            for (std::list<ValueFlow::Value>::const_iterator it = op1->values.begin(); it != op1->values.end(); ++it) {
+                if (it->valueType != ValueFlow::Value::FLOAT)
+                    continue;
+                if (it->inconclusive && !_settings->inconclusive)
+                    continue;
+                if (it->floatValue > ~0ULL)
+                    floatToIntegerOverflowError(tok, *it);
+                else if ((-it->floatValue) > (1ULL<<62))
+                    floatToIntegerOverflowError(tok, *it);
+                else if (_settings->platformType != Settings::Unspecified) {
+                    int bits = 0;
+                    if (vt->type == ValueType::Type::CHAR)
+                        bits = _settings->char_bit;
+                    else if (vt->type == ValueType::Type::SHORT)
+                        bits = _settings->short_bit;
+                    else if (vt->type == ValueType::Type::INT)
+                        bits = _settings->int_bit;
+                    else if (vt->type == ValueType::Type::LONG)
+                        bits = _settings->long_bit;
+                    else if (vt->type == ValueType::Type::LONGLONG)
+                        bits = _settings->long_long_bit;
+                    else
+                        continue;
+                    if (bits < 64 && it->floatValue >= (1ULL << bits))
+                        floatToIntegerOverflowError(tok, *it);
+                }
             }
         }
-        if (!found)
-            return &(*it);
-    }
-    return nullptr;
-}
-
-void CheckType::checkEnumMismatch()
-{
-    if (!_settings->isEnabled("style"))
-        return;
-    for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
-        // Assigning mismatching value to enum variable
-        if (tok->str() == "=") {
-            if (!tok->astOperand1() || !tok->astOperand2())
-                continue;
-
-            const ValueFlow::Value *v = mismatchingValue(tok->astOperand1()->valueType(), tok->astOperand2()->values);
-            if (v)
-                enumMismatchAssignError(tok, *v);
-        }
-
-        // Comparing enum variable against mismatching value
-        else if (Token::Match(tok, "==|!=")) {
-            if (!tok->astOperand1() || !tok->astOperand2())
-                continue;
-
-            const ValueFlow::Value * const v1 = mismatchingValue(tok->astOperand1()->valueType(), tok->astOperand2()->values);
-            if (v1 && v1->isKnown())
-                enumMismatchCompareError(tok, *v1);
-
-            const ValueFlow::Value * const v2 = mismatchingValue(tok->astOperand2()->valueType(), tok->astOperand1()->values);
-            if (v2 && v2->isKnown())
-                enumMismatchCompareError(tok, *v2);
-        }
     }
 }
 
-void CheckType::enumMismatchAssignError(const Token *tok, const ValueFlow::Value &value)
+void CheckType::floatToIntegerOverflowError(const Token *tok, const ValueFlow::Value &value)
 {
+    std::ostringstream errmsg;
+    errmsg << "Undefined behaviour: float (" << value.floatValue << ") conversion overflow.";
     reportError(tok,
-                Severity::style,
-                "enumMismatch",
-                "Assigning mismatching value " + MathLib::toString(value.intvalue) + " to enum variable.");
-}
-
-void CheckType::enumMismatchCompareError(const Token *tok, const ValueFlow::Value &value)
-{
-    reportError(tok,
-                Severity::style,
-                "enumMismatch",
-                "Comparing mismatching value " + MathLib::toString(value.intvalue) + " with enum variable.");
+                Severity::error,
+                "floatConversionOverflow",
+                errmsg.str(), CWE190, value.inconclusive);
 }

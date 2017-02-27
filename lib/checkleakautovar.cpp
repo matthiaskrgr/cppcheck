@@ -22,6 +22,7 @@
 
 #include "checkleakautovar.h"
 #include "checkmemoryleak.h"  // <- CheckMemoryLeak::memoryLeak
+#include "checknullpointer.h" // <- CheckNullPointer::isPointerDeRef
 #include "tokenize.h"
 #include "symboldatabase.h"
 #include "astutils.h"
@@ -140,6 +141,9 @@ void CheckLeakAutoVar::check()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
+        if (scope->hasInlineOrLambdaFunction())
+            continue;
+
         // Empty variable info
         VarInfo varInfo;
 
@@ -193,7 +197,8 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
         if (tok->varId() > 0) {
             const std::map<unsigned int, VarInfo::AllocInfo>::const_iterator var = alloctype.find(tok->varId());
             if (var != alloctype.end()) {
-                if (var->second.status == VarInfo::DEALLOC && tok->strAt(-1) != "&" && (!Token::Match(tok, "%name% =") || tok->strAt(-1) == "*")) {
+                bool unknown = false;
+                if (var->second.status == VarInfo::DEALLOC && CheckNullPointer::isPointerDeRef(tok,unknown) && !unknown) {
                     deallocUseError(tok, tok->str());
                 } else if (Token::simpleMatch(tok->tokAt(-2), "= &")) {
                     varInfo->erase(tok->varId());
@@ -224,6 +229,12 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
         const Token *varTok = tok;
         while (Token::Match(varTok, "%name% ::|. %name% !!("))
             varTok = varTok->tokAt(2);
+
+        const Token *ftok = tok;
+        if (ftok->str() == "::")
+            ftok = ftok->next();
+        while (Token::Match(ftok, "%name% :: %name%"))
+            ftok = ftok->tokAt(2);
 
         // assignment..
         if (Token::Match(varTok, "%var% =")) {
@@ -280,7 +291,9 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
                     alloctype[varTok->varId()].status = VarInfo::ALLOC;
                 }
             } else if (_tokenizer->isCPP() && varTok->strAt(2) == "new") {
-                alloctype[varTok->varId()].type = -1;
+                const Token* tok2 = varTok->tokAt(2)->astOperand1();
+                bool arrayNew = (tok2 && (tok2->str() == "[" || (tok2->str() == "(" && tok2->astOperand1() && tok2->astOperand1()->str() == "[")));
+                alloctype[varTok->varId()].type = arrayNew ? -2 : -1;
                 alloctype[varTok->varId()].status = VarInfo::ALLOC;
             }
 
@@ -437,14 +450,14 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
         }
 
         // Function call..
-        else if (Token::Match(tok, "%type% (")) {
-            const Library::AllocFunc* af = _settings->library.dealloc(tok);
+        else if (Token::Match(ftok, "%type% (")) {
+            const Library::AllocFunc* af = _settings->library.dealloc(ftok);
             VarInfo::AllocInfo allocation(af ? af->groupId : 0, VarInfo::DEALLOC);
             if (allocation.type == 0)
                 allocation.status = VarInfo::NOALLOC;
-            functionCall(tok, varInfo, allocation, af);
+            functionCall(ftok, varInfo, allocation, af);
 
-            tok = tok->next()->link();
+            tok = ftok->next()->link();
 
             // Handle scopes that might be noreturn
             if (allocation.status == VarInfo::NOALLOC && Token::simpleMatch(tok, ") ; }")) {
@@ -453,8 +466,7 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
                 if (_tokenizer->IsScopeNoReturn(tok->tokAt(2), &unknown)) {
                     if (!unknown)
                         varInfo->clear();
-                    else if (_settings->library.leakignore.find(functionName) == _settings->library.leakignore.end() &&
-                             _settings->library.use.find(functionName) == _settings->library.use.end())
+                    else if (!_settings->library.isLeakIgnore(functionName) && !_settings->library.isUse(functionName))
                         varInfo->possibleUsageAll(functionName);
                 }
             }
@@ -464,14 +476,15 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
 
         // delete
         else if (_tokenizer->isCPP() && tok->str() == "delete") {
-            if (tok->strAt(1) == "[")
+            bool arrayDelete = (tok->strAt(1) == "[");
+            if (arrayDelete)
                 tok = tok->tokAt(3);
             else
                 tok = tok->next();
             while (Token::Match(tok, "%name% ::|."))
                 tok = tok->tokAt(2);
             if (tok->varId() && tok->strAt(1) != "[") {
-                VarInfo::AllocInfo allocation(-1, VarInfo::DEALLOC);
+                VarInfo::AllocInfo allocation(arrayDelete ? -2 : -1, VarInfo::DEALLOC);
                 changeAllocStatus(varInfo, allocation, tok, tok);
             }
         }
@@ -518,8 +531,7 @@ void CheckLeakAutoVar::changeAllocStatus(VarInfo *varInfo, const VarInfo::AllocI
 void CheckLeakAutoVar::functionCall(const Token *tok, VarInfo *varInfo, const VarInfo::AllocInfo& allocation, const Library::AllocFunc* af)
 {
     // Ignore function call?
-    const bool ignore = bool(_settings->library.leakignore.find(tok->str()) != _settings->library.leakignore.end());
-    if (ignore)
+    if (_settings->library.isLeakIgnore(tok->str()))
         return;
 
     int argNr = 1;
@@ -540,7 +552,11 @@ void CheckLeakAutoVar::functionCall(const Token *tok, VarInfo *varInfo, const Va
             if (!af || af->arg == argNr)
                 changeAllocStatus(varInfo, allocation, tok, arg);
         } else if (Token::Match(arg, "%name% (")) {
-            functionCall(arg, varInfo, allocation, af);
+            const Library::AllocFunc* allocFunc = _settings->library.dealloc(arg);
+            VarInfo::AllocInfo alloc(allocFunc ? allocFunc->groupId : 0, VarInfo::DEALLOC);
+            if (alloc.type == 0)
+                alloc.status = VarInfo::NOALLOC;
+            functionCall(arg, varInfo, alloc, allocFunc);
         }
         argNr++;
     }

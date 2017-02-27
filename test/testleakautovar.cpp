@@ -65,10 +65,13 @@ private:
         TEST_CASE(doublefree2);
         TEST_CASE(doublefree3); // #4914
         TEST_CASE(doublefree4); // #5451 - FP when exit is called
+        TEST_CASE(doublefree5); // #5522
+        TEST_CASE(doublefree6); // #7685
 
         // exit
         TEST_CASE(exit1);
         TEST_CASE(exit2);
+        TEST_CASE(exit3);
 
         // goto
         TEST_CASE(goto1);
@@ -91,7 +94,7 @@ private:
         TEST_CASE(loop1);
 
         // mismatching allocation/deallocation
-        TEST_CASE(mismatch_fopen_free);
+        TEST_CASE(mismatchAllocDealloc);
 
         // Execution reaches a 'return'
         TEST_CASE(return1);
@@ -121,6 +124,8 @@ private:
 
         TEST_CASE(nestedAllocation);
         TEST_CASE(testKeywords); // #6767
+
+        TEST_CASE(inlineFunction); // #3989
     }
 
     void check(const char code[], bool cpp = false) {
@@ -573,10 +578,10 @@ private:
         ASSERT_EQUALS("[test.cpp:4]: (error) Memory pointed to by 'p' is freed twice.\n", errout.str());
 
         check(
-            "~LineMarker() {\n"
+            "LineMarker::~LineMarker() {\n"
             "  delete pxpm;\n"
             "}\n"
-            "LineMarker &operator=(const LineMarker &) {\n"
+            "LineMarker &LineMarker::operator=(const LineMarker &) {\n"
             "  delete pxpm;\n"
             "  pxpm = NULL;\n"
             "  return *this;\n"
@@ -810,6 +815,23 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void doublefree5() {  // #5522
+        check("void f(char *p) {\n"
+              "  free(p);\n"
+              "  x = (q == p);\n"
+              "  free(p);\n"
+              "}");
+        ASSERT_EQUALS("[test.c:4]: (error) Memory pointed to by 'p' is freed twice.\n", errout.str());
+    }
+
+    void doublefree6() { // #7685
+        check("void do_wordexp(FILE *f) {\n"
+              "  free(getword(f));\n"
+              "  fclose(f);\n"
+              "}", /*cpp=*/false);
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void exit1() {
         check("void f() {\n"
               "    char *p = malloc(10);\n"
@@ -826,6 +848,28 @@ private:
         ASSERT_EQUALS("[test.c:3]: (information) --check-library: Function fatal_error() should have <noreturn> configuration\n"
                       "[test.c:4]: (information) --check-library: Function fatal_error() should have <use>/<leak-ignore> configuration\n",
                       errout.str());
+    }
+
+    void exit3() {
+        check("void f() {\n"
+              "  char *p = malloc(100);\n"
+              "  if (x) {\n"
+              "    free(p);\n"
+              "    ::exit(0);\n"
+              "  }"
+              "  free(p);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "  char *p = malloc(100);\n"
+              "  if (x) {\n"
+              "    free(p);\n"
+              "    std::exit(0);\n"
+              "  }"
+              "  free(p);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void goto1() {
@@ -982,12 +1026,28 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
-    void mismatch_fopen_free() {
+    void mismatchAllocDealloc() {
         check("void f() {\n"
               "    FILE*f=fopen(fname,a);\n"
               "    free(f);\n"
               "}");
         ASSERT_EQUALS("[test.c:3]: (error) Mismatching allocation and deallocation: f\n", errout.str());
+
+        check("void f() {\n"
+              "    char *cPtr = new char[100];\n"
+              "    delete[] cPtr;\n"
+              "    cPtr = new char[100]('x');\n"
+              "    delete[] cPtr;\n"
+              "    cPtr = new char[100];\n"
+              "    delete cPtr;\n"
+              "}", true);
+        ASSERT_EQUALS("[test.cpp:7]: (error) Mismatching allocation and deallocation: cPtr\n", errout.str());
+
+        check("void f() {\n"
+              "    char *cPtr = new char[100];\n"
+              "    free(cPtr);\n"
+              "}", true);
+        ASSERT_EQUALS("[test.cpp:3]: (error) Mismatching allocation and deallocation: cPtr\n", errout.str());
     }
 
     void return1() {
@@ -1221,6 +1281,19 @@ private:
               "  free(new);\n"
               "  return 0;\n"
               "}", false);
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void inlineFunction() {
+        check("int test() {\n"
+              "  char *c;\n"
+              "  int ret() {\n"
+              "        free(c);\n"
+              "        return 0;\n"
+              "    }\n"
+              "    c = malloc(128);\n"
+              "    return ret();\n"
+              "}");
         ASSERT_EQUALS("", errout.str());
     }
 };

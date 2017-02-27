@@ -10,12 +10,12 @@ import sys
 START = 0
 PASSWORD = ''
 for arg in sys.argv[1:]:
-	if len(arg)==1:
-		START = '0123456789abcdefghijklmnopqrstuvwxyz'.find(arg)
-		if START < 0:
-			START = 0
-	else:
-		PASSWORD = arg
+    if len(arg) == 1:
+        START = '0123456789abcdefghijklmnopqrstuvwxyz'.find(arg)
+        if START < 0:
+            START = 0
+    else:
+        PASSWORD = arg
 
 # Upload file to sourceforge web server using scp
 def upload(file_to_upload, destination):
@@ -56,7 +56,7 @@ def daca2(foldernum):
 
     # run cppcheck
     subprocess.call(['rm', '-rf', os.path.expanduser('~/daca2/' + folder)])
-    subprocess.call(['nice', '--adjustment=19', 'python', os.path.expanduser('~/cppcheck/tools/daca2.py'), folder, '--rev=' + rev])
+    subprocess.call(['nice', '--adjustment=19', 'python', os.path.expanduser('~/cppcheck/tools/daca2.py'), folder, '--rev=' + rev, '--skip=virtuoso-opensource'])
     upload(os.path.expanduser('~/daca2/' + folder + '/results.txt'), 'evidente/results-' + folder + '.txt')
     subprocess.call(['rm', '-rf', os.path.expanduser('~/daca2/lib' + folder)])
     subprocess.call(['nice', '--adjustment=19', 'python', os.path.expanduser('~/cppcheck/tools/daca2.py'), 'lib' + folder, '--rev=' + rev])
@@ -64,7 +64,7 @@ def daca2(foldernum):
 
     # run cppcheck addons
     subprocess.call(['rm', '-rf', os.path.expanduser('~/daca2/' + folder)])
-    subprocess.call(['nice', '--adjustment=19', 'python', os.path.expanduser('~/cppcheck/tools/daca2-addons.py'), folder, '--rev=' + rev])
+    subprocess.call(['nice', '--adjustment=19', 'python', os.path.expanduser('~/cppcheck/tools/daca2-addons.py'), folder, '--rev=' + rev, '--skip=virtuoso-opensource'])
     upload(os.path.expanduser('~/daca2/' + folder + '/results.txt'), 'evidente/addons-' + folder + '.txt')
     subprocess.call(['rm', '-rf', os.path.expanduser('~/daca2/lib' + folder)])
     subprocess.call(['nice', '--adjustment=19', 'python', os.path.expanduser('~/cppcheck/tools/daca2-addons.py'), 'lib' + folder, '--rev=' + rev])

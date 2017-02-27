@@ -26,6 +26,7 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QFile>
+#include <QInputDialog>
 #include "mainwindow.h"
 #include "cppcheck.h"
 #include "applicationlist.h"
@@ -46,7 +47,8 @@
 #include "showtypes.h"
 #include "librarydialog.h"
 
-static const QString OnlineHelpURL("http://cppcheck.sourceforge.net/manual.html");
+static const QString OnlineHelpURL("http://cppcheck.net/manual.html");
+static const QString compile_commands_json("compile_commands.json");
 
 MainWindow::MainWindow(TranslationHandler* th, QSettings* settings) :
     mSettings(settings),
@@ -353,6 +355,49 @@ void MainWindow::SaveSettings() const
     mUI.mResults->SaveSettings(mSettings);
 }
 
+void MainWindow::DoCheckProject(ImportProject p)
+{
+    ClearResults();
+
+    mIsLogfileLoaded = false;
+    if (mProject) {
+        std::vector<std::string> v;
+        foreach (const QString &s, mProject->GetProjectFile()->GetExcludedPaths()) {
+            v.push_back(s.toStdString());
+        }
+        p.ignorePaths(v);
+    } else {
+        EnableProjectActions(false);
+    }
+
+    mUI.mResults->Clear(true);
+    mThread->ClearFiles();
+
+    mUI.mResults->CheckingStarted(p.fileSettings.size());
+
+    QDir inf(mCurrentDirectory);
+    const QString checkPath = inf.canonicalPath();
+    SetPath(SETTINGS_LAST_CHECK_PATH, checkPath);
+
+    CheckLockDownUI(); // lock UI while checking
+
+    mUI.mResults->SetCheckDirectory(checkPath);
+    Settings checkSettings = GetCppcheckSettings();
+    checkSettings.force = false;
+
+    if (mProject)
+        qDebug() << "Checking project file" << mProject->GetProjectFile()->GetFilename();
+
+    if (!checkSettings.buildDir.empty()) {
+        std::list<std::string> sourcefiles;
+        AnalyzerInformation::writeFilesTxt(checkSettings.buildDir, sourcefiles, p.fileSettings);
+    }
+
+    //mThread->SetCheckProject(true);
+    mThread->SetProject(p);
+    mThread->Check(checkSettings, true);
+}
+
 void MainWindow::DoCheckFiles(const QStringList &files)
 {
     if (files.isEmpty()) {
@@ -397,6 +442,13 @@ void MainWindow::DoCheckFiles(const QStringList &files)
 
     if (mProject)
         qDebug() << "Checking project file" << mProject->GetProjectFile()->GetFilename();
+
+    if (!checkSettings.buildDir.empty()) {
+        std::list<std::string> sourcefiles;
+        foreach (QString s, fileNames)
+            sourcefiles.push_back(s.toStdString());
+        AnalyzerInformation::writeFilesTxt(checkSettings.buildDir, sourcefiles, checkSettings.project.fileSettings);
+    }
 
     mThread->SetCheckFiles(true);
     mThread->Check(checkSettings, true);
@@ -450,7 +502,9 @@ QStringList MainWindow::SelectFilesToCheck(QFileDialog::FileMode mode)
         selected = QFileDialog::getOpenFileNames(this,
                    tr("Select files to check"),
                    GetPath(SETTINGS_LAST_CHECK_PATH),
-                   tr("C/C++ Source (%1)").arg(FileList::GetDefaultFilters().join(" ")));
+                   tr("C/C++ Source, Compile database, Visual Studio (%1 %2 *.sln *.vcxproj)")
+                   .arg(FileList::GetDefaultFilters().join(" "))
+                   .arg(compile_commands_json));
         if (selected.isEmpty())
             mCurrentDirectory.clear();
         else {
@@ -478,7 +532,34 @@ QStringList MainWindow::SelectFilesToCheck(QFileDialog::FileMode mode)
 
 void MainWindow::CheckFiles()
 {
-    DoCheckFiles(SelectFilesToCheck(QFileDialog::ExistingFiles));
+    QStringList selected = SelectFilesToCheck(QFileDialog::ExistingFiles);
+
+    const QString file0 = (selected.size() ? selected[0].toLower() : "");
+    if (file0.endsWith(".sln") || file0.endsWith(".vcxproj") || file0.endsWith(compile_commands_json)) {
+        ImportProject p;
+        p.import(selected[0].toStdString());
+
+        if (file0.endsWith(".sln")) {
+            QStringList configs;
+            for (std::list<ImportProject::FileSettings>::const_iterator it = p.fileSettings.begin(); it != p.fileSettings.end(); ++it) {
+                const QString cfg(QString::fromStdString(it->cfg));
+                if (!configs.contains(cfg))
+                    configs.push_back(cfg);
+            }
+            configs.sort();
+
+            bool ok = false;
+            const QString cfg = QInputDialog::getItem(this, tr("Select configuration"), tr("Select the configuration that will be checked"), configs, 0, false, &ok);
+            if (!ok)
+                return;
+            p.ignoreOtherConfigs(cfg.toStdString());
+        }
+
+        DoCheckProject(p);
+        return;
+    }
+
+    DoCheckFiles(selected);
 }
 
 void MainWindow::CheckDirectory()
@@ -673,6 +754,12 @@ Settings MainWindow::GetCppcheckSettings()
         // Only check the given -D configuration
         if (!defines.isEmpty())
             result.maxConfigs = 1;
+
+        QString buildDir = pfile->GetBuildDir();
+        if (!buildDir.isEmpty()) {
+            QString prjpath = QFileInfo(pfile->GetFilename()).absolutePath();
+            result.buildDir = (prjpath + '/' + buildDir).toStdString();
+        }
     }
 
     // Include directories (and files) are searched in listed order.
@@ -690,6 +777,8 @@ Settings MainWindow::GetCppcheckSettings()
     result.addEnabled("portability");
     result.addEnabled("information");
     result.addEnabled("missingInclude");
+    if (!result.buildDir.empty())
+        result.addEnabled("unusedFunction");
     result.debug = false;
     result.debugwarnings = mSettings->value(SETTINGS_SHOW_DEBUG_WARNINGS, false).toBool();
     result.quiet = false;
@@ -719,6 +808,8 @@ Settings MainWindow::GetCppcheckSettings()
     if (result.jobs <= 1) {
         result.jobs = 1;
     }
+
+    result.terminate(false);
 
     return result;
 }
@@ -1064,6 +1155,9 @@ void MainWindow::Save()
     if (!selectedFile.isEmpty()) {
         Report::Type type = Report::TXT;
         if (selectedFilter == tr("XML files version 1 (*.xml)")) {
+            QMessageBox msgBox(QMessageBox::Icon::Warning, tr("Deprecated XML format"), tr("XML format 1 is deprecated and will be removed in cppcheck 1.81."), QMessageBox::StandardButton::Ok);
+            msgBox.exec();
+
             type = Report::XML;
             if (!selectedFile.endsWith(".xml", Qt::CaseInsensitive))
                 selectedFile += ".xml";
@@ -1227,6 +1321,14 @@ void MainWindow::CheckProject(Project *project)
     else
         mCurrentDirectory = rootpath;
 
+    if (!project->GetProjectFile()->GetImportProject().isEmpty()) {
+        ImportProject p;
+        QString prjfile = inf.canonicalPath() + '/' + project->GetProjectFile()->GetImportProject();
+        p.import(prjfile.toStdString());
+        DoCheckProject(p);
+        return;
+    }
+
     QStringList paths = project->GetProjectFile()->GetCheckPaths();
 
     // If paths not given then check the root path (which may be the project
@@ -1295,7 +1397,8 @@ void MainWindow::EditProjectFile()
         msg.exec();
         return;
     }
-    mProject->Edit();
+    if (mProject->Edit())
+        CheckProject(mProject);
 }
 
 void MainWindow::ShowLogView()

@@ -82,11 +82,11 @@ private:
         TEST_CASE(invalidPointerCast);
 
         TEST_CASE(passedByValue);
+        TEST_CASE(passedByValue_nonConst);
 
         TEST_CASE(switchRedundantAssignmentTest);
         TEST_CASE(switchRedundantOperationTest);
         TEST_CASE(switchRedundantBitwiseOperationTest);
-        TEST_CASE(switchFallThroughCase);
         TEST_CASE(unreachableCode);
 
         TEST_CASE(suspiciousCase);
@@ -118,7 +118,7 @@ private:
         TEST_CASE(clarifyStatement);
 
         TEST_CASE(duplicateBranch);
-        TEST_CASE(duplicateBranch1); // tests extracted by http://www.viva64.com/en/b/0149/ ( Comparison between PVS-Studio and cppcheck ): Errors detected in Quake 3: Arena by PVS-Studio: Fragement 2
+        TEST_CASE(duplicateBranch1); // tests extracted by http://www.viva64.com/en/b/0149/ ( Comparison between PVS-Studio and cppcheck ): Errors detected in Quake 3: Arena by PVS-Studio: Fragment 2
         TEST_CASE(duplicateBranch2); // empty macro
         TEST_CASE(duplicateExpression1);
         TEST_CASE(duplicateExpression2); // ticket #2730
@@ -170,6 +170,32 @@ private:
         TEST_CASE(testEvaluationOrderSequencePointsFunctionCall);
         TEST_CASE(testEvaluationOrderSequencePointsComma);
         TEST_CASE(testEvaluationOrderSizeof);
+
+        TEST_CASE(testUnsignedLessThanZero);
+
+        TEST_CASE(doubleMove1);
+        TEST_CASE(doubleMoveMemberInitialization1);
+        TEST_CASE(doubleMoveMemberInitialization2);
+        TEST_CASE(moveAndAssign1);
+        TEST_CASE(moveAndAssign2);
+        TEST_CASE(moveAssignMoveAssign);
+        TEST_CASE(moveAndReset1);
+        TEST_CASE(moveAndReset2);
+        TEST_CASE(moveResetMoveReset);
+        TEST_CASE(moveAndFunctionParameter);
+        TEST_CASE(moveAndFunctionParameterReference);
+        TEST_CASE(moveAndFunctionParameterConstReference);
+        TEST_CASE(moveAndFunctionParameterUnknown);
+        TEST_CASE(moveAndReturn);
+        TEST_CASE(moveAndClear);
+        TEST_CASE(movedPointer);
+        TEST_CASE(partiallyMoved);
+        TEST_CASE(moveAndLambda);
+        TEST_CASE(forwardAndUsed);
+
+        TEST_CASE(funcArgNamesDifferent);
+        TEST_CASE(funcArgOrderDifferent);
+        TEST_CASE(cpp11FunctionArgInit); // #7846 - "void foo(int declaration = {}) {"
     }
 
     void check(const char code[], const char *filename = nullptr, bool experimental = false, bool inconclusive = true, bool runSimpleChecks=true, Settings* settings = 0) {
@@ -183,6 +209,8 @@ private:
         settings->addEnabled("warning");
         settings->addEnabled("portability");
         settings->addEnabled("performance");
+        settings->standards.c = Standards::CLatest;
+        settings->standards.cpp = Standards::CPPLatest;
         settings->inconclusive = inconclusive;
         settings->experimental = experimental;
 
@@ -220,41 +248,6 @@ private:
 
         check(code, nullptr, false, false, true, &settings);
     }
-
-    void check_preprocess_suppress(const char precode[], const char *filename = nullptr) {
-        // Clear the error buffer..
-        errout.str("");
-
-        if (filename == nullptr)
-            filename = "test.cpp";
-
-        Settings settings;
-        settings.addEnabled("warning");
-        settings.addEnabled("style");
-        settings.addEnabled("performance");
-        settings.experimental = true;
-
-        // Preprocess file..
-        SimpleSuppressor logger(settings, this);
-        Preprocessor preprocessor(settings, &logger);
-        std::list<std::string> configurations;
-        std::string filedata = "";
-        std::istringstream fin(precode);
-        preprocessor.preprocess(fin, filedata, configurations, filename, settings.includePaths);
-        const std::string code = preprocessor.getcode(filedata, "", filename);
-
-        // Tokenize..
-        Tokenizer tokenizer(&settings, &logger);
-        std::istringstream istr(code);
-        tokenizer.tokenize(istr, filename);
-
-        // Check..
-        CheckOther checkOther(&tokenizer, &settings, &logger);
-        checkOther.checkSwitchCaseFallThrough();
-
-        logger.reportUnmatchedSuppressions(settings.nomsg.getUnmatchedLocalSuppressions(filename, false));
-    }
-
 
     void emptyBrackets() {
         check("{\n"
@@ -726,6 +719,15 @@ private:
               "    }\n"
               "    if (b) {\n"
               "        c(i);\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n" // #5398
+              "    bool success = false;\n"
+              "    int notReducable(someClass.getX(&success));\n"
+              "    if (success) {\n"
+              "        foo(notReducable);\n"
               "    }\n"
               "}");
         ASSERT_EQUALS("", errout.str());
@@ -1328,7 +1330,28 @@ private:
         check("void f(const std::string::size_type x) {}");
         ASSERT_EQUALS("", errout.str());
 
-        check("class Foo;\nvoid f(const Foo foo) {}");
+        check("class Foo;\nvoid f(const Foo foo) {}"); // Unknown class
+        ASSERT_EQUALS("[test.cpp:2]: (performance, inconclusive) Function parameter 'foo' should be passed by reference.\n", errout.str());
+
+        check("class Foo { std::vector<int> v; };\nvoid f(const Foo foo) {}"); // Large class (STL member)
+        ASSERT_EQUALS("[test.cpp:2]: (performance) Function parameter 'foo' should be passed by reference.\n", errout.str());
+
+        check("class Foo { int i; };\nvoid f(const Foo foo) {}"); // Small class
+        ASSERT_EQUALS("", errout.str());
+
+        check("class Foo { int i[6]; };\nvoid f(const Foo foo) {}"); // Large class (array)
+        ASSERT_EQUALS("[test.cpp:2]: (performance) Function parameter 'foo' should be passed by reference.\n", errout.str());
+
+        check("class Foo { std::string* s; };\nvoid f(const Foo foo) {}"); // Small class (pointer)
+        ASSERT_EQUALS("", errout.str());
+
+        check("class Foo { static std::string s; };\nvoid f(const Foo foo) {}"); // Small class (static member)
+        ASSERT_EQUALS("", errout.str());
+
+        check("class X { std::string s; }; class Foo : X { };\nvoid f(const Foo foo) {}"); // Large class (inherited)
+        ASSERT_EQUALS("[test.cpp:2]: (performance) Function parameter 'foo' should be passed by reference.\n", errout.str());
+
+        check("class X { std::string s; }; class Foo { X x; };\nvoid f(const Foo foo) {}"); // Large class (inherited)
         ASSERT_EQUALS("[test.cpp:2]: (performance) Function parameter 'foo' should be passed by reference.\n", errout.str());
 
         check("void f(const std::string &str) {}");
@@ -1364,6 +1387,9 @@ private:
         check("void f(const std::streamoff pos) {}");
         ASSERT_EQUALS("", errout.str());
 
+        check("void f(std::initializer_list<int> i) {}");
+        ASSERT_EQUALS("", errout.str());
+
         // #5824
         check("void log(const std::string& file, int line, const std::string& function, const std::string str, ...) {}");
         ASSERT_EQUALS("", errout.str());
@@ -1377,10 +1403,105 @@ private:
               "}; ");
         ASSERT_EQUALS("", errout.str());
 
+        check("class X {\n"
+              "    virtual void func(const std::string str) {}\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:2]: (performance) Function parameter 'str' should be passed by reference.\n", errout.str());
+    }
+
+    void passedByValue_nonConst() {
+        check("void f(std::string str) {}");
+        ASSERT_EQUALS("[test.cpp:1]: (performance) Function parameter 'str' should be passed by reference.\n", errout.str());
+
+        check("void f(std::string str) {\n"
+              "    return str + x;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:1]: (performance) Function parameter 'str' should be passed by reference.\n", errout.str());
+
+        check("void f(std::string str) {\n"
+              "    std::cout << str;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:1]: (performance) Function parameter 'str' should be passed by reference.\n", errout.str());
+
+        check("void f(std::string str) {\n"
+              "    std::cin >> str;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f(std::string str) {\n"
+              "    foo(str);\n" // It could be that foo takes str as non-const-reference
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo(const std::string& str);\n"
+              "void f(std::string str) {\n"
+              "    foo(str);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (performance) Function parameter 'str' should be passed by reference.\n", errout.str());
+
+        check("void foo(std::string str);\n"
+              "void f(std::string str) {\n"
+              "    foo(str);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (performance) Function parameter 'str' should be passed by reference.\n", errout.str());
+
+        check("void foo(std::string& str);\n"
+              "void f(std::string str) {\n"
+              "    foo(str);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo(int& i1, const std::string& str, int& i2);\n"
+              "void f(std::string str) {\n"
+              "    foo((a+b)*c, str, x);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (performance) Function parameter 'str' should be passed by reference.\n", errout.str());
+
+        check("std::string f(std::string str) {\n"
+              "    str += x;\n"
+              "    return str;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("class X {\n"
+              "    std::string s;\n"
+              "    void func() const;\n"
+              "};\n"
+              "Y f(X x) {\n"
+              "    x.func();\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:5]: (performance) Function parameter 'x' should be passed by reference.\n", errout.str());
+
+        check("class X {\n"
+              "    void func();\n"
+              "};\n"
+              "Y f(X x) {\n"
+              "    x.func();\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("class X {\n"
+              "    void func(std::string str) {}\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:2]: (performance) Function parameter 'str' should be passed by reference.\n", errout.str());
+
+        check("class X {\n"
+              "    virtual void func(std::string str) {}\n" // Do not warn about virtual functions, if 'str' is not declared as const
+              "};");
+        ASSERT_EQUALS("", errout.str());
+
+        check("class X {\n"
+              "    uint64_t i;\n"
+              "};\n"
+              "class Y : X {\n"
+              "    uint64_t j;\n"
+              "};\n"
+              "void f(X x, Y y) {\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:7]: (performance) Function parameter 'y' should be passed by reference.\n", errout.str());
     }
 
     void switchRedundantAssignmentTest() {
-
         check("void foo()\n"
               "{\n"
               "    int y = 1;\n"
@@ -1556,8 +1677,8 @@ private:
               "}");
         ASSERT_EQUALS("[test.cpp:8] -> [test.cpp:11]: (warning) Variable 'y' is reassigned a value before the old one has been used. 'break;' missing?\n", errout.str());
 
-        check("void foo(char *str, int a)\n"
-              "{\n"
+        check("void foo(int a) {\n"
+              "    char str[10];\n"
               "    switch (a)\n"
               "    {\n"
               "    case 2:\n"
@@ -1568,8 +1689,8 @@ private:
               "}", 0, false, false, false);
         ASSERT_EQUALS("[test.cpp:6] -> [test.cpp:8]: (warning) Buffer 'str' is being written before its old content has been used. 'break;' missing?\n", errout.str());
 
-        check("void foo(char *str, int a)\n"
-              "{\n"
+        check("void foo(int a) {\n"
+              "    char str[10];\n"
               "    switch (a)\n"
               "    {\n"
               "    case 2:\n"
@@ -1580,8 +1701,8 @@ private:
               "}");
         ASSERT_EQUALS("[test.cpp:6] -> [test.cpp:8]: (warning) Buffer 'str' is being written before its old content has been used. 'break;' missing?\n", errout.str());
 
-        check("void foo(char *str, int a)\n"
-              "{\n"
+        check("void foo(int a) {\n"
+              "    char str[10];\n"
               "    int z = 0;\n"
               "    switch (a)\n"
               "    {\n"
@@ -1595,8 +1716,8 @@ private:
               "}", nullptr, false, false, false);
         ASSERT_EQUALS("[test.cpp:7] -> [test.cpp:10]: (warning) Buffer 'str' is being written before its old content has been used. 'break;' missing?\n", errout.str());
 
-        check("void foo(char *str, int a)\n"
-              "{\n"
+        check("void foo(int a) {\n"
+              "    char str[10];\n"
               "    switch (a)\n"
               "    {\n"
               "    case 2:\n"
@@ -1609,8 +1730,8 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
-        check("void foo(char *str, int a)\n"
-              "{\n"
+        check("void foo(int a) {\n"
+              "    char str[10];\n"
               "    switch (a)\n"
               "    {\n"
               "    case 2:\n"
@@ -2163,307 +2284,6 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
-    void switchFallThroughCase() {
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            break;\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            break;\n"
-            "        case 2:\n"
-            "            continue;\n"
-            "        case 3:\n"
-            "            return;\n"
-            "        case 4:\n"
-            "            exit(1);\n"
-            "        case 5:\n"
-            "            goto end;\n"
-            "        case 6:\n"
-            "            throw e;\n"
-            "        case 7:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 0:\n"
-            "        case 1:\n"
-            "            break;\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            g();\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("[test.cpp:5]: (style) Switch falls through case without comment. 'break;' missing?\n", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            g();\n"
-            "        default:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("[test.cpp:5]: (style) Switch falls through case without comment. 'break;' missing?\n", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            g();\n"
-            "            // fall through\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            g();\n"
-            "            /* FALLTHRU */\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            g();\n"
-            "            break;\n"
-            "            // fall through\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("[test.cpp:7]: (information) Unmatched suppression: switchCaseFallThrough\n", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            {\n"
-            "                break;\n"
-            "            }\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            for (;;) {\n"
-            "                break;\n"
-            "            }\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("[test.cpp:7]: (style) Switch falls through case without comment. 'break;' missing?\n", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            if (b) {\n"
-            "                break;\n"
-            "            } else {\n"
-            "                break;\n"
-            "            }\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            if (b) {\n"
-            "                break;\n"
-            "            } else {\n"
-            "            }\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("[test.cpp:8]: (style) Switch falls through case without comment. 'break;' missing?\n", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            if (b) {\n"
-            "                break;\n"
-            "            }\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("[test.cpp:7]: (style) Switch falls through case without comment. 'break;' missing?\n", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            if (b) {\n"
-            "            } else {\n"
-            "                break;\n"
-            "            }\n"
-            "        case 2:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("[test.cpp:8]: (style) Switch falls through case without comment. 'break;' missing?\n", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "        case 1:\n"
-            "            if (b) {\n"
-            "        case 2:\n"
-            "            } else {\n"
-            "                break;\n"
-            "            }\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("[test.cpp:5]: (style) Switch falls through case without comment. 'break;' missing?\n", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "            int x;\n"
-            "        case 1:\n"
-            "            break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "    case 1:\n"
-            "        g();\n"
-            "        switch (b) {\n"
-            "            case 1:\n"
-            "                return;\n"
-            "            default:\n"
-            "                return;\n"
-            "        }\n"
-            "    case 2:\n"
-            "        break;\n"
-            "    }\n"
-            "}");
-        // This fails because the switch parsing code currently doesn't understand
-        // that all paths after g() actually return. It's a pretty unusual case
-        // (no pun intended).
-        TODO_ASSERT_EQUALS("",
-                           "[test.cpp:11]: (style) Switch falls through case without comment. 'break;' missing?\n", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "    case 1:\n"
-            "#ifndef A\n"
-            "        g();\n"
-            "        // fall through\n"
-            "#endif\n"
-            "    case 2:\n"
-            "        break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "    case 1:\n"
-            "        goto leave;\n"
-            "    case 2:\n"
-            "        break;\n"
-            "    }\n"
-            "leave:\n"
-            "    if (x) {\n"
-            "        g();\n"
-            "        return;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    switch (a) {\n"
-            "    case 1:\n"
-            "        g();\n"
-            "        // fall through\n"
-            "    case 2:\n"
-            "        g();\n"
-            "        // falls through\n"
-            "    case 3:\n"
-            "        g();\n"
-            "        // fall-through\n"
-            "    case 4:\n"
-            "        g();\n"
-            "        // drop through\n"
-            "    case 5:\n"
-            "        g();\n"
-            "        // pass through\n"
-            "    case 5:\n"
-            "        g();\n"
-            "        // no break\n"
-            "    case 5:\n"
-            "        g();\n"
-            "        // fallthru\n"
-            "    case 6:\n"
-            "        g();\n"
-            "        /* fall */\n"
-            "    default:\n"
-            "        break;\n"
-            "    }\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-
-        check_preprocess_suppress(
-            "void foo() {\n"
-            "    // unrelated comment saying 'fall through'\n"
-            "}");
-        ASSERT_EQUALS("", errout.str());
-    }
-
     void unreachableCode() {
         check("void foo(int a) {\n"
               "    while(1) {\n"
@@ -2490,7 +2310,7 @@ private:
 
         Settings settings;
         settings.library.setnoreturn("exit", true);
-        settings.library.argumentChecks["exit"][1] = Library::ArgumentChecks();
+        settings.library.functions["exit"].argumentChecks[1] = Library::ArgumentChecks();
         check("void foo() {\n"
               "    exit(0);\n"
               "    break;\n"
@@ -3556,7 +3376,7 @@ private:
     void duplicateBranch1() {
 
         // tests inspired by http://www.viva64.com/en/b/0149/ ( Comparison between PVS-Studio and cppcheck )
-        // Errors detected in Quake 3: Arena by PVS-Studio: Fragement 2
+        // Errors detected in Quake 3: Arena by PVS-Studio: Fragment 2
         check("void f()\n"
               "{\n"
               "  if (front < 0)\n"
@@ -3747,7 +3567,7 @@ private:
         ASSERT_EQUALS("", errout.str());
 
         // make sure there are not "same expression" fp when there are different ({}) expressions
-        check("void f(long x) { if (({ 1+2; }) == ({3+4};)) {} }");
+        check("void f(long x) { if (({ 1+2; }) == ({3+4;})) {} }");
         ASSERT_EQUALS("", errout.str());
 
         // #5535: Reference named like its type
@@ -3773,7 +3593,7 @@ private:
               "}");
         ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:2]: (style) Same expression on both sides of '|'.\n", errout.str());
 
-        check("void foo(std::string a, std::string b) {\n"
+        check("void foo(const std::string& a, const std::string& b) {\n"
               "  return a.find(b+\"&\") || a.find(\"&\"+b);\n"
               "}");
         ASSERT_EQUALS("", errout.str());
@@ -4033,6 +3853,11 @@ private:
 
         check("void f() {\n"
               "    return A ? x : z;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f(unsigned char c) {\n"
+              "  x = y ? (signed char)c : (unsigned char)c;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }
@@ -4809,17 +4634,31 @@ private:
               "   std::cout << 3 << -1 ;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+        check("void foo() {\n"
+              "   x = (-10+2) << 3;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (portability) Shifting a negative value is technically undefined behaviour\n", errout.str());
 
         check("x = y ? z << $-1 : 0;\n");
         ASSERT_EQUALS("", errout.str());
 
         // Negative LHS
         check("const int x = -1 >> 2;");
-        ASSERT_EQUALS("[test.cpp:1]: (error) Shifting a negative value is undefined behaviour\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:1]: (portability) Shifting a negative value is technically undefined behaviour\n", errout.str());
 
         // #6383 - unsigned type
         check("const int x = (unsigned int)(-1) >> 2;");
         ASSERT_EQUALS("", errout.str());
+
+        // #7814 - UB happening in valueflowcode when it tried to compute shifts.
+        check("int shift1() { return 1 >> -1 ;}\n"
+              "int shift2() { return 1 << -1 ;}\n"
+              "int shift3() { return -1 >> 1 ;}\n"
+              "int shift4() { return -1 << 1 ;}\n");
+        ASSERT_EQUALS("[test.cpp:1]: (error) Shifting by a negative value is undefined behaviour\n"
+                      "[test.cpp:2]: (error) Shifting by a negative value is undefined behaviour\n"
+                      "[test.cpp:3]: (portability) Shifting a negative value is technically undefined behaviour\n"
+                      "[test.cpp:4]: (portability) Shifting a negative value is technically undefined behaviour\n", errout.str());
     }
 
     void incompleteArrayFill() {
@@ -4906,6 +4745,28 @@ private:
               "    i = 1;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (style, inconclusive) Variable 'i' is reassigned a value before the old one has been used if variable is no semaphore variable.\n", errout.str());
+
+        check("void f() {\n"
+              "    int i[10];\n"
+              "    i[2] = 1;\n"
+              "    i[2] = 1;\n"
+              "}", nullptr, false, false, false);
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (style) Variable 'i[2]' is reassigned a value before the old one has been used.\n", errout.str());
+
+        check("void f(int x) {\n"
+              "    int i[10];\n"
+              "    i[x] = 1;\n"
+              "    x=1;\n"
+              "    i[x] = 1;\n"
+              "}", nullptr, false, false, false);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f(const int x) {\n"
+              "    int i[10];\n"
+              "    i[x] = 1;\n"
+              "    i[x] = 1;\n"
+              "}", nullptr, false, false, false);
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (style) Variable 'i[x]' is reassigned a value before the old one has been used.\n", errout.str());
 
         // Testing different types
         check("void f() {\n"
@@ -5041,7 +4902,7 @@ private:
               "    x = 2;\n"
               "    x = z.g();\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:8] -> [test.cpp:9]: (style, inconclusive) Variable 'x' is reassigned a value before the old one has been used if variable is no semaphore variable.\n", errout.str());
+        ASSERT_EQUALS("", errout.str());
 
         // from #3103 (avoid a false negative)
         check("int foo(){\n"
@@ -5097,7 +4958,7 @@ private:
               "    ab.a = 2;\n"
               "    return ab.a;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:5] -> [test.cpp:6]: (style, inconclusive) Variable 'a' is reassigned a value before the old one has been used if variable is no semaphore variable.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:5] -> [test.cpp:6]: (style) Variable 'ab.a' is reassigned a value before the old one has been used.\n", errout.str());
 
         check("struct AB { int a; int b; };\n"
               "\n"
@@ -5234,7 +5095,7 @@ private:
               "    if (memptr)\n"
               "        memptr = 0;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (style) Variable 'memptr' is reassigned a value before the old one has been used.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (style, inconclusive) Variable 'memptr' is reassigned a value before the old one has been used if variable is no semaphore variable.\n", errout.str());
     }
 
     void redundantVarAssignment_7133() {
@@ -5257,52 +5118,58 @@ private:
               "   catch (const uno::Exception&)  {\n"
               "   }\n"
               "}", "test.cpp", false, true);
-        TODO_ASSERT_EQUALS("",
-                           "[test.cpp:6] -> [test.cpp:9]: (style) Variable 'Name' is reassigned a value before the old one has been used.\n",
-                           errout.str());
+        ASSERT_EQUALS("", errout.str());
 
         check("void ConvertBitmapData(sal_uInt16 nDestBits) {\n"
-              "BitmapBuffer aSrcBuf;\n"
+              "    BitmapBuffer aSrcBuf;\n"
               "    aSrcBuf.mnBitCount = nSrcBits;\n"
               "    BitmapBuffer aDstBuf;\n"
               "    aSrcBuf.mnBitCount = nDestBits;\n"
               "    bConverted = ::ImplFastBitmapConversion( aDstBuf, aSrcBuf, aTwoRects );\n"
               "}", "test.c");
-        ASSERT_EQUALS("[test.c:3] -> [test.c:5]: (style) Variable 'mnBitCount' is reassigned a value before the old one has been used.\n", errout.str());
+        ASSERT_EQUALS("[test.c:3] -> [test.c:5]: (style) Variable 'aSrcBuf.mnBitCount' is reassigned a value before the old one has been used.\n", errout.str());
         check("void ConvertBitmapData(sal_uInt16 nDestBits) {\n"
-              "BitmapBuffer aSrcBuf;\n"
+              "    BitmapBuffer aSrcBuf;\n"
               "    aSrcBuf.mnBitCount = nSrcBits;\n"
               "    BitmapBuffer aDstBuf;\n"
               "    aSrcBuf.mnBitCount = nDestBits;\n"
               "    bConverted = ::ImplFastBitmapConversion( aDstBuf, aSrcBuf, aTwoRects );\n"
               "}");
-        TODO_ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:5]: (style, inconclusive) Variable 'mnBitCount' is reassigned a value before the old one has been used.\n",
-                           "[test.cpp:3] -> [test.cpp:5]: (style) Variable 'mnBitCount' is reassigned a value before the old one has been used.\n",
-                           errout.str());
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:5]: (style, inconclusive) Variable 'aSrcBuf.mnBitCount' is reassigned a value before the old one has been used if variable is no semaphore variable.\n",
+                      errout.str());
 
     }
 
     void redundantMemWrite() {
         // Simple tests
-        check("void f(void* a) {\n"
+        check("void f() {\n"
+              "    char a[10];\n"
               "    memcpy(a, foo, bar);\n"
               "    memset(a, 0, bar);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:3]: (performance) Buffer 'a' is being written before its old content has been used.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (performance) Buffer 'a' is being written before its old content has been used.\n", errout.str());
 
-        check("void* a;\n"
-              "void f() {\n"
+        check("void f() {\n"
+              "    char a[10];\n"
               "    strcpy(a, foo);\n"
               "    strncpy(a, 0, bar);\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (performance) Buffer 'a' is being written before its old content has been used.\n", errout.str());
 
         check("void f() {\n"
-              "    void* a = foo();\n"
-              "    sprintf(a, foo);\n"
+              "    char a[10];\n"
+              "    sprintf(a, \"foo\");\n"
               "    memmove(a, 0, bar);\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (performance) Buffer 'a' is being written before its old content has been used.\n", errout.str());
+
+        check("void f(char *filename) {\n"
+              "    char *p = strrchr(filename,'.');\n"
+              "    strcpy(p, \"foo\");\n"
+              "    dostuff(filename);\n"
+              "    strcpy(p, \"foo\");\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
 
         // Writing to different parts of a buffer
         check("void f(void* a) {\n"
@@ -5320,20 +5187,22 @@ private:
         ASSERT_EQUALS("", errout.str());
 
         // strcat is special
-        check("void f(void* a) {\n"
+        check("void f() {\n"
+              "    char a[10];\n"
               "    strcpy(a, foo);\n"
               "    strcat(a, bar);\n" // Not redundant
               "    strcpy(a, x);\n" // Redundant
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:4]: (performance) Buffer 'a' is being written before its old content has been used.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:5]: (performance) Buffer 'a' is being written before its old content has been used.\n", errout.str());
 
         // Tests with function call between copy
-        check("void f(void* a) {\n"
+        check("void f() {\n"
+              "    char a[10];\n"
               "    snprintf(a, foo, bar);\n"
               "    bar();\n"
               "    memset(a, 0, size);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:4]: (performance) Buffer 'a' is being written before its old content has been used.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:5]: (performance) Buffer 'a' is being written before its old content has been used.\n", errout.str());
 
         check("void* a;\n"
               "void f() {\n"
@@ -5344,12 +5213,12 @@ private:
         ASSERT_EQUALS("", errout.str());
 
         check("void f() {\n"
-              "    void* a = foo();\n"
+              "    char a[10];\n"
               "    memset(a, 0, size);\n"
               "    bar();\n"
               "    memset(a, 0, size);\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:5]: (performance) Buffer 'a' is being written before its old content has been used.\n", errout.str());
+        TODO_ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:5]: (performance) Buffer 'a' is being written before its old content has been used.\n", "", errout.str());
 
         check("void bar(void* a) {}\n"
               "void f(void* a) {\n"
@@ -5389,6 +5258,23 @@ private:
               "    return i;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        // #7175 - read+write
+        check("void f() {\n"
+              "    char buf[100];\n"
+              "    strcpy(buf, x);\n"
+              "    strcpy(buf, dostuff(buf));\n" // <- read + write
+              "    strcpy(buf, x);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    char buf[100];\n"
+              "    strcpy(buf, x);\n"
+              "    strcpy(buf, dostuff(buf));\n"
+              "    strcpy(buf, x);\n"
+              "}");
+        TODO_ASSERT_EQUALS("error", "", errout.str());
     }
 
     void varFuncNullUB() { // #4482
@@ -5751,12 +5637,12 @@ private:
         check("int *f(int *x) {\n"
               "    return &*x;\n"
               "}\n", nullptr, false, true);
-        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant pointer operation on x - it's already a pointer.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant pointer operation on 'x' - it's already a pointer.\n", errout.str());
 
         check("int *f(int *y) {\n"
               "    return &(*y);\n"
               "}\n", nullptr, false, true);
-        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant pointer operation on y - it's already a pointer.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant pointer operation on 'y' - it's already a pointer.\n", errout.str());
 
         // no warning for bitwise AND
         check("void f(int *b) {\n"
@@ -5786,14 +5672,14 @@ private:
         check("void f(Mutex *mut) {\n"
               "    pthread_mutex_lock(&*mut);\n"
               "}\n", nullptr, false, false);
-        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant pointer operation on mut - it's already a pointer.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant pointer operation on 'mut' - it's already a pointer.\n", errout.str());
 
         // make sure we got the AST match for "(" right
         check("void f(char *ptr) {\n"
               "    if (&*ptr == NULL)\n"
               "        return;\n"
               "}\n", nullptr, false, true);
-        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant pointer operation on ptr - it's already a pointer.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (style) Redundant pointer operation on 'ptr' - it's already a pointer.\n", errout.str());
 
         // no warning for macros
         check("#define MUTEX_LOCK(m) pthread_mutex_lock(&(m))\n"
@@ -6138,6 +6024,15 @@ private:
               "}");
         ASSERT_EQUALS("[test.cpp:3]: (warning) Label 'caseZERO' is not used. Should this be a 'case' of the enclosing switch()?\n"
                       "[test.cpp:5]: (warning) Label 'case1' is not used. Should this be a 'case' of the enclosing switch()?\n", errout.str());
+
+        check("int test(char art) {\n"
+              "    switch (art) {\n"
+              "    case 2:\n"
+              "        return 2;\n"
+              "    }\n"
+              "    label:\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:6]: (style) Label 'label' is not used.\n", errout.str());
     }
 
     void testEvaluationOrder() {
@@ -6174,7 +6069,7 @@ private:
     }
 
     void testEvaluationOrderMacro() {
-        // macro, dont bailout (#7233)
+        // macro, don't bailout (#7233)
         check((std::string("void f(int x) {\n"
                            "  return x + ") + Preprocessor::macroChar + "x++;\n"
                "}").c_str(), "test.c");
@@ -6219,6 +6114,309 @@ private:
         check("void f(char *buf) {\n"
               "  dostuff(buf++, sizeof(*buf));"
               "}", "test.c");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void testUnsignedLessThanZero() {
+        check("struct d {\n"
+              "  unsigned n;\n"
+              "};\n"
+              "void f(void) {\n"
+              "  struct d d;\n"
+              "  d.n = 3;\n"
+              "\n"
+              "  if (d.n < 0) {\n"
+              "    return;\n"
+              "  }\n"
+              "\n"
+              "  if (0 > d.n) {\n"
+              "    return;\n"
+              "  }\n"
+              "}", "test.c");
+        ASSERT_EQUALS("[test.c:8]: (style) Checking if unsigned variable 'd.n' is less than zero.\n"
+                      "[test.c:12]: (style) Checking if unsigned variable 'd.n' is less than zero.\n",
+                      errout.str());
+    }
+
+    void doubleMove1() {
+        check("void g(A a);\n"
+              "void f() {\n"
+              "    A a;\n"
+              "    g(std::move(a));\n"
+              "    g(std::move(a));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:5]: (warning) Access of moved variable a.\n", errout.str());
+    }
+
+    void doubleMoveMemberInitialization1() {
+        check("class A\n"
+              "{\n"
+              "    A(B && b)\n"
+              "    :b1(std::move(b))\n"
+              "    {\n"
+              "        b2 = std::move(b);\n"
+              "    }\n"
+              "    B b1;\n"
+              "    B b2;\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:6]: (warning) Access of moved variable b.\n", errout.str());
+    }
+
+    void doubleMoveMemberInitialization2() {
+        check("class A\n"
+              "{\n"
+              "    A(B && b)\n"
+              "    :b1(std::move(b)),\n"
+              "     b2(std::move(b))\n"
+              "    {}\n"
+              "    B b1;\n"
+              "    B b2;\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:5]: (warning) Access of moved variable b.\n", errout.str());
+    }
+
+    void moveAndAssign1() {
+        check("A g(A a);\n"
+              "void f() {\n"
+              "    A a;\n"
+              "    a = g(std::move(a));\n"
+              "    a = g(std::move(a));\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void moveAndAssign2() {
+        check("A g(A a);\n"
+              "void f() {\n"
+              "    A a;\n"
+              "    B b = g(std::move(a));\n"
+              "    C c = g(std::move(a));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:5]: (warning) Access of moved variable a.\n", errout.str());
+    }
+
+    void moveAssignMoveAssign() {
+        check("void h(A a);\n"
+              "void f() {"
+              "    A a;\n"
+              "    g(std::move(a));\n"
+              "    h(a);\n"
+              "    a = b;\n"
+              "    h(a);\n"
+              "    g(std::move(a));\n"
+              "    h(a);\n"
+              "    a = b;\n"
+              "    h(a);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Access of moved variable a.\n"
+                      "[test.cpp:8]: (warning) Access of moved variable a.\n", errout.str());
+    }
+
+    void moveAndReset1() {
+        check("A g(A a);\n"
+              "void f() {\n"
+              "    A a;\n"
+              "    a.reset(g(std::move(a)));\n"
+              "    a.reset(g(std::move(a)));\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void moveAndReset2() {
+        check("A g(A a);\n"
+              "void f() {\n"
+              "    A a;\n"
+              "    A b;\n"
+              "    A c;\n"
+              "    b.reset(g(std::move(a)));\n"
+              "    c.reset(g(std::move(a)));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:7]: (warning) Access of moved variable a.\n", errout.str());
+    }
+
+    void moveResetMoveReset() {
+        check("void h(A a);\n"
+              "void f() {"
+              "    A a;\n"
+              "    g(std::move(a));\n"
+              "    h(a);\n"
+              "    a.reset(b);\n"
+              "    h(a);\n"
+              "    g(std::move(a));\n"
+              "    h(a);\n"
+              "    a.reset(b);\n"
+              "    h(a);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Access of moved variable a.\n"
+                      "[test.cpp:8]: (warning) Access of moved variable a.\n", errout.str());
+    }
+
+    void moveAndFunctionParameter() {
+        check("void g(A a);\n"
+              "void f() {\n"
+              "    A a;\n"
+              "    A b = std::move(a);\n"
+              "    g(a);\n"
+              "    A c = a;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:5]: (warning) Access of moved variable a.\n"
+                      "[test.cpp:6]: (warning) Access of moved variable a.\n", errout.str());
+    }
+
+    void moveAndFunctionParameterReference() {
+        check("void g(A & a);\n"
+              "void f() {\n"
+              "    A a;\n"
+              "    A b = std::move(a);\n"
+              "    g(a);\n"
+              "    A c = a;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void moveAndFunctionParameterConstReference() {
+        check("void g(A const & a);\n"
+              "void f() {\n"
+              "    A a;\n"
+              "    A b = std::move(a);\n"
+              "    g(a);\n"
+              "    A c = a;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:5]: (warning) Access of moved variable a.\n"
+                      "[test.cpp:6]: (warning) Access of moved variable a.\n", errout.str());
+    }
+
+    void moveAndFunctionParameterUnknown() {
+        check("void f() {\n"
+              "    A a;\n"
+              "    A b = std::move(a);\n"
+              "    g(a);\n"
+              "    A c = a;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (warning, inconclusive) Access of moved variable a.\n"
+                      "[test.cpp:5]: (warning, inconclusive) Access of moved variable a.\n", errout.str());
+    }
+
+    void moveAndReturn() {
+        check("int f(int i) {\n"
+              "    A a;\n"
+              "    A b;\n"
+              "    g(std::move(a));\n"
+              "    if (i)\n"
+              "        return g(std::move(b));\n"
+              "    return h(std::move(a),std::move(b));\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:7]: (warning) Access of moved variable a.\n", errout.str());
+    }
+
+    void moveAndClear() {
+        check("void f() {\n"
+              "    V v;\n"
+              "    g(std::move(v));\n"
+              "    v.clear();\n"
+              "    if (v.empty()) {}\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void movedPointer() {
+        check("void f() {\n"
+              "    P p;\n"
+              "    g(std::move(p));\n"
+              "    x = p->x;\n"
+              "    y = p->y;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Access of moved variable p.\n"
+                      "[test.cpp:5]: (warning) Access of moved variable p.\n", errout.str());
+    }
+
+    void partiallyMoved() {
+        check("void f() {\n"
+              "    A a;\n"
+              "    gx(std::move(a).x());\n"
+              "    gy(std::move(a).y());\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void moveAndLambda() {
+        check("void f() {\n"
+              "    A a;\n"
+              "    auto h = [a=std::move(a)](){return g(std::move(a));};"
+              "    b = a;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void forwardAndUsed() {
+        check("template<typename T>\n"
+              "void f(T && t) {\n"
+              "    g(std::forward<T>(t));\n"
+              "    T s = t;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Access of forwarded variable t.\n", errout.str());
+    }
+
+    void funcArgNamesDifferent() {
+        check("void func1(int a, int b, int c); \n"
+              "void func1(int a, int b, int c) { }\n"
+              "void func2(int a, int b, int c);\n"
+              "void func2(int A, int B, int C) { }\n"
+              "class Fred {\n"
+              "    void func1(int a, int b, int c); \n"
+              "    void func2(int a, int b, int c);\n"
+              "    void func3(int a = 0, int b = 0, int c = 0);\n"
+              "    void func4(int a = 0, int b = 0, int c = 0);\n"
+              "};\n"
+              "void Fred::func1(int a, int b, int c) { }\n"
+              "void Fred::func2(int A, int B, int C) { }\n"
+              "void Fred::func3(int a, int b, int c) { }\n"
+              "void Fred::func4(int A, int B, int C) { }\n");
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (style, inconclusive) Function 'func2' argument 1 names different: declaration 'a' definition 'A'.\n"
+                      "[test.cpp:3] -> [test.cpp:4]: (style, inconclusive) Function 'func2' argument 2 names different: declaration 'b' definition 'B'.\n"
+                      "[test.cpp:3] -> [test.cpp:4]: (style, inconclusive) Function 'func2' argument 3 names different: declaration 'c' definition 'C'.\n"
+                      "[test.cpp:7] -> [test.cpp:12]: (style, inconclusive) Function 'func2' argument 1 names different: declaration 'a' definition 'A'.\n"
+                      "[test.cpp:7] -> [test.cpp:12]: (style, inconclusive) Function 'func2' argument 2 names different: declaration 'b' definition 'B'.\n"
+                      "[test.cpp:7] -> [test.cpp:12]: (style, inconclusive) Function 'func2' argument 3 names different: declaration 'c' definition 'C'.\n"
+                      "[test.cpp:9] -> [test.cpp:14]: (style, inconclusive) Function 'func4' argument 1 names different: declaration 'a' definition 'A'.\n"
+                      "[test.cpp:9] -> [test.cpp:14]: (style, inconclusive) Function 'func4' argument 2 names different: declaration 'b' definition 'B'.\n"
+                      "[test.cpp:9] -> [test.cpp:14]: (style, inconclusive) Function 'func4' argument 3 names different: declaration 'c' definition 'C'.\n", errout.str());
+    }
+
+    void funcArgOrderDifferent() {
+        check("void func1(int a, int b, int c);\n"
+              "void func1(int a, int b, int c) { }\n"
+              "void func2(int a, int b, int c);\n"
+              "void func2(int c, int b, int a) { }\n"
+              "void func3(int, int b, int c);\n"
+              "void func3(int c, int b, int a) { }\n"
+              "class Fred {\n"
+              "    void func1(int a, int b, int c);\n"
+              "    void func2(int a, int b, int c);\n"
+              "    void func3(int a = 0, int b = 0, int c = 0);\n"
+              "    void func4(int, int b = 0, int c = 0);\n"
+              "};\n"
+              "void Fred::func1(int a, int b, int c) { }\n"
+              "void Fred::func2(int c, int b, int a) { }\n"
+              "void Fred::func3(int c, int b, int a) { }\n"
+              "void Fred::func4(int c, int b, int a) { }\n",
+              nullptr, false, false);
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:4]: (warning) Function 'func2' argument order different: declaration 'a, b, c' definition 'c, b, a'\n"
+                      "[test.cpp:5] -> [test.cpp:6]: (warning) Function 'func3' argument order different: declaration ', b, c' definition 'c, b, a'\n"
+                      "[test.cpp:9] -> [test.cpp:14]: (warning) Function 'func2' argument order different: declaration 'a, b, c' definition 'c, b, a'\n"
+                      "[test.cpp:10] -> [test.cpp:15]: (warning) Function 'func3' argument order different: declaration 'a, b, c' definition 'c, b, a'\n"
+                      "[test.cpp:11] -> [test.cpp:16]: (warning) Function 'func4' argument order different: declaration ', b, c' definition 'c, b, a'\n", errout.str());
+    }
+
+    // #7846 - Syntax error when using C++11 braced-initializer in default argument
+    void cpp11FunctionArgInit() {
+        // syntax error is not expected
+        ASSERT_NO_THROW(check(
+                            "\n void foo(int declaration = {}) {"
+                            "\n   for (int i = 0; i < 10; i++) {}"
+                            "\n }"
+                            "\n  "
+                        ));
         ASSERT_EQUALS("", errout.str());
     }
 };

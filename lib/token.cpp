@@ -65,7 +65,7 @@ void Token::update_property_info()
     if (!_str.empty()) {
         if (_str == "true" || _str == "false")
             _tokType = eBoolean;
-        else if (_str[0] == '_' || std::isalpha((unsigned char)_str[0])) { // Name
+        else if (std::isalpha((unsigned char)_str[0]) || _str[0] == '_' || _str[0] == '$') { // Name
             if (_varId)
                 _tokType = eVariable;
             else if (_tokType != eVariable && _tokType != eFunction && _tokType != eType && _tokType != eKeyword)
@@ -843,7 +843,7 @@ Token * Token::findClosingBracket()
 
 //---------------------------------------------------------------------------
 
-const Token *Token::findsimplematch(const Token *startTok, const char pattern[])
+const Token *Token::findsimplematch(const Token * const startTok, const char pattern[])
 {
     for (const Token* tok = startTok; tok; tok = tok->next()) {
         if (Token::simpleMatch(tok, pattern))
@@ -852,7 +852,7 @@ const Token *Token::findsimplematch(const Token *startTok, const char pattern[])
     return 0;
 }
 
-const Token *Token::findsimplematch(const Token *startTok, const char pattern[], const Token *end)
+const Token *Token::findsimplematch(const Token * const startTok, const char pattern[], const Token * const end)
 {
     for (const Token* tok = startTok; tok && tok != end; tok = tok->next()) {
         if (Token::simpleMatch(tok, pattern))
@@ -861,7 +861,7 @@ const Token *Token::findsimplematch(const Token *startTok, const char pattern[],
     return nullptr;
 }
 
-const Token *Token::findmatch(const Token *startTok, const char pattern[], unsigned int varId)
+const Token *Token::findmatch(const Token * const startTok, const char pattern[], const unsigned int varId)
 {
     for (const Token* tok = startTok; tok; tok = tok->next()) {
         if (Token::Match(tok, pattern, varId))
@@ -870,7 +870,7 @@ const Token *Token::findmatch(const Token *startTok, const char pattern[], unsig
     return nullptr;
 }
 
-const Token *Token::findmatch(const Token *startTok, const char pattern[], const Token *end, unsigned int varId)
+const Token *Token::findmatch(const Token * const startTok, const char pattern[], const Token * const end, const unsigned int varId)
 {
     for (const Token* tok = startTok; tok && tok != end; tok = tok->next()) {
         if (Token::Match(tok, pattern, varId))
@@ -992,7 +992,7 @@ std::string Token::stringifyList(bool varid, bool attributes, bool linenumbers, 
 
     std::ostringstream ret;
 
-    unsigned int lineNumber = _linenr;
+    unsigned int lineNumber = _linenr - (linenumbers ? 1U : 0U);
     unsigned int fileInd = files ? ~0U : _fileIndex;
     std::map<int, unsigned int> lineNumbers;
     for (const Token *tok = this; tok != end; tok = tok->next()) {
@@ -1009,6 +1009,7 @@ std::string Token::stringifyList(bool varid, bool attributes, bool linenumbers, 
                     ret << fileNames->at(tok->_fileIndex);
                 else
                     ret << fileInd;
+                ret << '\n';
             }
 
             lineNumber = lineNumbers[fileInd];
@@ -1019,6 +1020,8 @@ std::string Token::stringifyList(bool varid, bool attributes, bool linenumbers, 
             if (lineNumber+4 < tok->linenr() && fileInd == tok->_fileIndex) {
                 ret << '\n' << lineNumber+1 << ":\n|\n";
                 ret << tok->linenr()-1 << ":\n";
+                ret << tok->linenr() << ": ";
+            } else if (this == tok && linenumbers) {
                 ret << tok->linenr() << ": ";
             } else {
                 while (lineNumber < tok->linenr()) {
@@ -1038,7 +1041,7 @@ std::string Token::stringifyList(bool varid, bool attributes, bool linenumbers, 
         if (tok->next() != end && (!linebreaks || (tok->next()->linenr() <= tok->linenr() && tok->next()->fileIndex() == tok->fileIndex())))
             ret << ' ';
     }
-    if (linebreaks && files)
+    if (linebreaks && (files || linenumbers))
         ret << '\n';
     return ret.str();
 }
@@ -1143,6 +1146,51 @@ bool Token::isUnaryPreOp() const
     return false; // <- guess
 }
 
+static const Token* goToLeftParenthesis(const Token* start, const Token* end)
+{
+    // move start to lpar in such expression: '(*it).x'
+    int par = 0;
+    for (const Token *tok = start; tok && tok != end; tok = tok->next()) {
+        if (tok->str() == "(")
+            ++par;
+        else if (tok->str() == ")") {
+            if (par == 0)
+                start = tok->link();
+            else
+                --par;
+        }
+    }
+    return start;
+}
+
+static const Token* goToRightParenthesis(const Token* start, const Token* end)
+{
+    // move end to rpar in such expression: '2>(x+1)'
+    int par = 0;
+    for (const Token *tok = end; tok && tok != start; tok = tok->previous()) {
+        if (tok->str() == ")")
+            ++par;
+        else if (tok->str() == "(") {
+            if (par == 0)
+                end = tok->link();
+            else
+                --par;
+        }
+    }
+    return end;
+}
+
+static std::string stringFromTokenRange(const Token* start, const Token* end)
+{
+    std::string ret;
+    for (const Token *tok = start; tok && tok != end; tok = tok->next()) {
+        ret += tok->str();
+        if (Token::Match(tok, "%name%|%num% %name%|%num%"))
+            ret += " ";
+    }
+    return ret + end->str();
+}
+
 std::string Token::expressionString() const
 {
     const Token * const top = this;
@@ -1160,39 +1208,10 @@ std::string Token::expressionString() const
         end = end->astOperand2() ? end->astOperand2() : end->astOperand1();
     }
 
-    // move start to lpar in such expression: '(*it).x'
-    int par = 0;
-    for (const Token *tok = start; tok && tok != end; tok = tok->next()) {
-        if (tok->str() == "(")
-            ++par;
-        else if (tok->str() == ")") {
-            if (par == 0)
-                start = tok->link();
-            else
-                --par;
-        }
-    }
+    start = goToLeftParenthesis(start, end);
+    end = goToRightParenthesis(start, end);
 
-    // move end to rpar in such expression: '2>(x+1)'
-    par = 0;
-    for (const Token *tok = end; tok && tok != start; tok = tok->previous()) {
-        if (tok->str() == ")")
-            ++par;
-        else if (tok->str() == "(") {
-            if (par == 0)
-                end = tok->link();
-            else
-                --par;
-        }
-    }
-
-    std::string ret;
-    for (const Token *tok = start; tok && tok != end; tok = tok->next()) {
-        ret += tok->str();
-        if (Token::Match(tok, "%name%|%num% %name%|%num%"))
-            ret += " ";
-    }
-    return ret + end->str();
+    return stringFromTokenRange(start, end);
 }
 
 static void astStringXml(const Token *tok, std::size_t indent, std::ostream &out)
@@ -1306,10 +1325,20 @@ void Token::printValueFlow(bool xml, std::ostream &out) const
         for (std::list<ValueFlow::Value>::const_iterator it=tok->values.begin(); it!=tok->values.end(); ++it) {
             if (xml) {
                 out << "      <value ";
-                if (it->tokvalue)
-                    out << "tokvalue=\"" << it->tokvalue << '\"';
-                else
+                switch (it->valueType) {
+                case ValueFlow::Value::INT:
                     out << "intvalue=\"" << it->intvalue << '\"';
+                    break;
+                case ValueFlow::Value::TOK:
+                    out << "tokvalue=\"" << it->tokvalue << '\"';
+                    break;
+                case ValueFlow::Value::FLOAT:
+                    out << "floatvalue=\"" << it->floatValue << '\"';
+                    break;
+                case ValueFlow::Value::MOVED:
+                    out << "movedvalue=\"" << ValueFlow::Value::toString(it->moveKind) << '\"';
+                    break;
+                }
                 if (it->condition)
                     out << " condition-line=\"" << it->condition->linenr() << '\"';
                 if (it->isKnown())
@@ -1322,10 +1351,20 @@ void Token::printValueFlow(bool xml, std::ostream &out) const
             else {
                 if (it != tok->values.begin())
                     out << ",";
-                if (it->tokvalue)
-                    out << it->tokvalue->str();
-                else
+                switch (it->valueType) {
+                case ValueFlow::Value::INT:
                     out << it->intvalue;
+                    break;
+                case ValueFlow::Value::TOK:
+                    out << it->tokvalue->str();
+                    break;
+                case ValueFlow::Value::FLOAT:
+                    out << it->floatValue;
+                    break;
+                case ValueFlow::Value::MOVED:
+                    out << ValueFlow::Value::toString(it->moveKind);
+                    break;
+                }
             }
         }
         if (xml)
@@ -1344,7 +1383,7 @@ const ValueFlow::Value * Token::getValueLE(const MathLib::bigint val, const Sett
     const ValueFlow::Value *ret = nullptr;
     std::list<ValueFlow::Value>::const_iterator it;
     for (it = values.begin(); it != values.end(); ++it) {
-        if (it->intvalue <= val && !it->tokvalue) {
+        if (it->isIntValue() && it->intvalue <= val) {
             if (!ret || ret->inconclusive || (ret->condition && !it->inconclusive))
                 ret = &(*it);
             if (!ret->inconclusive && !ret->condition)
@@ -1365,7 +1404,7 @@ const ValueFlow::Value * Token::getValueGE(const MathLib::bigint val, const Sett
     const ValueFlow::Value *ret = nullptr;
     std::list<ValueFlow::Value>::const_iterator it;
     for (it = values.begin(); it != values.end(); ++it) {
-        if (it->intvalue >= val && !it->tokvalue) {
+        if (it->isIntValue() && it->intvalue >= val) {
             if (!ret || ret->inconclusive || (ret->condition && !it->inconclusive))
                 ret = &(*it);
             if (!ret->inconclusive && !ret->condition)
@@ -1387,7 +1426,7 @@ const Token *Token::getValueTokenMinStrSize() const
     std::size_t minsize = ~0U;
     std::list<ValueFlow::Value>::const_iterator it;
     for (it = values.begin(); it != values.end(); ++it) {
-        if (it->tokvalue && it->tokvalue->tokType() == Token::eString) {
+        if (it->isTokValue() && it->tokvalue && it->tokvalue->tokType() == Token::eString) {
             std::size_t size = getStrSize(it->tokvalue);
             if (!ret || size < minsize) {
                 minsize = size;
@@ -1404,7 +1443,7 @@ const Token *Token::getValueTokenMaxStrLength() const
     std::size_t maxlength = 0U;
     std::list<ValueFlow::Value>::const_iterator it;
     for (it = values.begin(); it != values.end(); ++it) {
-        if (it->tokvalue && it->tokvalue->tokType() == Token::eString) {
+        if (it->isTokValue() && it->tokvalue && it->tokvalue->tokType() == Token::eString) {
             std::size_t length = getStrLength(it->tokvalue);
             if (!ret || length > maxlength) {
                 maxlength = length;
@@ -1429,7 +1468,7 @@ const Token *Token::getValueTokenDeadPointer() const
     std::list<ValueFlow::Value>::const_iterator it;
     for (it = values.begin(); it != values.end(); ++it) {
         // Is this a pointer alias?
-        if (!it->tokvalue || it->tokvalue->str() != "&")
+        if (!it->isTokValue() || (it->tokvalue && it->tokvalue->str() != "&"))
             continue;
         // Get variable
         const Token *vartok = it->tokvalue->astOperand1();

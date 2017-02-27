@@ -105,9 +105,7 @@ class MatchCompiler:
         elif tok == '%str%':
             return '(tok->tokType()==Token::eString)'
         elif tok == '%type%':
-            return (
-                '(tok->isName() && tok->varId()==0U && !tok->isKeyword())'
-            )
+            return '(tok->isName() && tok->varId()==0U && !tok->isKeyword())'
         elif tok == '%name%':
             return 'tok->isName()'
         elif tok == '%var%':
@@ -162,16 +160,11 @@ class MatchCompiler:
             # a|b|c
             elif tok.find('|') > 0:
                 tokens2 = tok.split('|')
-                logicalOp = None
-                neg = None
+                logicalOp = ' || '
                 if "" in tokens2:
                     ret += '    if (tok && ('
-                    logicalOp = ' || '
-                    neg = ''
                 else:
                     ret += '    if (!tok || !('
-                    logicalOp = ' || '
-                    neg = ''
                 first = True
                 for tok2 in tokens2:
                     if tok2 == '':
@@ -179,14 +172,13 @@ class MatchCompiler:
                     if not first:
                         ret += logicalOp
                     first = False
-                    ret += neg + self._compileCmd(tok2)
+                    ret += self._compileCmd(tok2)
 
+                ret += '))\n'
                 if "" in tokens2:
-                    ret += '))\n'
                     ret += '        tok = tok->next();\n'
                     gotoNextToken = ''
                 else:
-                    ret += '))\n'
                     ret += '        ' + returnStatement
 
             # !!a
@@ -266,16 +258,10 @@ class MatchCompiler:
         pos = 0
         inString = False
         while pos != pos1:
-            if inString:
-                if line[pos] == '\\':
-                    pos += 1
-                elif line[pos] == '"':
-                    inString = False
-            else:
-                if line[pos] == '\\':
-                    pos += 1
-                elif line[pos] == '"':
-                    inString = True
+            if line[pos] == '\\':
+                pos += 1
+            elif line[pos] == '"':
+                inString = not inString
             pos += 1
         return inString
 
@@ -382,7 +368,7 @@ class MatchCompiler:
                 patternNumber) + '(' + tok + more_args + ')' + line[start_pos + end_pos:]
         )
 
-    def _replaceTokenMatch(self, line):
+    def _replaceTokenMatch(self, line, linenr, filename):
         while True:
             is_simplematch = False
             pos1 = line.find('Token::Match(')
@@ -409,7 +395,7 @@ class MatchCompiler:
             res = re.match(r'\s*"((?:.|\\")*?)"\s*$', raw_pattern)
             if res is None:
                 if self._showSkipped:
-                    print("[SKIPPING] match pattern: " + raw_pattern)
+                    print(filename +":" + str(linenr) +" skipping match pattern:" + raw_pattern)
                 break  # Non-const pattern - bailout
 
             pattern = res.group(1)
@@ -515,7 +501,7 @@ class MatchCompiler:
                 findMatchNumber) + '(' + tok + more_args + ') ' + line[start_pos + end_pos:]
         )
 
-    def _replaceTokenFindMatch(self, line):
+    def _replaceTokenFindMatch(self, line, linenr, filename):
         pos1 = 0
         while True:
             is_findsimplematch = True
@@ -531,8 +517,8 @@ class MatchCompiler:
                 break
 
             assert(len(res) >= 3 or len(res) < 6)
-            # assert that Token::find(simple)match has either 2, 3 or
-            # four arguments
+            # assert that Token::find(simple)match has either 2, 3 or 4
+            # arguments
 
             g0 = res[0]
             tok = res[1]
@@ -554,18 +540,15 @@ class MatchCompiler:
             # Token *findmatch(const Token *tok, const char pattern[], const
             # Token *end, unsigned int varId = 0);
             endToken = None
-            if is_findsimplematch is True and len(res) == 4:
+            if ((is_findsimplematch and len(res) == 4) or
+               (not is_findsimplematch and varId and (len(res) == 5)) or
+               (not is_findsimplematch and varId is None and len(res) == 4)):
                 endToken = res[3]
-            elif is_findsimplematch is False:
-                if varId and len(res) == 5:
-                    endToken = res[3]
-                elif varId is None and len(res) == 4:
-                    endToken = res[3]
 
             res = re.match(r'\s*"((?:.|\\")*?)"\s*$', pattern)
             if res is None:
                 if self._showSkipped:
-                    print("[SKIPPING] findmatch pattern: " + pattern)
+                    print(filename +":" + str(linenr) +" skipping findmatch pattern:" + pattern)
                 break  # Non-const pattern - bailout
 
             pattern = res.group(1)
@@ -605,7 +588,7 @@ class MatchCompiler:
     def convertFile(self, srcname, destname, line_directive):
         self._reset()
 
-        fin = io.open(srcname, "rt", encoding="us-ascii")
+        fin = io.open(srcname, "rt", encoding="utf-8")
         srclines = fin.readlines()
         fin.close()
 
@@ -617,12 +600,14 @@ class MatchCompiler:
         # header += '#include <iostream>\n'
         code = ''
 
+        linenr = 0
         for line in srclines:
+            linenr += 1
             # Compile Token::Match and Token::simpleMatch
-            line = self._replaceTokenMatch(line)
+            line = self._replaceTokenMatch(line, linenr, srcname)
 
             # Compile Token::findsimplematch
-            line = self._replaceTokenFindMatch(line)
+            line = self._replaceTokenFindMatch(line, linenr, srcname)
 
             # Cache plain C-strings in C++ strings
             line = self._replaceCStrings(line)
@@ -638,7 +623,7 @@ class MatchCompiler:
         if line_directive:
             lineno = '#line 1 "' + srcname + '"\n'
 
-        fout = io.open(destname, 'wt', encoding="us-ascii")
+        fout = io.open(destname, 'wt', encoding="utf-8")
         fout.write(header + strFunctions + lineno + code)
         fout.close()
 

@@ -46,15 +46,21 @@ void CheckUninitVar::check()
     const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
     std::list<Scope>::const_iterator scope;
 
+    std::set<std::string> arrayTypeDefs;
+    for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
+        if (Token::Match(tok, "%name% [") && tok->variable() && Token::Match(tok->variable()->typeStartToken(), "%type% %var% ;"))
+            arrayTypeDefs.insert(tok->variable()->typeStartToken()->str());
+    }
+
     // check every executable scope
     for (scope = symbolDatabase->scopeList.begin(); scope != symbolDatabase->scopeList.end(); ++scope) {
         if (scope->isExecutable()) {
-            checkScope(&*scope);
+            checkScope(&*scope, arrayTypeDefs);
         }
     }
 }
 
-void CheckUninitVar::checkScope(const Scope* scope)
+void CheckUninitVar::checkScope(const Scope* scope, const std::set<std::string> &arrayTypeDefs)
 {
     for (std::list<Variable>::const_iterator i = scope->varlist.begin(); i != scope->varlist.end(); ++i) {
         if ((_tokenizer->isCPP() && i->type() && !i->isPointer() && i->type()->needInitialization != Type::True) ||
@@ -87,7 +93,7 @@ void CheckUninitVar::checkScope(const Scope* scope)
                 continue;
         }
 
-        bool stdtype = _tokenizer->isC();
+        bool stdtype = _tokenizer->isC() && arrayTypeDefs.find(i->typeStartToken()->str()) == arrayTypeDefs.end();
         const Token* tok = i->typeStartToken();
         for (; tok != i->nameToken() && tok->str() != "<"; tok = tok->next()) {
             if (tok->isStandardType() || tok->isEnumType())
@@ -99,6 +105,10 @@ void CheckUninitVar::checkScope(const Scope* scope)
         while (tok && tok->str() != ";")
             tok = tok->next();
         if (!tok)
+            continue;
+
+        if (tok->astParent() && Token::simpleMatch(tok->astParent()->previous(), "for (") &&
+            checkLoopBody(tok->astParent()->link()->next(), *i, i->isArray() ? ARRAY : NO_ALLOC, "", true))
             continue;
 
         if (i->isArray()) {
@@ -117,12 +127,12 @@ void CheckUninitVar::checkScope(const Scope* scope)
     if (scope->function) {
         for (unsigned int i = 0; i < scope->function->argCount(); i++) {
             const Variable *arg = scope->function->getArgumentVar(i);
-            if (arg && arg->declarationId() && Token::Match(arg->typeStartToken(), "struct| %type% * %name% [,)]")) {
+            if (arg && arg->declarationId() && Token::Match(arg->typeStartToken(), "%type% * %name% [,)]")) {
                 // Treat the pointer as initialized until it is assigned by malloc
                 for (const Token *tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
                     if (Token::Match(tok, "[;{}] %varid% = %name% (", arg->declarationId()) &&
                         _settings->library.returnuninitdata.count(tok->strAt(3)) == 1U) {
-                        if (arg->typeStartToken()->str() == "struct")
+                        if (arg->typeStartToken()->strAt(-1) == "struct" || (arg->type() && arg->type()->isStructType()))
                             checkStruct(tok, *arg);
                         else if (arg->typeStartToken()->isStandardType() || arg->typeStartToken()->isEnumType()) {
                             Alloc alloc = NO_ALLOC;
@@ -138,8 +148,6 @@ void CheckUninitVar::checkScope(const Scope* scope)
 void CheckUninitVar::checkStruct(const Token *tok, const Variable &structvar)
 {
     const Token *typeToken = structvar.typeStartToken();
-    if (typeToken->str() == "struct")
-        typeToken = typeToken->next();
     const SymbolDatabase * symbolDatabase = _tokenizer->getSymbolDatabase();
     for (std::size_t j = 0U; j < symbolDatabase->classAndStructScopes.size(); ++j) {
         const Scope *scope2 = symbolDatabase->classAndStructScopes[j];
@@ -647,8 +655,26 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
             }
             if (var.isPointer() && (var.typeStartToken()->isStandardType() || var.typeStartToken()->isEnumType() || (var.type() && var.type()->needInitialization == Type::True)) && Token::simpleMatch(tok->next(), "= new")) {
                 *alloc = CTOR_CALL;
+
+                // type has constructor(s)
                 if (var.typeScope() && var.typeScope()->numConstructors > 0)
                     return true;
+
+                // standard or enum type: check if new initializes the allocated memory
+                if (var.typeStartToken()->isStandardType() || var.typeStartToken()->isEnumType()) {
+                    // scalar new with initialization
+                    if (Token::Match(tok->next(), "= new %type% ("))
+                        return true;
+
+                    // array new
+                    if (Token::Match(tok->next(), "= new %type% [")) {
+                        const Token* tokClosingBracket=tok->linkAt(4);
+                        // array new with initialization
+                        if (tokClosingBracket && Token::simpleMatch(tokClosingBracket->next(), "( )"))
+                            return true;
+                    }
+                }
+
                 continue;
             }
 
@@ -813,7 +839,8 @@ void CheckUninitVar::checkRhs(const Token *tok, const Variable &var, Alloc alloc
                 uninitvarError(tok, tok->str(), alloc);
             else if (!membervar.empty() && isMemberVariableUsage(tok, var.isPointer(), alloc, membervar))
                 uninitStructMemberError(tok, tok->str() + "." + membervar);
-
+            else if (Token::Match(tok, "%var% ="))
+                break;
         } else if (tok->str() == ";" || (indent==0 && tok->str() == ","))
             break;
         else if (tok->str() == "(")
@@ -868,7 +895,7 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, Alloc al
                 break;
             }
             if (alloc != NO_ALLOC && parent->str() == "(") {
-                if (_settings->library.functionpure.find(parent->strAt(-1)) == _settings->library.functionpure.end()) {
+                if (!_settings->library.isFunctionConst(parent->strAt(-1), true)) {
                     assignment = true;
                     break;
                 }
@@ -918,8 +945,11 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, Alloc al
 
         if (vartok->previous()->str() != "&" || !Token::Match(vartok->tokAt(-2), "[(,=?:]")) {
             if (alloc != NO_ALLOC && vartok->previous()->str() == "*") {
+                // TestUninitVar::isVariableUsageDeref()
                 const Token *parent = vartok->previous()->astParent();
                 if (parent && parent->str() == "=" && parent->astOperand1() == vartok->previous())
+                    return false;
+                if (vartok->variable() && vartok->variable()->dimensions().size() >= 2)
                     return false;
                 return true;
             }
@@ -962,7 +992,7 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, Alloc al
     if (_tokenizer->isCPP() && Token::Match(vartok->next(), "<<|>>")) {
         // Is this calculation done in rhs?
         const Token *tok = vartok;
-        while (tok && Token::Match(tok, "%name%|.|::"))
+        while (Token::Match(tok, "%name%|.|::"))
             tok = tok->previous();
         if (Token::Match(tok, "[;{}]"))
             return false;
@@ -1014,9 +1044,9 @@ int CheckUninitVar::isFunctionParUsage(const Token *vartok, bool pointer, Alloc 
             const Variable *arg = func->getArgumentVar(argumentNumber);
             if (arg) {
                 const Token *argStart = arg->typeStartToken();
-                if (!address && !array && Token::Match(argStart, "struct| %type% %name%| [,)]"))
+                if (!address && !array && Token::Match(argStart, "%type% %name%| [,)]"))
                     return 1;
-                if (pointer && !address && alloc == NO_ALLOC && Token::Match(argStart, "struct| %type% * %name% [,)]"))
+                if (pointer && !address && alloc == NO_ALLOC && Token::Match(argStart,  "%type% * %name% [,)]"))
                     return 1;
                 while (argStart->previous() && argStart->previous()->isName())
                     argStart = argStart->previous();
@@ -1034,7 +1064,7 @@ int CheckUninitVar::isFunctionParUsage(const Token *vartok, bool pointer, Alloc 
         } else {
             const bool isnullbad = _settings->library.isnullargbad(start->previous(), argumentNumber + 1);
             if (pointer && !address && isnullbad && alloc == NO_ALLOC)
-                return true;
+                return 1;
             const bool isuninitbad = _settings->library.isuninitargbad(start->previous(), argumentNumber + 1);
             if (alloc != NO_ALLOC)
                 return isnullbad && isuninitbad;

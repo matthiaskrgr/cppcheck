@@ -75,6 +75,7 @@ private:
         TEST_CASE(noConstructor8); // ticket #4404
         TEST_CASE(noConstructor9); // ticket #4419
         TEST_CASE(noConstructor10); // ticket #6614
+        TEST_CASE(noConstructor11); // ticket #3552
 
         TEST_CASE(forwardDeclaration); // ticket #4290/#3190
 
@@ -558,6 +559,12 @@ private:
               "private:\n"
               "    wxTimer *WxTimer1;\n"
               "};\n");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void noConstructor11() { // #3552
+        check("class Fred { int x; };\n"
+              "union U { int y; Fred fred; };");
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -2800,6 +2807,58 @@ private:
               "};");
 
         ASSERT_EQUALS("", errout.str());
+
+        // Ticket #7068
+        check("struct Foo {\n"
+              "    int * p;\n"
+              "    char c;\n"
+              "    Foo() { memset(p, 0, sizeof(int)); }\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Member variable 'Foo::c' is not initialized in the constructor.\n", errout.str());
+        check("struct Foo {\n"
+              "    int i;\n"
+              "    char c;\n"
+              "    Foo() { memset(&i, 0, sizeof(int)); }\n"
+              "};");
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Member variable 'Foo::c' is not initialized in the constructor.\n", errout.str());
+        check("struct Foo { int f; };\n"
+              "struct Bar { int b; };\n"
+              "struct FooBar {\n"
+              "  FooBar() {\n"
+              "     memset(&foo, 0, sizeof(foo));\n"
+              "  }\n"
+              "  Foo foo;\n"
+              "  Bar bar;\n"
+              "};\n"
+              "int main() {\n"
+              "  FooBar foobar;\n"
+              "  return foobar.foo.f + foobar.bar.b;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Member variable 'FooBar::bar' is not initialized in the constructor.\n", errout.str());
+        check("struct Foo { int f; };\n"
+              "struct Bar { int b; };\n"
+              "struct FooBar {\n"
+              "  FooBar() {\n"
+              "     memset(&this->foo, 0, sizeof(this->foo));\n"
+              "  }\n"
+              "  Foo foo;\n"
+              "  Bar bar;\n"
+              "};\n"
+              "int main() {\n"
+              "  FooBar foobar;\n"
+              "  return foobar.foo.f + foobar.bar.b;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Member variable 'FooBar::bar' is not initialized in the constructor.\n", errout.str());
+
+        // #7755
+        check("struct A {\n"
+              "  A() {\n"
+              "    memset(this->data, 0, 42);\n"
+              "  }\n"
+              "  char data[42];\n"
+              "};");
+        ASSERT_EQUALS("", errout.str());
+
     }
 
     void privateCtor1() {
@@ -2846,41 +2905,38 @@ private:
 
 
     void uninitVarHeader1() {
-        check("#file \"fred.h\"\n"
+        check("#line 1 \"fred.h\"\n"
               "class Fred\n"
               "{\n"
               "private:\n"
               "    unsigned int i;\n"
               "public:\n"
               "    Fred();\n"
-              "};\n"
-              "#endfile");
+              "};\n");
         ASSERT_EQUALS("", errout.str());
     }
 
     void uninitVarHeader2() {
-        check("#file \"fred.h\"\n"
+        check("#line 1 \"fred.h\"\n"
               "class Fred\n"
               "{\n"
               "private:\n"
               "    unsigned int i;\n"
               "public:\n"
               "    Fred() { }\n"
-              "};\n"
-              "#endfile");
+              "};\n");
         ASSERT_EQUALS("[fred.h:6]: (warning) Member variable 'Fred::i' is not initialized in the constructor.\n", errout.str());
     }
 
     void uninitVarHeader3() {
-        check("#file \"fred.h\"\n"
+        check("#line 1 \"fred.h\"\n"
               "class Fred\n"
               "{\n"
               "private:\n"
               "    mutable int i;\n"
               "public:\n"
               "    Fred() { }\n"
-              "};\n"
-              "#endfile");
+              "};\n");
         ASSERT_EQUALS("[fred.h:6]: (warning) Member variable 'Fred::i' is not initialized in the constructor.\n", errout.str());
     }
 

@@ -96,6 +96,7 @@ private:
         TEST_CASE(functioncallDefaultArguments);
         TEST_CASE(nullpointer_internal_error); // #5080
         TEST_CASE(ticket6505);
+        TEST_CASE(subtract);
     }
 
     void check(const char code[], bool inconclusive = false, const char filename[] = "test.cpp") {
@@ -111,12 +112,12 @@ private:
             return;
 
         // Check for redundant code..
-        CheckNullPointer checkNullPointer(&tokenizer, &settings, this);
-        checkNullPointer.nullPointer();
+        CheckNullPointer checkNullPointer;
+        checkNullPointer.runChecks(&tokenizer, &settings, this);
 
         tokenizer.simplifyTokenList2();
 
-        checkNullPointer.nullConstantDereference();
+        checkNullPointer.runSimplifiedChecks(&tokenizer, &settings, this);
     }
 
 
@@ -1538,9 +1539,6 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
-        // #2582 - segmentation fault
-        check("if()");
-
         // #2674 - different functions
         check("class Fred {\n"
               "public:\n"
@@ -1671,7 +1669,7 @@ private:
               "        return;\n"
               "    }\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:3]: (warning) Either the condition 'p==0' is redundant or there is possible null pointer dereference: p.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:3]: (warning) Either the condition 'p==NULL' is redundant or there is possible null pointer dereference: p.\n", errout.str());
 
         // check, and use
         check("void f(struct X *p, int x) {\n"
@@ -1691,7 +1689,7 @@ private:
             ASSERT_EQUALS("", errout.str());
 
             check(code, true);     // inconclusive
-            ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:2]: (warning, inconclusive) Either the condition 'fred==0' is redundant or there is possible null pointer dereference: fred.\n", errout.str());
+            ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:2]: (warning, inconclusive) Either the condition 'fred==NULL' is redundant or there is possible null pointer dereference: fred.\n", errout.str());
         }
 
         check("void f(char *s) {\n"   // #3358
@@ -2010,6 +2008,30 @@ private:
                       "[test.cpp:12]: (error) Possible null pointer dereference: p\n"*/
                       , errout.str());
 
+        check("void f(std::string s1) {\n"
+              "    s1 = nullptr;\n"
+              "    std::string s2 = nullptr;\n"
+              "    std::string s3(nullptr);\n"
+              "    foo(std::string(nullptr));\n"
+              "}", true);
+        ASSERT_EQUALS("[test.cpp:2]: (error) Null pointer dereference\n"
+                      "[test.cpp:3]: (error) Null pointer dereference\n"
+                      "[test.cpp:4]: (error) Null pointer dereference\n"
+                      "[test.cpp:5]: (error) Null pointer dereference\n"
+                      , errout.str());
+
+        check("void f(std::string s1) {\n"
+              "    s1 = NULL;\n"
+              "    std::string s2 = NULL;\n"
+              "    std::string s3(NULL);\n"
+              "    foo(std::string(NULL));\n"
+              "}", true);
+        ASSERT_EQUALS("[test.cpp:2]: (error) Null pointer dereference\n"
+                      "[test.cpp:3]: (error) Null pointer dereference\n"
+                      "[test.cpp:4]: (error) Null pointer dereference\n"
+                      "[test.cpp:5]: (error) Null pointer dereference\n"
+                      , errout.str());
+
         check("void f(std::string s1, const std::string& s2, const std::string* s3) {\n"
               "    void* p = 0;\n"
               "    if (x) { return; }\n"
@@ -2077,6 +2099,20 @@ private:
               "  ASSERT_MESSAGE(\"Error on s\", 0 == s.compare(\"Some text\"));\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        check("void foo(int i, std::string s);\n"
+              "void bar() {\n"
+              "  foo(0, \"\");\n"
+              "  foo(0, 0);\n"
+              "  foo(var, 0);\n"
+              "  foo(var, NULL);\n"
+              "  foo(var, nullptr);\n"
+              "  foo(0, var);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (error) Null pointer dereference\n"
+                      "[test.cpp:5]: (error) Null pointer dereference\n"
+                      "[test.cpp:6]: (error) Null pointer dereference\n"
+                      "[test.cpp:7]: (error) Null pointer dereference\n", errout.str());
     }
 
     void nullpointerStdStream() {
@@ -2136,7 +2172,7 @@ private:
               "}", true);
         ASSERT_EQUALS("", errout.str());
 
-        // #5811 false postive: (error) Null pointer dereference
+        // #5811 false positive: (error) Null pointer dereference
         check("using namespace std;\n"
               "std::string itoip(int ip) {\n"
               "    stringstream out;\n"
@@ -2256,66 +2292,28 @@ private:
         {
             Library library;
             Library::ArgumentChecks arg;
-            library.argumentChecks["x"][1] = arg;
-            library.argumentChecks["x"][2] = arg;
-            library.argumentChecks["x"][3] = arg;
+            library.functions["x"].argumentChecks[1] = arg;
+            library.functions["x"].argumentChecks[2] = arg;
+            library.functions["x"].argumentChecks[3] = arg;
 
-            std::list<const Token *> null, uninit;
-            CheckNullPointer::parseFunctionCall(*xtok, null, &library, 0U);
-            CheckNullPointer::parseFunctionCall(*xtok, uninit, &library, 1U);
+            std::list<const Token *> null;
+            CheckNullPointer::parseFunctionCall(*xtok, null, &library);
             ASSERT_EQUALS(0U, null.size());
-            ASSERT_EQUALS(0U, uninit.size());
         }
 
         // for 1st parameter null pointer is not ok..
         {
             Library library;
             Library::ArgumentChecks arg;
-            library.argumentChecks["x"][1] = arg;
-            library.argumentChecks["x"][2] = arg;
-            library.argumentChecks["x"][3] = arg;
-            library.argumentChecks["x"][1].notnull = true;
+            library.functions["x"].argumentChecks[1] = arg;
+            library.functions["x"].argumentChecks[2] = arg;
+            library.functions["x"].argumentChecks[3] = arg;
+            library.functions["x"].argumentChecks[1].notnull = true;
 
-            std::list<const Token *> null,uninit;
-            CheckNullPointer::parseFunctionCall(*xtok, null, &library, 0U);
-            CheckNullPointer::parseFunctionCall(*xtok, uninit, &library, 1U);
+            std::list<const Token *> null;
+            CheckNullPointer::parseFunctionCall(*xtok, null, &library);
             ASSERT_EQUALS(1U, null.size());
             ASSERT_EQUALS("a", null.front()->str());
-            ASSERT_EQUALS(0U, uninit.size());
-        }
-
-        // for 2nd parameter uninit data is not ok..
-        {
-            Library library;
-            Library::ArgumentChecks arg;
-            library.argumentChecks["x"][1] = arg;
-            library.argumentChecks["x"][2] = arg;
-            library.argumentChecks["x"][3] = arg;
-            library.argumentChecks["x"][2].notuninit = true;
-
-            std::list<const Token *> null,uninit;
-            CheckNullPointer::parseFunctionCall(*xtok, null, &library, 0U);
-            CheckNullPointer::parseFunctionCall(*xtok, uninit, &library, 1U);
-            ASSERT_EQUALS(0U, null.size());
-            ASSERT_EQUALS(1U, uninit.size());
-            ASSERT_EQUALS("b", uninit.front()->str());
-        }
-
-        // for 3rd parameter uninit data is not ok..
-        {
-            Library library;
-            Library::ArgumentChecks arg;
-            library.argumentChecks["x"][1] = arg;
-            library.argumentChecks["x"][2] = arg;
-            library.argumentChecks["x"][3] = arg;
-            library.argumentChecks["x"][3].notuninit = true;
-
-            std::list<const Token *> null,uninit;
-            CheckNullPointer::parseFunctionCall(*xtok, null, &library, 0U);
-            CheckNullPointer::parseFunctionCall(*xtok, uninit, &library, 1U);
-            ASSERT_EQUALS(0U, null.size());
-            ASSERT_EQUALS(1U, uninit.size());
-            ASSERT_EQUALS("c", uninit.front()->str());
         }
     }
 
@@ -2505,7 +2503,7 @@ private:
 
     void ticket6505() {
         check("void foo(MythSocket *socket) {\n"
-              "  bool do_write=false;\n"
+              "  bool do_write=0;\n"
               "  if (socket) {\n"
               "    do_write=something();\n"
               "  }\n"
@@ -2517,6 +2515,20 @@ private:
               "  foo(0);\n"
               "}\n", true, "test.c");
         ASSERT_EQUALS("", errout.str());
+    }
+
+    void subtract() {
+        check("void foo(char *s) {\n"
+              "  p = s - 20;\n"
+              "}\n"
+              "void bar() { foo(0); }\n");
+        ASSERT_EQUALS("[test.cpp:2]: (error) Overflow in pointer arithmetic, NULL pointer is subtracted.\n", errout.str());
+
+        check("void foo(char *s) {\n"
+              "  if (!s) {}\n"
+              "  p = s - 20;\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:3] -> [test.cpp:2]: (warning) Either the condition '!s' is redundant or there is overflow in pointer subtraction.\n", errout.str());
     }
 };
 

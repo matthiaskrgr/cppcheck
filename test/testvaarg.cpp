@@ -200,6 +200,69 @@ private:
               "    va_end(v2);\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        // #7527
+        check("void foo(int flag1, int flag2, ...) {\n"
+              "    switch (flag1) {\n"
+              "    default:\n"
+              "        va_list vargs;\n"
+              "        va_start(vargs, flag2);\n"
+              "        if (flag2) {\n"
+              "            va_end(vargs);\n"
+              "            break;\n"
+              "        }\n"
+              "        int data = va_arg(vargs, int);\n"
+              "        va_end(vargs);\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // #7533
+        check("void action_push(int type, ...) {\n"
+              "    va_list args;\n"
+              "    va_start(args, type);\n"
+              "    switch (push_mode) {\n"
+              "    case UNDO:\n"
+              "        list_add(&act->node, &to_redo);\n"
+              "        break;\n"
+              "    case REDO:\n"
+              "        list_add(&act->node, &to_undo);\n"
+              "        break;\n"
+              "    }\n"
+              "    va_end(args);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void action_push(int type, ...) {\n"
+              "    va_list args;\n"
+              "    va_start(args, type);\n"
+              "    switch (push_mode) {\n"
+              "    case UNDO:\n"
+              "        list_add(&act->node, &to_redo);\n"
+              "        va_end(args);\n"
+              "        break;\n"
+              "    case REDO:\n"
+              "        list_add(&act->node, &to_undo);\n"
+              "        va_end(args);\n"
+              "        break;\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void action_push(int type, ...) {\n"
+              "    va_list args;\n"
+              "    va_start(args, type);\n"
+              "    switch (push_mode) {\n"
+              "    case UNDO:\n"
+              "        list_add(&act->node, &to_redo);\n"
+              "        break;\n"
+              "    case REDO:\n"
+              "        list_add(&act->node, &to_undo);\n"
+              "        va_end(args);\n"
+              "        break;\n"
+              "    }\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:13]: (error) va_list 'args' was opened but not closed by va_end().\n", errout.str());
     }
 
     void va_start_subsequentCalls() {
@@ -236,6 +299,17 @@ private:
               "  BG_TString result(f);\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        // #7559
+        check("void mowgli_object_message_broadcast(mowgli_object_t *self, const char *name, ...) {\n"
+              "  va_list va;\n"
+              "  MOWGLI_LIST_FOREACH(n, self->klass->message_handlers.head) {\n"
+              "    if (!strcasecmp(sig2->name, name))\n"
+              "      break;\n"
+              "  }\n"
+              "  va_start(va, name);\n"
+              "  va_end(va);\n"
+              "}");
     }
 };
 

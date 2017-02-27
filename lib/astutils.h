@@ -22,9 +22,10 @@
 #define astutilsH
 //---------------------------------------------------------------------------
 
-#include <set>
 #include <string>
 
+class Settings;
+class Library;
 class Token;
 
 /** Is expression a 'signed char' if no promotion is used */
@@ -52,7 +53,7 @@ std::string astCanonicalType(const Token *expr);
 /** Is given syntax tree a variable comparison against value */
 const Token * astIsVariableComparison(const Token *tok, const std::string &comp, const std::string &rhs, const Token **vartok=nullptr);
 
-bool isSameExpression(bool cpp, bool macro, const Token *tok1, const Token *tok2, const std::set<std::string> &constFunctions);
+bool isSameExpression(bool cpp, bool macro, const Token *tok1, const Token *tok2, const Library& library, bool pure);
 
 /**
  * Are two conditions opposite
@@ -62,17 +63,27 @@ bool isSameExpression(bool cpp, bool macro, const Token *tok1, const Token *tok2
  * @param cond2  condition2
  * @param constFunctions  constFunctions
  */
-bool isOppositeCond(bool isNot, bool cpp, const Token * const cond1, const Token * const cond2, const std::set<std::string> &constFunctions);
+bool isOppositeCond(bool isNot, bool cpp, const Token * const cond1, const Token * const cond2, const Library& library, bool pure);
 
-bool isConstExpression(const Token *tok, const std::set<std::string> &constFunctions);
+bool isConstExpression(const Token *tok, const Library& library, bool pure);
 
 bool isWithoutSideEffects(bool cpp, const Token* tok);
 
 /** Is scope a return scope (scope will unconditionally return) */
 bool isReturnScope(const Token *endToken);
 
+/** Is variable changed by function call?
+ * In case the answer of the question is inconclusive, e.g. because the function declaration is not known
+ * the return value is false and the output parameter inconclusive is set to true
+ *
+ * @param tok           token of variable in function call
+ * @param settings      program settings
+ * @param inconclusive pointer to output variable which indicates that the answer of the question is inconclusive
+ */
+bool isVariableChangedByFunctionCall(const Token *tok, const Settings *settings, bool *inconclusive);
+
 /** Is variable changed in block of code? */
-bool isVariableChanged(const Token *start, const Token *end, const unsigned int varid);
+bool isVariableChanged(const Token *start, const Token *end, const unsigned int varid, const Settings *settings);
 
 /** Determines the number of arguments - if token is a function call or macro
  * @param start token which is supposed to be the function/macro name.

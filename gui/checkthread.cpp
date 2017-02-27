@@ -25,7 +25,8 @@
 CheckThread::CheckThread(ThreadResult &result) :
     mState(Ready),
     mResult(result),
-    mCppcheck(result, true)
+    mCppcheck(result, true),
+    mAnalyseWholeProgram(false)
 {
     //ctor
 }
@@ -37,16 +38,38 @@ CheckThread::~CheckThread()
 
 void CheckThread::Check(const Settings &settings)
 {
+    mFiles.clear();
     mCppcheck.settings() = settings;
+    start();
+}
+
+void CheckThread::AnalyseWholeProgram(const QStringList &files)
+{
+    mFiles = files;
+    mAnalyseWholeProgram = true;
     start();
 }
 
 void CheckThread::run()
 {
     mState = Running;
-    QString file;
-    file = mResult.GetNextFile();
 
+    if (!mFiles.isEmpty() || mAnalyseWholeProgram) {
+        mAnalyseWholeProgram = false;
+        qDebug() << "Whole program analysis";
+        const std::string &buildDir = mCppcheck.settings().buildDir;
+        if (!buildDir.empty()) {
+            std::map<std::string,std::size_t> files2;
+            for (QString file : mFiles)
+                files2[file.toStdString()] = 0;
+            mCppcheck.analyseWholeProgram(buildDir, files2);
+        }
+        mFiles.clear();
+        emit Done();
+        return;
+    }
+
+    QString file = mResult.GetNextFile();
     while (!file.isEmpty() && mState == Running) {
         qDebug() << "Checking file" << file;
         mCppcheck.check(file.toStdString());
@@ -55,6 +78,18 @@ void CheckThread::run()
         if (mState == Running)
             file = mResult.GetNextFile();
     }
+
+    ImportProject::FileSettings fileSettings = mResult.GetNextFileSettings();
+    while (!fileSettings.filename.empty() && mState == Running) {
+        file = QString::fromStdString(fileSettings.filename);
+        qDebug() << "Checking file" << file;
+        mCppcheck.check(fileSettings);
+        emit FileChecked(file);
+
+        if (mState == Running)
+            fileSettings = mResult.GetNextFileSettings();
+    }
+
     if (mState == Running)
         mState = Ready;
     else

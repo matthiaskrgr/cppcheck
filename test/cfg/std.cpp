@@ -23,6 +23,8 @@
 #include <iostream>
 #include <iomanip>
 #include <cinttypes>
+#include <istream>
+#include <fstream>
 
 void bufferAccessOutOfBounds(void)
 {
@@ -2984,17 +2986,42 @@ void uninitvar_find(std::string s)
     (void)s.find(pc,0);
     // cppcheck-suppress uninitvar
     (void)s.find(pc,pos);
+    // cppcheck-suppress uninitvar
+    (void)s.find("test",pos);
 
     // testing of size_t find (char c, size_t pos = 0) const;
     char c;
     // cppcheck-suppress uninitvar
     (void)s.find(c,pos);
-    /*
-        // testing of size_t find (const char* pc, size_t pos, size_t n) const;
-        size_t n;
-        // cppcheck-suppress uninitvar
-        (void)s.find(pc,pos,n); // #6991
-    */
+
+    // testing of size_t find (const char* pc, size_t pos, size_t n) const;
+    size_t n;
+    // cppcheck-suppress uninitvar
+    (void)s.find(pc,pos,n); // #6991
+    // cppcheck-suppress uninitvar
+    (void)s.find("test",pos,n);
+    // cppcheck-suppress uninitvar
+    (void)s.find("test",1,n);
+    // cppcheck-suppress uninitvar
+    (void)s.find("test",pos,1);
+    // cppcheck-suppress uninitvar
+    (void)s.find(pc,1,1);
+}
+
+void uninivar_ifstream_read(std::ifstream &f)
+{
+    int size;
+    char buffer[10];
+    // cppcheck-suppress uninitvar
+    f.read(buffer, size);
+}
+
+void uninivar_istream_read(std::istream &f)
+{
+    int size;
+    char buffer[10];
+    // cppcheck-suppress uninitvar
+    f.read(buffer, size);
 }
 
 void invalidFunctionArgBool_abs(bool b, double x, double y)
@@ -3012,7 +3039,20 @@ void ignoredReturnValue_abs(int i)
     // cppcheck-suppress ignoredReturnValue
     std::abs(i);
     // cppcheck-suppress constStatement
+    // cppcheck-suppress ignoredReturnValue
     std::abs(-199);
+}
+
+void nullPointer_ifstream_read(std::ifstream &f)
+{
+    // cppcheck-suppress nullPointer
+    f.read(NULL, 10);
+}
+
+void nullPointer_istream_read(std::istream &f)
+{
+    // cppcheck-suppress nullPointer
+    f.read(NULL, 10);
 }
 
 void nullPointer_asctime(void)
@@ -3116,4 +3156,68 @@ void nullPointer_wmemcmp(wchar_t *p)
 {
     // cppcheck-suppress nullPointer
     (void)std::wmemcmp(p, 0, 123);
+}
+
+///////////////////////////////////////////////////////////////////////
+//  <algorithm>
+///////////////////////////////////////////////////////////////////////
+
+#include <algorithm>
+#include <list>
+
+#define pred    [](int i){return i==0;}
+
+
+void stdalgorithm(const std::list<int> &ints1, const std::list<int> &ints2)
+{
+    // <!-- InputIterator std::find(InputIterator first, InputIterator last, T val) -->
+    // cppcheck-suppress mismatchingContainers
+    // cppcheck-suppress ignoredReturnValue
+    std::find(ints1.begin(), ints2.end(), 123);
+    // cppcheck-suppress mismatchingContainers
+    if (std::find(ints1.begin(), ints1.end(), 123) == ints2.end()) {}
+
+    // <!-- InputIterator std::find_if(InputIterator first, InputIterator last, UnaryPredicate val) -->
+    // cppcheck-suppress mismatchingContainers
+    // cppcheck-suppress ignoredReturnValue
+    std::find_if(ints1.begin(), ints2.end(), pred);
+    // cppcheck-suppress mismatchingContainers
+    if (std::find_if(ints1.begin(), ints1.end(), pred) == ints2.end()) {}
+
+    // <!-- InputIterator std::find_if_not(InputIterator first, InputIterator last, UnaryPredicate val) -->
+    // cppcheck-suppress mismatchingContainers
+    // cppcheck-suppress ignoredReturnValue
+    std::find_if_not(ints1.begin(), ints2.end(), pred);
+    // cppcheck-suppress mismatchingContainers
+    if (std::find_if_not(ints1.begin(), ints1.end(), pred) == ints2.end()) {}
+
+    // <!-- bool std::all_of(InputIterator first, InputIterator last, UnaryPredicate pred) -->
+    // cppcheck-suppress mismatchingContainers
+    // cppcheck-suppress ignoredReturnValue
+    std::all_of(ints1.begin(), ints2.end(), pred);
+
+    // <!-- bool std::any_of(InputIterator first, InputIterator last, UnaryPredicate pred) -->
+    // cppcheck-suppress mismatchingContainers
+    // cppcheck-suppress ignoredReturnValue
+    std::any_of(ints1.begin(), ints2.end(), pred);
+
+    // <!-- bool std::none_of(InputIterator first, InputIterator last, UnaryPredicate pred) -->
+    // cppcheck-suppress mismatchingContainers
+    // cppcheck-suppress ignoredReturnValue
+    std::none_of(ints1.begin(), ints2.end(), pred);
+
+    // <!-- difference_type std::count(InputIterator first, InputIterator last, T val) -->
+    // cppcheck-suppress mismatchingContainers
+    // cppcheck-suppress ignoredReturnValue
+    std::count(ints1.begin(), ints2.end(), 123);
+
+    // <!-- difference_type std::count_if(InputIterator first, InputIterator last, UnaryPredicate val) -->
+    // cppcheck-suppress mismatchingContainers
+    // cppcheck-suppress ignoredReturnValue
+    std::count_if(ints1.begin(), ints2.end(), pred);
+
+    // <!-- Function std::for_each(InputIterator first, InputIterator last, Function func) -->
+    // cppcheck-suppress mismatchingContainers
+    std::for_each(ints1.begin(), ints2.end(), [](int i) {});
+
 }

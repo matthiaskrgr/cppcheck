@@ -121,7 +121,7 @@ bool CheckAutoVariables::isAutoVarArray(const Token *tok)
     if (var->isPointer() && !var->isArgument()) {
         for (std::list<ValueFlow::Value>::const_iterator it = tok->values.begin(); it != tok->values.end(); ++it) {
             const ValueFlow::Value &val = *it;
-            if (val.tokvalue && isAutoVarArray(val.tokvalue))
+            if (val.isTokValue() && isAutoVarArray(val.tokvalue))
                 return true;
         }
     }
@@ -178,15 +178,20 @@ void CheckAutoVariables::assignFunctionArg()
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
         for (const Token *tok = scope->classStart; tok && tok != scope->classEnd; tok = tok->next()) {
-            if (Token::Match(tok, "[;{}] %var% =|++|--") &&
-                isNonReferenceArg(tok->next()) &&
-                !Token::Match(tok->tokAt(2), "= %varid% ;", tok->next()->varId()) &&
-                !variableIsUsedInScope(Token::findsimplematch(tok->tokAt(2), ";"), tok->next()->varId(), scope) &&
-                !Token::findsimplematch(tok, "goto", scope->classEnd)) {
-                if (tok->next()->variable()->isPointer() && printWarning)
-                    errorUselessAssignmentPtrArg(tok->next());
+            // TODO: What happens if this is removed?
+            if (tok->astParent())
+                continue;
+            if (!Token::Match(tok, "=|++|--") || !Token::Match(tok->astOperand1(), "%var%"))
+                continue;
+            const Token* const vartok = tok->astOperand1();
+            if (isNonReferenceArg(vartok) &&
+                !Token::Match(vartok->next(), "= %varid% ;", vartok->varId()) &&
+                !variableIsUsedInScope(Token::findsimplematch(vartok->next(), ";"), vartok->varId(), scope) &&
+                !Token::findsimplematch(vartok, "goto", scope->classEnd)) {
+                if (vartok->variable()->isPointer() && printWarning)
+                    errorUselessAssignmentPtrArg(vartok);
                 else if (printStyle)
-                    errorUselessAssignmentArg(tok->next());
+                    errorUselessAssignmentArg(vartok);
             }
         }
     }
@@ -396,6 +401,8 @@ static bool astHasAutoResult(const Token *tok)
         return false;
 
     if (tok->isOp()) {
+        if (tok->tokType() == Token::eIncDecOp)
+            return false;
         if ((tok->str() == "<<" || tok->str() == ">>") && tok->astOperand1()) {
             const Token* tok2 = tok->astOperand1();
             while (tok2 && tok2->str() == "*" && !tok2->astOperand2())
@@ -475,8 +482,13 @@ void CheckAutoVariables::returnReference()
 
                 // Skip over lambdas
                 tok2 = skipLambda(tok2);
+                if (!tok2)
+                    break;
 
-                if (!tok2 || tok2->str() != "return")
+                if (tok2->str() == "(")
+                    tok2 = tok2->link();
+
+                if (tok2->str() != "return")
                     continue;
 
                 // return..

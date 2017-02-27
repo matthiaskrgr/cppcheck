@@ -47,6 +47,7 @@ public:
     void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
         CheckNullPointer checkNullPointer(tokenizer, settings, errorLogger);
         checkNullPointer.nullPointer();
+        checkNullPointer.arithmetic();
     }
 
     /** @brief Run checks against the simplified token list */
@@ -60,13 +61,10 @@ public:
      * @param tok first token
      * @param var variables that the function read / write.
      * @param library --library files data
-     * @param value 0 => invalid with null pointers as parameter.
-     *              non-zero => invalid with uninitialized data.
      */
     static void parseFunctionCall(const Token &tok,
                                   std::list<const Token *> &var,
-                                  const Library *library,
-                                  unsigned char value);
+                                  const Library *library);
 
     /**
      * Is there a pointer dereference? Everything that should result in
@@ -96,6 +94,7 @@ private:
         c.nullPointerError(nullptr);
         c.nullPointerError(nullptr, "pointer", false, true, true);
         c.nullPointerError(nullptr, "pointer", nullptr, false);
+        c.arithmeticError(nullptr, nullptr);
     }
 
     /** Name of check */
@@ -106,7 +105,8 @@ private:
     /** class info in WIKI format. Used by --doc */
     std::string classInfo() const {
         return "Null pointers\n"
-               "- null pointer dereferencing\n";
+               "- null pointer dereferencing\n"
+               "- undefined null pointer arithmetic\n";
     }
 
     /**
@@ -120,6 +120,10 @@ private:
      * Dereferencing a pointer and then checking if it's NULL..
      */
     void nullPointerByDeRefAndChec();
+
+    /** undefined null pointer arithmetic */
+    void arithmetic();
+    void arithmeticError(const Token *tok, const ValueFlow::Value *value);
 };
 /// @}
 //---------------------------------------------------------------------------

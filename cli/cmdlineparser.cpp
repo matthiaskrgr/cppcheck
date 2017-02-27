@@ -120,6 +120,12 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
                 return true;
             }
 
+            else if (std::strncmp(argv[i], "--cppcheck-build-dir=", 21) == 0) {
+                _settings->buildDir = Path::fromNativeSeparators(argv[i] + 21);
+                if (_settings->buildDir.back() == '/')
+                    _settings->buildDir.erase(_settings->buildDir.size() - 1U);
+            }
+
             // Flag used for various purposes during debugging
             else if (std::strcmp(argv[i], "--debug") == 0)
                 _settings->debug = _settings->debugwarnings = true;
@@ -291,6 +297,9 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
 
             // Append user-defined code to checked source code
             else if (std::strncmp(argv[i], "--append=", 9) == 0) {
+                // This is deprecated and will be removed in 1.80
+                PrintMessage("cppcheck: '--append' is deprecated and will be removed in version 1.80. To supply additional information to cppcheck, use --library or --include.");
+
                 const std::string filename = 9 + argv[i];
                 if (!_settings->append(filename)) {
                     PrintMessage("cppcheck: Couldn't open the file: \"" + filename + "\".");
@@ -478,6 +487,13 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
                     return false;
             }
 
+            // --project
+            else if (std::strncmp(argv[i], "--project=", 10) == 0) {
+                _settings->project.import(argv[i]+10);
+                if (std::strstr(argv[i], ".sln") || std::strstr(argv[i], ".vcxproj"))
+                    CppCheckExecutor::tryLoadLibrary(_settings->library, argv[0], "windows");
+            }
+
             // Report progress
             else if (std::strcmp(argv[i], "--report-progress") == 0) {
                 _settings->reportProgress = true;
@@ -631,7 +647,7 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
             // Rule file
             else if (std::strncmp(argv[i], "--rule-file=", 12) == 0) {
                 tinyxml2::XMLDocument doc;
-                if (doc.LoadFile(12+argv[i]) == tinyxml2::XML_NO_ERROR) {
+                if (doc.LoadFile(12+argv[i]) == tinyxml2::XML_SUCCESS) {
                     tinyxml2::XMLElement *node = doc.FirstChildElement();
                     for (; node && strcmp(node->Value(), "rule") == 0; node = node->NextSiblingElement()) {
                         Settings::Rule rule;
@@ -734,6 +750,8 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
         }
     }
 
+    _settings->project.ignorePaths(_ignoredPaths);
+
     if (_settings->force)
         _settings->maxConfigs = ~0U;
 
@@ -744,8 +762,12 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
         PrintMessage("cppcheck: unusedFunction check can't be used with '-j' option. Disabling unusedFunction check.");
     }
 
-    if (_settings->inconclusive && _settings->xml && _settings->xml_version == 1U) {
-        PrintMessage("cppcheck: inconclusive messages will not be shown, because the old xml format is not compatible. It's recommended to use the new xml format (use --xml-version=2).");
+    if (_settings->xml) {
+        // Warn about XML format 1, which will be removed in cppcheck 1.81
+        if (_settings->xml_version == 1U)
+            PrintMessage("cppcheck: XML format version 1 is deprecated and will be removed in cppcheck 1.81. Use '--xml-version=2'.");
+        if (_settings->inconclusive && _settings->xml_version == 1U)
+            PrintMessage("cppcheck: inconclusive messages will not be shown, because the old xml format is not compatible.");
     }
 
     if (argc <= 1) {
@@ -759,7 +781,7 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
     }
 
     // Print error only if we have "real" command and expect files
-    if (!_exitAfterPrint && _pathnames.empty()) {
+    if (!_exitAfterPrint && _pathnames.empty() && _settings->project.fileSettings.empty()) {
         PrintMessage("cppcheck: No C or C++ source files found.");
         return false;
     }
@@ -781,8 +803,10 @@ void CmdLineParser::PrintHelp()
               "If a directory is given instead of a filename, *.cpp, *.cxx, *.cc, *.c++, *.c,\n"
               "*.tpp, and *.txx files are checked recursively from the given directory.\n\n"
               "Options:\n"
-              "    --append=<file>      This allows you to provide information about functions\n"
-              "                         by providing an implementation for them.\n"
+              "    --cppcheck-build-dir=<dir>\n"
+              "                         Analysis output directory. Useful for various data.\n"
+              "                         Some possible usages are; whole program analysis,\n"
+              "                         incremental analysis, distributed analysis.\n"
               "    --check-config       Check cppcheck configuration. The normal code\n"
               "                         analysis is disabled by this flag.\n"
               "    --check-library      Show information messages when library files have\n"
@@ -838,6 +862,7 @@ void CmdLineParser::PrintHelp()
               "                         provided. Note that your operating system can modify\n"
               "                         this value, e.g. '256' can become '0'.\n"
               "    --errorlist          Print a list of all the error messages in XML format.\n"
+              "    --doc                Print a list of all available checks.\n"
               "    --exitcode-suppressions=<file>\n"
               "                         Used when certain messages should be displayed but\n"
               "                         should not cause a non-zero exitcode.\n"
@@ -885,14 +910,19 @@ void CmdLineParser::PrintHelp()
               "    --language=<language>, -x <language>\n"
               "                         Forces cppcheck to check all files as the given\n"
               "                         language. Valid values are: c, c++\n"
-              "    --library=<cfg>\n"
-              "                         Load file <cfg> that contains information about types\n"
+              "    --library=<cfg>      Load file <cfg> that contains information about types\n"
               "                         and functions. With such information Cppcheck\n"
               "                         understands your your code better and therefore you\n"
               "                         get better results. The std.cfg file that is\n"
               "                         distributed with Cppcheck is loaded automatically.\n"
               "                         For more information about library files, read the\n"
               "                         manual.\n"
+              "    --project=<file>     Run Cppcheck on project. The <file> can be a Visual\n"
+              "                         Studio Solution (*.sln), Visual Studio Project\n"
+              "                         (*.vcxproj), or compile database\n"
+              "                         (compile_commands.json). The files to analyse,\n"
+              "                         include paths, defines, platform and undefines in\n"
+              "                         the specified file will be used.\n"
               "    --max-configs=<limit>\n"
               "                         Maximum number of configurations to check in a file\n"
               "                         before skipping it. Default is '12'. If used together\n"
@@ -981,5 +1011,5 @@ void CmdLineParser::PrintHelp()
               "  cppcheck -I inc1/ -I inc2/ f.cpp\n"
               "\n"
               "For more information:\n"
-              "    http://cppcheck.sourceforge.net/manual.pdf\n";
+              "    http://cppcheck.net/manual.pdf\n";
 }

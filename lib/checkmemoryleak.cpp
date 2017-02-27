@@ -39,9 +39,10 @@ namespace {
 }
 
 // CWE ID used:
-static const CWE CWE398(398U);
-static const CWE CWE771(771U);
-static const CWE CWE772(772U);
+static const CWE CWE398(398U);  // Indicator of Poor Code Quality
+static const CWE CWE401(401U);  // Improper Release of Memory Before Removing Last Reference ('Memory Leak')
+static const CWE CWE771(771U);  // Missing Reference to Active Allocated Resource
+static const CWE CWE772(772U);  // Missing Release of Resource after Effective Lifetime
 
 /**
  * Count function parameters
@@ -266,7 +267,7 @@ CheckMemoryLeak::AllocType CheckMemoryLeak::getDeallocationType(const Token *tok
 
 //--------------------------------------------------------------------------
 
-void CheckMemoryLeak::memoryLeak(const Token *tok, const std::string &varname, AllocType alloctype)
+void CheckMemoryLeak::memoryLeak(const Token *tok, const std::string &varname, AllocType alloctype) const
 {
     if (alloctype == CheckMemoryLeak::File ||
         alloctype == CheckMemoryLeak::Pipe ||
@@ -385,6 +386,9 @@ CheckMemoryLeak::AllocType CheckMemoryLeak::functionReturnType(const Function* f
         if (Token::Match(tok, "[(,] & %varid% [.,)]", varid)) {
             return No;
         }
+        if (Token::Match(tok, "[;{}] %varid% .", varid)) {
+            return No;
+        }
         if (allocType == No && tok->str() == "return")
             return No;
     }
@@ -493,7 +497,7 @@ static bool alwaysTrue(const Token *tok)
 
 bool CheckMemoryLeakInFunction::test_white_list(const std::string &funcname, const Settings *settings, bool cpp)
 {
-    return ((call_func_white_list.find(funcname)!=call_func_white_list.end()) || (settings->library.leakignore.find(funcname) != settings->library.leakignore.end()) || (cpp && funcname == "delete"));
+    return ((call_func_white_list.find(funcname)!=call_func_white_list.end()) || settings->library.isLeakIgnore(funcname) || (cpp && funcname == "delete"));
 }
 
 namespace {
@@ -711,7 +715,9 @@ Token *CheckMemoryLeakInFunction::getcode(const Token *tok, std::list<const Toke
 
             // function calls are interesting..
             const Token *tok2 = tok;
-            while (Token::Match(tok2->next(), "%name% ."))
+            if (Token::Match(tok2, "[{};] :: %name%"))
+                tok2 = tok2->next();
+            while (Token::Match(tok2->next(), "%name% ::|. %name%"))
                 tok2 = tok2->tokAt(2);
             if (Token::Match(tok2->next(), "%name% ("))
                 ;
@@ -907,6 +913,9 @@ Token *CheckMemoryLeakInFunction::getcode(const Token *tok, std::list<const Toke
             }
 
             if (Token::Match(tok->previous(), "%op%|;|{|}|) ::| %name%") || (Token::Match(tok->previous(), "( ::| %name%") && (!rettail || rettail->str() != "loop"))) {
+                if (tok->str() == "::")
+                    tok = tok->next();
+
                 if (Token::Match(tok, "%varid% ?", varid))
                     tok = tok->tokAt(2);
 
@@ -1314,7 +1323,7 @@ Token *CheckMemoryLeakInFunction::getcode(const Token *tok, std::list<const Toke
                     parent = parent->astParent();
                 if (parent && parent->astOperand1() && parent->astOperand1()->isName()) {
                     const std::string &functionName = parent->astOperand1()->str();
-                    if (_settings->library.leakignore.find(functionName) != _settings->library.leakignore.end())
+                    if (_settings->library.isLeakIgnore(functionName))
                         leakignore = true;
                 }
             }
@@ -1689,6 +1698,13 @@ void CheckMemoryLeakInFunction::simplifycode(Token *tok) const
                 done = false;
             }
 
+            // Ticket #7745
+            // Delete "if (!var) { alloc ; dealloc }" blocks
+            if (Token::simpleMatch(tok2->next(), "if(!var) { alloc ; dealloc ; }")) {
+                tok2->deleteNext(7);
+                done = false;
+            }
+
             // Reduce "do { alloc ; } " => "alloc ;"
             /** @todo If the loop "do { alloc ; }" can be executed twice, reduce it to "loop alloc ;" */
             if (Token::simpleMatch(tok2->next(), "do { alloc ; }")) {
@@ -1957,12 +1973,16 @@ const Token *CheckMemoryLeakInFunction::findleak(const Token *tokens)
         return result->tokAt(2);
     }
 
+    if ((result = Token::findmatch(tokens, "alloc ; loop|while1 {| alloc ;")) != nullptr) {
+        return result->tokAt(3 + (result->strAt(3) == "{"));
+    }
+
     if ((result = Token::findsimplematch(tokens, "; alloc ; if assign ;")) != nullptr) {
         return result->tokAt(4);
     }
 
-    if (((result = Token::findsimplematch(tokens, "; alloc ; if dealloc ; }")) != nullptr) &&
-        !result->tokAt(7)) {
+    if (((result = Token::findsimplematch(tokens, "; alloc ; if dealloc ; }")) != nullptr) ||
+        ((result = Token::findsimplematch(tokens, "; alloc ; if dealloc ; return ;")) != nullptr)) {
         return result->tokAt(6);
     }
 
@@ -2177,8 +2197,8 @@ void CheckMemoryLeakInFunction::check()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-
-        checkScope(scope->classStart->next(), "", 0, scope->functionOf != nullptr, 1);
+        if (!scope->hasInlineOrLambdaFunction())
+            checkScope(scope->classStart->next(), "", 0, scope->functionOf != nullptr, 1);
     }
 
     // Check variables..
@@ -2195,6 +2215,9 @@ void CheckMemoryLeakInFunction::check()
 
         // check for known class without implementation (forward declaration)
         if (var->isPointer() && var->type() && !var->typeScope())
+            continue;
+
+        if (var->scope()->hasInlineOrLambdaFunction())
             continue;
 
         unsigned int sz = _tokenizer->sizeOfType(var->typeStartToken());
@@ -2746,6 +2769,6 @@ void CheckMemoryLeakNoVar::unsafeArgAllocError(const Token *tok, const std::stri
     const std::string factoryFunc = ptrType == "shared_ptr" ? "make_shared" : "make_unique";
     reportError(tok, Severity::warning, "leakUnsafeArgAlloc",
                 "Unsafe allocation. If " + funcName + "() throws, memory could be leaked. Use " + factoryFunc + "<" + objType + ">() instead.",
-                CWE(0U),
+                CWE401,
                 true); // Inconclusive because funcName may never throw
 }

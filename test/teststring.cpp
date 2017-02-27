@@ -88,6 +88,24 @@ private:
               "  abc[0] = 'a';\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        check("void foo_FP1(char *p) {\n"
+              "  p[1] = 'B';\n"
+              "}\n"
+              "void foo_FP2(void) {\n"
+              "  char* s = \"Y\";\n"
+              "  foo_FP1(s);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2] -> [test.cpp:5]: (error) Modifying string literal \"Y\" directly or indirectly is undefined behaviour.\n", errout.str());
+
+        check("void foo_FP1(char *p) {\n"
+              "  p[1] = 'B';\n"
+              "}\n"
+              "void foo_FP2(void) {\n"
+              "  char s[10] = \"Y\";\n"
+              "  foo_FP1(s);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void alwaysTrueFalseStringCompare() {
@@ -349,7 +367,7 @@ private:
 
     void suspiciousStringCompare_char() {
         check("bool foo(char* c) {\n"
-              "    return c == '\\0';\n"
+              "    return c == 'x';\n"
               "}");
         ASSERT_EQUALS("[test.cpp:2]: (warning) Char literal compared with pointer 'c'. Did you intend to dereference it?\n", errout.str());
 

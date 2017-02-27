@@ -258,6 +258,30 @@ private:
                                   "    virtual int i() = 0;\n"
                                   "};");
         ASSERT_EQUALS("", errout.str());
+
+        // #7465: Error properly reported in templates
+        checkExplicitConstructors("template <class T> struct Test {\n"
+                                  "  Test(int) : fData(0) {}\n"
+                                  "  T fData;\n"
+                                  "};\n"
+                                  "int main() {\n"
+                                  "  Test <int> test;\n"
+                                  "  return 0;\n"
+                                  "}");
+        ASSERT_EQUALS("[test.cpp:2]: (style) Struct 'Test < int >' has a constructor with 1 argument that is not explicit.\n", errout.str());
+
+        // #7465: No error for copy or move constructors
+        checkExplicitConstructors("template <class T> struct Test {\n"
+                                  "  Test() : fData(0) {}\n"
+                                  "  Test (const Test<T>& aOther) : fData(aOther.fData) {}\n"
+                                  "  Test (Test<T>&& aOther) : fData(std::move(aOther.fData)) {}\n"
+                                  "  T fData;\n"
+                                  "};\n"
+                                  "int main() {\n"
+                                  "  Test <int> test;\n"
+                                  "  return 0;\n"
+                                  "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void checkDuplInheritedMembers(const char code[]) {
@@ -530,7 +554,7 @@ private:
                              "      d=(char*)malloc(100);\n"
                              "   }\n"
                              "};");
-        ASSERT_EQUALS("[test.cpp:1]: (style) 'class F' does not have a copy constructor which is recommended since the class contains a pointer to allocated memory.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:1]: (style) class 'F' does not have a copy constructor which is recommended since the class contains a pointer to allocated memory.\n", errout.str());
 
         checkCopyConstructor("class F\n"
                              "{\n"
@@ -595,7 +619,7 @@ private:
                              "   char *p;\n"
                              "   F() : p(malloc(100)) {}\n"
                              "};");
-        ASSERT_EQUALS("[test.cpp:1]: (style) 'class F' does not have a copy constructor which is recommended since the class contains a pointer to allocated memory.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:1]: (style) class 'F' does not have a copy constructor which is recommended since the class contains a pointer to allocated memory.\n", errout.str());
 
         // #7198
         checkCopyConstructor("struct F {\n"
@@ -1893,6 +1917,7 @@ private:
         errout.str("");
 
         settings0.inconclusive = inconclusive;
+        settings0.addEnabled("warning");
 
         // Tokenize..
         Tokenizer tokenizer(&settings0, this);
@@ -2139,7 +2164,7 @@ private:
                                "};\n"
                                "\n"
                                "AA<double> *p = new B; delete p;");
-        ASSERT_EQUALS("[test.cpp:9]: (error) Class 'AA<double>' which is inherited by class 'B' does not have a virtual destructor.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:9]: (error) Class 'AA < double >' which is inherited by class 'B' does not have a virtual destructor.\n", errout.str());
     }
 
     void virtualDestructorInconclusive() {
@@ -4868,8 +4893,9 @@ private:
                    "private:\n"
                    "  MyGUI::IntCoord mCoordValue;\n"
                    "};");
-        ASSERT_EQUALS("[test.cpp:7]: (performance, inconclusive) Technically the member function 'MyGUI::types::TCoord::size' can be static.\n"
-                      "[test.cpp:15]: (style, inconclusive) Technically the member function 'SelectorControl::getSize' can be const.\n", errout.str());
+        TODO_ASSERT_EQUALS("[test.cpp:7]: (performance, inconclusive) Technically the member function 'MyGUI::types::TCoord::size' can be static.\n"
+                           "[test.cpp:15]: (style, inconclusive) Technically the member function 'SelectorControl::getSize' can be const.\n",
+                           "[test.cpp:7]: (performance, inconclusive) Technically the member function 'MyGUI::types::TCoord::size' can be static.\n", errout.str());
 
         checkConst("struct Foo {\n"
                    "    Bar b;\n"
@@ -5134,6 +5160,17 @@ private:
                    "    }\n"
                    "};");
         ASSERT_EQUALS("[test.cpp:2]: (performance, inconclusive) Technically the member function 'Foo::foo' can be static.\n", errout.str());
+
+        checkConst("struct A;\n" // #5839 - operator()
+                   "struct B {\n"
+                   "    void operator()(A *a);\n"
+                   "};\n"
+                   "struct A {\n"
+                   "    void dostuff() {\n"
+                   "        B()(this);\n"
+                   "    }\n"
+                   "};");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void assigningPointerToPointerIsNotAConstOperation() {
@@ -5895,10 +5932,12 @@ private:
     }
 
     void initializerListUsage() {
-        checkInitializationListUsage("class Fred {\n"
+        checkInitializationListUsage("enum Enum { C = 0 };\n"
+                                     "class Fred {\n"
                                      "    int a;\n"  // No message for builtin types: No performance gain
                                      "    int* b;\n" // No message for pointers: No performance gain
-                                     "    Fred() { a = 0; b = 0; }\n"
+                                     "    Enum c;\n" // No message for enums: No performance gain
+                                     "    Fred() { a = 0; b = 0; c = C; }\n"
                                      "};");
         ASSERT_EQUALS("", errout.str());
 

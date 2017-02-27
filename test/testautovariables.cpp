@@ -328,6 +328,16 @@ private:
               "    ptr++;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:2]: (warning) Assignment of function parameter has no effect outside the function. Did you forget dereferencing it?\n", errout.str());
+
+        check("void foo(int* ptr) {\n" // #3177
+              "    --ptr;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Assignment of function parameter has no effect outside the function. Did you forget dereferencing it?\n", errout.str());
+
+        check("void foo(struct S* const x) {\n" // #7839
+              "    ++x->n;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void testautovar11() { // #4641 - fp, assign local struct member address to function parameter
@@ -1012,6 +1022,11 @@ private:
               "    return \"foo\" + str;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        check("int& incValue(int& value) {\n"
+              "    return ++value;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void returnReferenceLambda() {
@@ -1031,6 +1046,12 @@ private:
               "    return var;\n"
               "  }();\n"
               "return s_var;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // #7583
+        check("Command& foo() {\n"
+              "  return f([]() -> int { return 1; });\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }

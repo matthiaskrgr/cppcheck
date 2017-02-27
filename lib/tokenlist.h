@@ -40,6 +40,10 @@ public:
         _settings = settings;
     }
 
+    const Settings *getSettings() const {
+        return _settings;
+    }
+
     /** @return the source file path. e.g. "file.cpp" */
     const std::string& getSourceFilePath() const;
 
@@ -135,7 +139,7 @@ public:
      * Check abstract syntax tree.
      * Throws InternalError on failure
      */
-    void validateAst();
+    void validateAst() const;
 
     /**
      * Verify that the given token is an element of the tokenlist.

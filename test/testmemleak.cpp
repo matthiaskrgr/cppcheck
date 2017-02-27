@@ -184,6 +184,7 @@ private:
         TEST_CASE(if9);     // if (realloc)
         TEST_CASE(if10);    // else if (realloc)
         TEST_CASE(if11);
+        TEST_CASE(if12);    // Ticket #7745
 
         TEST_CASE(forwhile5);
         TEST_CASE(forwhile6);
@@ -191,6 +192,7 @@ private:
         TEST_CASE(forwhile9);
         TEST_CASE(forwhile10);
         TEST_CASE(forwhile11);
+        TEST_CASE(forwhile12);
 
         TEST_CASE(switch2);
         TEST_CASE(switch3);
@@ -249,6 +251,8 @@ private:
         TEST_CASE(allocfunc12); // #3660: allocating and returning non-local pointer => not allocfunc
         TEST_CASE(allocfunc13); // Ticket #4494 and #4540 - class function
         TEST_CASE(allocfunc14); // Use pointer before returning it
+
+        TEST_CASE(inlineFunction); // #3989 - inline function
 
         TEST_CASE(throw1);
         TEST_CASE(throw2);
@@ -312,6 +316,7 @@ private:
         TEST_CASE(autoptr1);
         TEST_CASE(if_with_and);
         TEST_CASE(assign_pclose);
+        TEST_CASE(conditional_dealloc_return); // #7820
 
         // Using the function "exit"
         TEST_CASE(exit2);
@@ -363,6 +368,8 @@ private:
         TEST_CASE(gnucfg);
         TEST_CASE(trac3991);
         TEST_CASE(crash);
+        TEST_CASE(trac7680);
+        TEST_CASE(trac7440);
     }
 
     std::string getcode(const char code[], const char varname[], bool classfunc=false) {
@@ -377,8 +384,12 @@ private:
         if (!tokenizer.tokenize(istr, "test.cpp"))
             return "";
         tokenizer.simplifyTokenList2();
+        const Token * start = tokenizer.tokens();
+        const SymbolDatabase * db = tokenizer.getSymbolDatabase();
+        if (db && db->functionScopes.size())
+            start = db->functionScopes[0]->classStart->next();
 
-        const unsigned int varId(Token::findmatch(tokenizer.tokens(), varname)->varId());
+        const unsigned int varId(Token::findmatch(start, varname)->varId());
 
         // getcode..
         CheckMemoryLeakInFunction checkMemoryLeak(&tokenizer, &settings2, nullptr);
@@ -386,7 +397,7 @@ private:
         callstack.push_back(0);
         CheckMemoryLeak::AllocType allocType, deallocType;
         allocType = deallocType = CheckMemoryLeak::No;
-        Token *tokens = checkMemoryLeak.getcode(tokenizer.tokens(), callstack, varId, allocType, deallocType, classfunc, 1);
+        Token *tokens = checkMemoryLeak.getcode(start, callstack, varId, allocType, deallocType, classfunc, 1);
 
         // stringify..
         std::ostringstream ret;
@@ -549,9 +560,11 @@ private:
         ASSERT_EQUALS(";;exit;", getcode("char *s; abort();", "s"));
         ASSERT_EQUALS(";;callfunc;", getcode("char *s; err(0);", "s")); // not in std.cfg
         ASSERT_EQUALS(";;if{exit;}", getcode("char *s; if (a) { exit(0); }", "s"));
+        ASSERT_EQUALS(";;if{exit;}", getcode("char *s; if (a) { ::exit(0); }", "s"));
+        ASSERT_EQUALS(";;if{exit;}", getcode("char *s; if (a) { std::exit(0); }", "s"));
 
         // list_for_each
-        ASSERT_EQUALS(";;exit;{}", getcode("char *s; list_for_each(x,y,z) { }", "s"));
+        ASSERT_EQUALS(";;exit;{}}", getcode("void f() { char *s; list_for_each(x,y,s) { } }", "s"));
 
         // open/close
         ASSERT_EQUALS(";;alloc;if(var){dealloc;}", getcode("int f; f=open(a,b); if(f>=0)close(f);", "f"));
@@ -1225,6 +1238,16 @@ private:
                            "", errout.str());
     }
 
+    void if12() { // #7745
+        check("void f() {\n"
+              "  FILE *fp = fopen(\"name\", \"r\");\n"
+              "  if (!fp) {\n"
+              "    fp = fopen(\"name\", \"w\");\n"
+              "    fclose(fp);\n"
+              "  }\n"
+              "}", /*c=*/true, /*posix=*/false);
+        ASSERT_EQUALS("[test.c:7]: (error) Resource leak: fp\n", errout.str());
+    }
 
     void forwhile5() {
         check("void f(const char **a)\n"
@@ -1330,7 +1353,35 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void forwhile12() {
+        check("extern int bar();\n"
+              "void f() {\n"
+              "  FILE *fp = fopen(\"name\", \"r\" );\n"
+              "  while(bar()) {\n"
+              "    fp = fopen(\"name\", \"w\");\n"
+              "    fclose(fp);\n"
+              "  }\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:5]: (error) Resource leak: fp\n", errout.str());
 
+        check("void f() {\n"
+              "  FILE *fp = fopen(\"name\", \"r\" );\n"
+              "  while(1) {\n"
+              "    fp = fopen(\"name\", \"w\");\n"
+              "    fclose(fp);\n"
+              "  }\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (error) Resource leak: fp\n", errout.str());
+
+        check("void f() {\n"
+              "  FILE *fp = fopen(\"name\", \"r\" );\n"
+              "  for( ; ; ) {\n"
+              "    fp = fopen(\"name\", \"w\");\n"
+              "    fclose(fp);\n"
+              "  }\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (error) Resource leak: fp\n", errout.str());
+    }
 
 
     void switch2() {
@@ -2572,6 +2623,20 @@ private:
               "    char* s = data();\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        // #5144
+        check("C* BuildC( C *previous ) {\n"
+              "  C *result = malloc(100);\n"
+              "  result->previous = previous;\n"
+              "  return result;\n"
+              "}\n"
+              "C *ParseC( ) {\n"
+              "  C *expr1 = NULL;\n"
+              "  while( something() )\n"
+              "    expr1 = BuildC(expr1);\n"
+              "  return expr1;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void allocfunc8() {
@@ -2675,6 +2740,19 @@ private:
               "\n"
               "static void f() {\n"
               "    struct ABC *abc = newabc();\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void inlineFunction() { // #3989 - inline function
+        check("int test() {\n"
+              "  char *c;\n"
+              "  int ret() {\n"
+              "        free(c);\n"
+              "        return 0;\n"
+              "    }\n"
+              "    c = malloc(128);\n"
+              "    return ret();\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }
@@ -3342,6 +3420,39 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void conditional_dealloc_return() { // #7820
+        check("void f() {\n"
+              "  FILE *pPipe = popen(\"foo\", \"r\");\n"
+              "  if (feof(pPipe))\n"
+              "    pclose(pPipe);\n"
+              "  return;\n"
+              "}", /*c=*/true, /*posix=*/true);
+        ASSERT_EQUALS("[test.c:5]: (error) Resource leak: pPipe\n", errout.str());
+
+        check("extern int bar();\n"
+              "void f() {\n"
+              "  char *c = (char*) malloc(10);\n"
+              "  if (bar())\n"
+              "    free(c);\n"
+              "  return;\n"
+              "}", /*c=*/true);
+        ASSERT_EQUALS("[test.c:6]: (error) Memory leak: c\n", errout.str());
+
+        check("extern int bar();\n"
+              "extern int baz();\n"
+              "extern void bos(char*);\n"
+              "void f() {\n"
+              "  char *c;\n"
+              "  if(bar()) {\n"
+              "    bos(c);\n"
+              "    c = (char*) malloc(10);\n"
+              "    if (baz())\n"
+              "      free(c);\n"
+              "  };\n"
+              "}", /*c=*/true);
+        ASSERT_EQUALS("[test.c:11]: (error) Memory leak: c\n", errout.str());
+    }
+
     void exit2() {
         check("void f()\n"
               "{\n"
@@ -3913,6 +4024,24 @@ private:
               "    ComponentDC *cdc = dynamic_cast<ComponentDC *>(childNode);\n"
               "    if (cdc)\n"
               "        ::Component *c = cdc->getComponent();\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void trac7680() {
+        check("void foo() {\n"
+              "  int *i = ::new int;\n"
+              "  ::delete i;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void trac7440() {
+        check("int main(void) {\n"
+              "  char* data = new char[100];\n"
+              "  char** dataPtr = &data;\n"
+              "  printf(\"test\");\n"
+              "  delete [] *dataPtr;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
     }
@@ -5962,6 +6091,8 @@ private:
         LOAD_LIB_2(settings.library, "windows.cfg");
 
         TEST_CASE(openfileNoLeak);
+        TEST_CASE(returnValueNotUsed_tfopen_s);
+        TEST_CASE(sendMessage);
     }
 
     void openfileNoLeak() {
@@ -5976,6 +6107,32 @@ private:
               "  int hFile = OpenFile(\"file\", &OfStr, OF_EXIST);"
               "}");
         TODO_ASSERT_EQUALS("", "[test.c:1]: (error) Resource leak: hFile\n", errout.str());
+    }
+
+    void returnValueNotUsed_tfopen_s() {
+        check("bool LoadFile(LPCTSTR filename) {\n"
+              "  FILE *fp = NULL;\n"
+              "  _tfopen_s(&fp, filename, _T(\"rb\"));\n"
+              "  if (!fp)\n"
+              "      return false;\n"
+              "  fclose(fp);\n"
+              "  return true;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("bool LoadFile(LPCTSTR filename) {\n"
+              "  FILE *fp = NULL;\n"
+              "  _tfopen_s(&fp, filename, _T(\"rb\"));\n"
+              "}");
+        TODO_ASSERT_EQUALS("[test.c:3]: (error) Resource leak: fp\n", "", errout.str());
+    }
+
+    void sendMessage() {
+        check("void SetFont() {\n"
+              "  HFONT hf = CreateFontIndirect(&lf);\n"
+              "  SendMessage(hwnd, WM_SETFONT, (WPARAM)hf, TRUE);\n" // We do not know what the handler for the message will do with 'hf', so it might be closed later
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 };
 

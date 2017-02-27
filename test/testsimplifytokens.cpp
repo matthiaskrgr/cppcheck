@@ -186,6 +186,7 @@ private:
         TEST_CASE(simplifyStructDecl4);
         TEST_CASE(simplifyStructDecl6); // ticket #3732
         TEST_CASE(simplifyStructDecl7); // ticket #476 (static anonymous struct array)
+        TEST_CASE(simplifyStructDecl8); // ticket #7698
 
         // register int var; => int var;
         // inline int foo() {} => int foo() {}
@@ -205,7 +206,6 @@ private:
         // void foo(void) -> void foo()
         TEST_CASE(removeVoidFromFunction);
 
-        TEST_CASE(simplifyVarDecl1); // ticket # 2682 segmentation fault
         TEST_CASE(return_strncat); // ticket # 2860 Returning value of strncat() reported as memory leak
 
         // #3069 : for loop with 1 iteration
@@ -340,7 +340,7 @@ private:
         ASSERT_EQUALS("; x [ ++ y ] = x [ y ] + 1 ;", tok("; x[++y] += 1;"));
 
         ASSERT_EQUALS(";", tok(";x += 0;"));
-        ASSERT_EQUALS(";", tok(";x += '\\0';"));
+        TODO_ASSERT_EQUALS(";", "; x = x + '\\0' ;", tok("; x += '\\0'; "));
         ASSERT_EQUALS(";", tok(";x -= 0;"));
         ASSERT_EQUALS(";", tok(";x |= 0;"));
         ASSERT_EQUALS(";", tok(";x *= 1;"));
@@ -362,6 +362,9 @@ private:
 
         // #3469
         ASSERT_EQUALS("; a = a + ( b = 1 ) ;", tok("; a += b = 1;"));
+
+        // #7571
+        ASSERT_EQUALS("; foo = foo + [ & ] ( ) { } ;", tok("; foo += [&]() {int i;};"));
     }
 
 
@@ -382,7 +385,7 @@ private:
 
         ASSERT_EQUALS("if ( true )", tok("if ((unsigned char)1)")); // #4164
         ASSERT_EQUALS("f ( 200 )", tok("f((unsigned char)200)"));
-        ASSERT_EQUALS("f ( ( char ) 1234 )", tok("f((char)1234)")); // dont simplify downcast
+        ASSERT_EQUALS("f ( ( char ) 1234 )", tok("f((char)1234)")); // don't simplify downcast
     }
 
 
@@ -696,7 +699,7 @@ private:
 
         // keep parentheses..
         ASSERT_EQUALS("b = a ;", tok("b = (char)a;"));
-        ASSERT_EQUALS("cast < char * > ( p )", tok("cast<char *>(p)"));
+        ASSERT_EQUALS("cast < char * > ( p ) ;", tok("cast<char *>(p);"));
         ASSERT_EQUALS("return ( a + b ) * c ;", tok("return (a+b)*c;"));
         ASSERT_EQUALS("void f ( ) { int p ; if ( 2 * p == 0 ) { } }", tok("void f(){int p; if (2*p == 0) {}}"));
         ASSERT_EQUALS("void f ( ) { DIR * f ; f = opendir ( dirname ) ; if ( closedir ( f ) ) { } }", tok("void f(){DIR * f = opendir(dirname);if (closedir(f)){}}"));
@@ -789,8 +792,8 @@ private:
     }
 
     void elseif1() {
-        const char code[] = "else if(ab) { cd } else { ef }gh";
-        ASSERT_EQUALS("\n\n##file 0\n1: else { if ( ab ) { cd } else { ef } } gh\n", tokenizeDebugListing(code));
+        const char code[] = "else if(ab) { cd } else { ef }gh;";
+        ASSERT_EQUALS("\n\n##file 0\n1: else { if ( ab ) { cd } else { ef } } gh ;\n", tokenizeDebugListing(code));
 
         // syntax error: assert there is no segmentation fault
         ASSERT_EQUALS("\n\n##file 0\n1: else if ( x ) { }\n", tokenizeDebugListing("else if (x) { }"));
@@ -827,13 +830,13 @@ private:
 
         // Ticket #6860 - lambdas
         {
-            const char src[] = "( []{if (ab) {cd}else if(ef) { gh } else { ij }kl}() )";
-            const char expected[] = "\n\n##file 0\n1: ( [ ] { if ( ab ) { cd } else { if ( ef ) { gh } else { ij } } kl } ( ) )\n";
+            const char src[] = "( []{if (ab) {cd}else if(ef) { gh } else { ij }kl}() );";
+            const char expected[] = "\n\n##file 0\n1: ( [ ] { if ( ab ) { cd } else { if ( ef ) { gh } else { ij } } kl } ( ) ) ;\n";
             ASSERT_EQUALS(expected, tokenizeDebugListing(src));
         }
         {
-            const char src[] = "[ []{if (ab) {cd}else if(ef) { gh } else { ij }kl}() ]";
-            const char expected[] = "\n\n##file 0\n1: [ [ ] { if ( ab ) { cd } else { if ( ef ) { gh } else { ij } } kl } ( ) ]\n";
+            const char src[] = "[ []{if (ab) {cd}else if(ef) { gh } else { ij }kl}() ];";
+            const char expected[] = "\n\n##file 0\n1: [ [ ] { if ( ab ) { cd } else { if ( ef ) { gh } else { ij } } kl } ( ) ] ;\n";
             ASSERT_EQUALS(expected, tokenizeDebugListing(src));
         }
         {
@@ -1001,10 +1004,10 @@ private:
         // ticket #716 - sizeof string
         {
             std::ostringstream expected;
-            expected << "; " << (sizeof "123");
+            expected << "; " << (sizeof "123") << " ;";
 
-            ASSERT_EQUALS(expected.str(), tok("; sizeof \"123\""));
-            ASSERT_EQUALS(expected.str(), tok("; sizeof(\"123\")"));
+            ASSERT_EQUALS(expected.str(), tok("; sizeof \"123\";"));
+            ASSERT_EQUALS(expected.str(), tok("; sizeof(\"123\");"));
         }
 
         {
@@ -1588,7 +1591,7 @@ private:
                                "{ "
                                "FILE * f ; "
                                "f = fopen ( \"foo\" , \"r\" ) ; "
-                               "if ( f == 0 ) "
+                               "if ( f == NULL ) "
                                "{ "
                                "return -1 ; "
                                "} "
@@ -1665,7 +1668,7 @@ private:
         ASSERT_EQUALS("char * s ; do { s = new char [ 10 ] ; } while ( ! s ) ;",
                       tok("char *s; do { } while (0 == (s=new char[10]));"));
         // #4911
-        ASSERT_EQUALS("; do { current = f ( ) ; } while ( ( current ) != 0 ) ;", simplifyIfAndWhileAssign(";do { } while((current=f()) != NULL);"));
+        ASSERT_EQUALS("; do { current = f ( ) ; } while ( ( current ) != NULL ) ;", simplifyIfAndWhileAssign(";do { } while((current=f()) != NULL);"));
     }
 
     void not1() {
@@ -1967,13 +1970,13 @@ private:
 
     void simplifyConditionOperator() {
         {
-            const char code[] = "(0?(false?1:2):3)";
-            ASSERT_EQUALS("( 3 )", tok(code));
+            const char code[] = "(0?(false?1:2):3);";
+            ASSERT_EQUALS("( 3 ) ;", tok(code));
         }
 
         {
-            const char code[] = "(1?(false?1:2):3)";
-            ASSERT_EQUALS("( 2 )", tok(code));
+            const char code[] = "(1?(false?1:2):3);";
+            ASSERT_EQUALS("( 2 ) ;", tok(code));
         }
 
         {
@@ -1982,8 +1985,8 @@ private:
         }
 
         {
-            const char code[] = "(1?0:foo())";
-            ASSERT_EQUALS("( 0 )", tok(code));
+            const char code[] = "(1?0:foo());";
+            ASSERT_EQUALS("( 0 ) ;", tok(code));
         }
 
         {
@@ -2002,13 +2005,13 @@ private:
         }
 
         {
-            const char code[] = "( true ? a ( ) : b ( ) )";
-            ASSERT_EQUALS("( a ( ) )", tok(code));
+            const char code[] = "( true ? a ( ) : b ( ) );";
+            ASSERT_EQUALS("( a ( ) ) ;", tok(code));
         }
 
         {
-            const char code[] = "( true ? abc . a : abc . b )";
-            ASSERT_EQUALS("( abc . a )", tok(code));
+            const char code[] = "( true ? abc . a : abc . b );";
+            ASSERT_EQUALS("( abc . a ) ;", tok(code));
         }
 
         {
@@ -2056,28 +2059,28 @@ private:
 
     void calculations() {
         {
-            const char code[] = "a[i+8+2]";
-            ASSERT_EQUALS("a [ i + 10 ]", tok(code));
+            const char code[] = "a[i+8+2];";
+            ASSERT_EQUALS("a [ i + 10 ] ;", tok(code));
         }
         {
-            const char code[] = "a[8+2+i]";
-            ASSERT_EQUALS("a [ 10 + i ]", tok(code));
+            const char code[] = "a[8+2+i];";
+            ASSERT_EQUALS("a [ 10 + i ] ;", tok(code));
         }
         {
-            const char code[] = "a[i + 2 * (2 * 4)]";
-            ASSERT_EQUALS("a [ i + 16 ]", tok(code));
+            const char code[] = "a[i + 2 * (2 * 4)];";
+            ASSERT_EQUALS("a [ i + 16 ] ;", tok(code));
         }
         {
-            const char code[] = "a[i + 100 - 90]";
-            ASSERT_EQUALS("a [ i + 10 ]", tok(code));
+            const char code[] = "a[i + 100 - 90];";
+            ASSERT_EQUALS("a [ i + 10 ] ;", tok(code));
         }
         {
-            const char code[] = "a[1+1+1+1+1+1+1+1+1+1-2+5-3]";
-            ASSERT_EQUALS("a [ 10 ]", tok(code));
+            const char code[] = "a[1+1+1+1+1+1+1+1+1+1-2+5-3];";
+            ASSERT_EQUALS("a [ 10 ] ;", tok(code));
         }
         {
-            const char code[] = "a[10+10-10-10]";
-            ASSERT_EQUALS("a [ 0 ]", tok(code));
+            const char code[] = "a[10+10-10-10];";
+            ASSERT_EQUALS("a [ 0 ] ;", tok(code));
         }
 
         ASSERT_EQUALS("a [ 4 ] ;", tok("a[1+3|4];"));
@@ -2110,30 +2113,30 @@ private:
         ASSERT_EQUALS("if ( a + 2 != 6 ) { ; }", tok("if (a+1+1!=1+2+3);"));
         ASSERT_EQUALS("if ( 4 < a ) { ; }", tok("if (14-2*5<a*4/(2*2));"));
 
-        ASSERT_EQUALS("( y / 2 - 2 )", tok("(y / 2 - 2)"));
-        ASSERT_EQUALS("( y % 2 - 2 )", tok("(y % 2 - 2)"));
+        ASSERT_EQUALS("( y / 2 - 2 ) ;", tok("(y / 2 - 2);"));
+        ASSERT_EQUALS("( y % 2 - 2 ) ;", tok("(y % 2 - 2);"));
 
-        ASSERT_EQUALS("( 4 )", tok("(1 * 2 / 1 * 2)")); // #3722
+        ASSERT_EQUALS("( 4 ) ;", tok("(1 * 2 / 1 * 2);")); // #3722
 
-        ASSERT_EQUALS("x ( 60129542144 )", tok("x(14<<4+17<<300%17)")); // #4931
-        ASSERT_EQUALS("x ( 1 )", tok("x(8|5&6+0 && 7)")); // #6104
-        ASSERT_EQUALS("x ( 1 )", tok("x(2 && 4<<4<<5 && 4)")); // #4933
-        ASSERT_EQUALS("x ( 1 )", tok("x(9&&8%5%4/3)")); // #4931
-        ASSERT_EQUALS("x ( 1 )", tok("x(2 && 2|5<<2%4)")); // #4931
-        ASSERT_EQUALS("x ( -2 << 6 | 1 )", tok("x(1-3<<6|5/3)")); // #4931
-        ASSERT_EQUALS("x ( 2 )", tok("x(2|0*0&2>>1+0%2*1)")); // #4931
-        ASSERT_EQUALS("x ( 0 & 4 != 1 )", tok("x(4%1<<1&4!=1)")); // #4931 (can be simplified further but it's not a problem)
-        ASSERT_EQUALS("x ( true )", tok("x(0&&4>0==2||4)")); // #4931
+        ASSERT_EQUALS("x ( 60129542144 ) ;", tok("x(14<<4+17<<300%17);")); // #4931
+        ASSERT_EQUALS("x ( 1 ) ;", tok("x(8|5&6+0 && 7);")); // #6104
+        ASSERT_EQUALS("x ( 1 ) ;", tok("x(2 && 4<<4<<5 && 4);")); // #4933
+        ASSERT_EQUALS("x ( 1 ) ;", tok("x(9&&8%5%4/3);")); // #4931
+        ASSERT_EQUALS("x ( 1 ) ;", tok("x(2 && 2|5<<2%4);")); // #4931
+        ASSERT_EQUALS("x ( -2 << 6 | 1 ) ;", tok("x(1-3<<6|5/3);")); // #4931
+        ASSERT_EQUALS("x ( 2 ) ;", tok("x(2|0*0&2>>1+0%2*1);")); // #4931
+        ASSERT_EQUALS("x ( 0 & 4 != 1 ) ;", tok("x(4%1<<1&4!=1);")); // #4931 (can be simplified further but it's not a problem)
+        ASSERT_EQUALS("x ( true ) ;", tok("x(0&&4>0==2||4);")); // #4931
 
         // don't remove these spaces..
         ASSERT_EQUALS("new ( auto ) ( 4 ) ;", tok("new (auto)(4);"));
     }
 
     void comparisons() {
-        ASSERT_EQUALS("( 1 )", tok("( 1 < 2 )"));
-        ASSERT_EQUALS("( x && true )", tok("( x && 1 < 2 )"));
-        ASSERT_EQUALS("( 5 )", tok("( 1 < 2 && 3 < 4 ? 5 : 6 )"));
-        ASSERT_EQUALS("( 6 )", tok("( 1 > 2 && 3 > 4 ? 5 : 6 )"));
+        ASSERT_EQUALS("( 1 ) ;", tok("( 1 < 2 );"));
+        ASSERT_EQUALS("( x && true ) ;", tok("( x && 1 < 2 );"));
+        ASSERT_EQUALS("( 5 ) ;", tok("( 1 < 2 && 3 < 4 ? 5 : 6 );"));
+        ASSERT_EQUALS("( 6 ) ;", tok("( 1 > 2 && 3 > 4 ? 5 : 6 );"));
     }
 
 
@@ -2497,16 +2500,13 @@ private:
 
     void simplifyOperator2() {
         // #6576
-        ASSERT_EQUALS("class TClass { "
-                      "public: "
-                      "TClass & operator= ( const TClass & rhs ) ; "
+        ASSERT_EQUALS("template < class T > class SharedPtr { "
+                      "SharedPtr & operator= ( SharedPtr < Y > const & r ) ; "
                       "} ; "
-                      "TClass :: TClass ( const TClass & other ) "
-                      "{ "
-                      "operator= ( other ) ; "
-                      "} class SharedPtr<Y> { "
-                      "SharedPtr<Y> & operator= ( SharedPtr<Y> const & r ) ; "
-                      "} ;",
+                      "class TClass { "
+                      "public: TClass & operator= ( const TClass & rhs ) ; "
+                      "} ; "
+                      "TClass :: TClass ( const TClass & other ) { operator= ( other ) ; }",
                       tok("template<class T>\n"
                           "    class SharedPtr {\n"
                           "    SharedPtr& operator=(SharedPtr<Y> const & r);\n"
@@ -3214,6 +3214,19 @@ private:
                       tok("static struct { char x; } a[2];", false));
     }
 
+    void simplifyStructDecl8() {
+        ASSERT_EQUALS("enum A { x , y , z } ; enum A a ; a = x ;", tok("enum A { x, y, z } a(x);", false));
+        ASSERT_EQUALS("enum B { x , y , z } ; enum B b ; b = x ;", tok("enum B { x , y, z } b{x};", false));
+        ASSERT_EQUALS("struct C { int i ; } ; struct C c ; c = { 0 } ;", tok("struct C { int i; } c{0};", false));
+        ASSERT_EQUALS("enum Anonymous0 { x , y , z } ; enum Anonymous0 d ; d = x ;", tok("enum { x, y, z } d(x);", false));
+        ASSERT_EQUALS("enum Anonymous0 { x , y , z } ; enum Anonymous0 e ; e = x ;", tok("enum { x, y, z } e{x};", false));
+        ASSERT_EQUALS("struct Anonymous0 { int i ; } ; struct Anonymous0 f ; f = { 0 } ;", tok("struct { int i; } f{0};", false));
+        ASSERT_EQUALS("enum G : short { x , y , z } ; enum G g ; g = x ;", tok("enum G : short { x, y, z } g(x);", false));
+        ASSERT_EQUALS("enum H : short { x , y , z } ; enum H h ; h = x ;", tok("enum H : short { x, y, z } h{x};", false));
+        ASSERT_EQUALS("enum class I : short { x , y , z } ; enum I i ; i = x ;", tok("enum class I : short { x, y, z } i(x);", false));
+        ASSERT_EQUALS("enum class J : short { x , y , z } ; enum J j ; j = x ;", tok("enum class J : short { x, y, z } j{x};", false));
+    }
+
     void removeUnwantedKeywords() {
         ASSERT_EQUALS("int var ;", tok("register int var ;", true));
         ASSERT_EQUALS("short var ;", tok("register short int var ;", true));
@@ -3255,9 +3268,12 @@ private:
         ASSERT_EQUALS("int f ( ) ;", tok("int __far __syscall f();", true));
         ASSERT_EQUALS("int f ( ) ;", tok("int __far __pascal f();", true));
         ASSERT_EQUALS("int f ( ) ;", tok("int __far __fortran f();", true));
-        ASSERT_EQUALS("int f ( ) ;", tok("int WINAPI f();", true));
-        ASSERT_EQUALS("int f ( ) ;", tok("int APIENTRY f();", true));
-        ASSERT_EQUALS("int f ( ) ;", tok("int CALLBACK f();", true));
+        ASSERT_EQUALS("int f ( ) ;", tok("int WINAPI f();", true, Settings::Win32A));
+        ASSERT_EQUALS("int f ( ) ;", tok("int APIENTRY f();", true, Settings::Win32A));
+        ASSERT_EQUALS("int f ( ) ;", tok("int CALLBACK f();", true, Settings::Win32A));
+
+        // don't simplify Microsoft defines in unix code (#7554)
+        ASSERT_EQUALS("enum E { CALLBACK } ;", tok("enum E { CALLBACK } ;", true, Settings::Unix32));
     }
 
     void simplifyFunctorCall() {
@@ -3306,16 +3322,34 @@ private:
                                     "const std :: string & Fred :: foo ( ) { return \"\" ; }";
             ASSERT_EQUALS(expected, tok(code, false));
         }
+        {
+            // Ticket #7916
+            // Tokenization would include "int fact < 2 > ( ) { return 2 > ( ) ; }" and generate
+            // a parse error (and use after free)
+            const char code[] = "extern \"C\" void abort ();\n"
+                                "template <int a> inline int fact2 ();\n"
+                                "template <int a> inline int fact () {\n"
+                                "  return a * fact2<a-1> ();\n"
+                                "}\n"
+                                "template <> inline int fact<1> () {\n"
+                                "  return 1;\n"
+                                "}\n"
+                                "template <int a> inline int fact2 () {\n"
+                                "  return a * fact<a-1>();\n"
+                                "}\n"
+                                "template <> inline int fact2<1> () {\n"
+                                "  return 1;\n"
+                                "}\n"
+                                "int main() {\n"
+                                "  fact2<3> ();\n"
+                                "  fact2<2> ();\n"
+                                "}";
+            tok(code);
+        }
     }
 
     void removeVoidFromFunction() {
         ASSERT_EQUALS("void foo ( ) ;", tok("void foo(void);"));
-    }
-
-    void simplifyVarDecl1() { // ticket # 2682 segmentation fault
-        const char code[] = "x a[0] =";
-        tok(code, false);
-        ASSERT_EQUALS("", errout.str());
     }
 
     void return_strncat() {

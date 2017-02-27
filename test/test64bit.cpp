@@ -168,6 +168,13 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
+        check("struct Foo {};\n"
+              "\n"
+              "int* dostuff(Foo foo) {\n"
+              "  return foo;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
         check("int foo(char* c) {\n"
               "    return c;\n"
               "}");
@@ -202,7 +209,7 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
-        // #7247: dont check return statements in nested functions..
+        // #7247: don't check return statements in nested functions..
         check("int foo() {\n"
               "  struct {\n"
               "    const char * name() { return \"abc\"; }\n"

@@ -59,7 +59,6 @@ private:
         TEST_CASE(garbageCode8); // #5511
         TEST_CASE(garbageCode9); // #5604
         TEST_CASE(garbageCode10); // #6127
-        TEST_CASE(garbageCode11);
         TEST_CASE(garbageCode12);
         TEST_CASE(garbageCode13); // #2607
         TEST_CASE(garbageCode14); // #5595
@@ -67,7 +66,6 @@ private:
         TEST_CASE(garbageCode16);
         TEST_CASE(garbageCode17);
         TEST_CASE(garbageCode18);
-        TEST_CASE(garbageCode19);
         TEST_CASE(garbageCode20);
         TEST_CASE(garbageCode21);
         TEST_CASE(garbageCode22);
@@ -77,17 +75,14 @@ private:
         TEST_CASE(garbageCode26);
         TEST_CASE(garbageCode27);
         TEST_CASE(garbageCode28);
-        TEST_CASE(garbageCode29);
         TEST_CASE(garbageCode30); // #5867
         TEST_CASE(garbageCode31); // #6539
-        TEST_CASE(garbageCode32); // #6135
         TEST_CASE(garbageCode33); // #6613
         TEST_CASE(garbageCode34); // #6626
-        TEST_CASE(garbageCode35); // #2599, #2604
+        TEST_CASE(garbageCode35); // #2604
         TEST_CASE(garbageCode36); // #6334
         TEST_CASE(garbageCode37); // #5166
         TEST_CASE(garbageCode38); // #6666
-        TEST_CASE(garbageCode39); // #6686
         TEST_CASE(garbageCode40); // #6620
         TEST_CASE(garbageCode41); // #6685
         TEST_CASE(garbageCode42); // #5760
@@ -98,9 +93,7 @@ private:
         TEST_CASE(garbageCode47); // #6706
         TEST_CASE(garbageCode48); // #6712
         TEST_CASE(garbageCode49); // #6715
-        TEST_CASE(garbageCode50); // #6718
         TEST_CASE(garbageCode51); // #6719
-        TEST_CASE(garbageCode52); // #6720
         TEST_CASE(garbageCode53); // #6721
         TEST_CASE(garbageCode54); // #6722
         TEST_CASE(garbageCode55); // #6724
@@ -110,12 +103,10 @@ private:
         TEST_CASE(garbageCode59); // #6735
         TEST_CASE(garbageCode60); // #6736
         TEST_CASE(garbageCode61);
-        TEST_CASE(garbageCode62);
         TEST_CASE(garbageCode63);
         TEST_CASE(garbageCode64);
         TEST_CASE(garbageCode65);
         TEST_CASE(garbageCode66);
-        TEST_CASE(garbageCode67);
         TEST_CASE(garbageCode68);
         TEST_CASE(garbageCode69);
         TEST_CASE(garbageCode70);
@@ -123,7 +114,6 @@ private:
         TEST_CASE(garbageCode72);
         TEST_CASE(garbageCode73);
         TEST_CASE(garbageCode74);
-        TEST_CASE(garbageCode75);
         TEST_CASE(garbageCode76);
         TEST_CASE(garbageCode77);
         TEST_CASE(garbageCode78);
@@ -137,7 +127,6 @@ private:
         TEST_CASE(garbageCode86);
         TEST_CASE(garbageCode87);
         TEST_CASE(garbageCode88);
-        TEST_CASE(garbageCode89);
         TEST_CASE(garbageCode90);
         TEST_CASE(garbageCode91);
         TEST_CASE(garbageCode92);
@@ -161,7 +150,6 @@ private:
         TEST_CASE(garbageCode110);
         TEST_CASE(garbageCode111);
         TEST_CASE(garbageCode112);
-        TEST_CASE(garbageCode113);
         TEST_CASE(garbageCode114);
         TEST_CASE(garbageCode115); // #5506
         TEST_CASE(garbageCode116); // #5356
@@ -172,7 +160,6 @@ private:
         TEST_CASE(garbageCode121); // #2585
         TEST_CASE(garbageCode122); // #6303
         TEST_CASE(garbageCode123);
-        TEST_CASE(garbageCode124); // 6948
         TEST_CASE(garbageCode125); // 6782, 6834
         TEST_CASE(garbageCode126); // #6997
         TEST_CASE(garbageCode127); // #6667
@@ -193,17 +180,15 @@ private:
         TEST_CASE(garbageCode142); // #7050
         TEST_CASE(garbageCode143); // #6922
         TEST_CASE(garbageCode144); // #6865
-        TEST_CASE(garbageCode145); // #7074
         TEST_CASE(garbageCode146); // #7081
         TEST_CASE(garbageCode147); // #7082
         TEST_CASE(garbageCode148); // #7090
         TEST_CASE(garbageCode149); // #7085
         TEST_CASE(garbageCode150); // #7089
-        TEST_CASE(garbageCode151); // #4175
+        TEST_CASE(garbageCode151); // #4911
         TEST_CASE(garbageCode152); // travis after 9c7271a5
         TEST_CASE(garbageCode153);
         TEST_CASE(garbageCode154); // #7112
-        TEST_CASE(garbageCode155); // #7118
         TEST_CASE(garbageCode156); // #7120
         TEST_CASE(garbageCode157); // #7131
         TEST_CASE(garbageCode158); // #3238
@@ -214,7 +199,6 @@ private:
         TEST_CASE(garbageCode163); // #7228
         TEST_CASE(garbageCode164); // #7234
         TEST_CASE(garbageCode165); // #7235
-        TEST_CASE(garbageCode166); // #7236
         TEST_CASE(garbageCode167); // #7237
         TEST_CASE(garbageCode168); // #7246
         TEST_CASE(garbageCode169); // #6731
@@ -225,17 +209,17 @@ private:
         TEST_CASE(garbageCode174); // #7356
         TEST_CASE(garbageCode175);
         TEST_CASE(garbageCode176); // #7527
-        TEST_CASE(garbageCode177); // #7321
-        TEST_CASE(garbageCode178); // #3441
-        TEST_CASE(garbageCode179); // #3533
-        TEST_CASE(garbageCode180);
         TEST_CASE(garbageCode181);
         TEST_CASE(garbageCode182); // #4195
         TEST_CASE(garbageCode183); // #7505
+        TEST_CASE(garbageCode184); // #7699
+        TEST_CASE(garbageCode185); // #6011
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
         TEST_CASE(garbageAST);
         TEST_CASE(templateSimplifierCrashes);
+        TEST_CASE(syntaxErrorFirstToken); // Make sure syntax errors are detected and reported
+        TEST_CASE(syntaxErrorLastToken); // Make sure syntax errors are detected and reported
     }
 
     std::string checkCode(const char code[], bool cpp = true) {
@@ -246,7 +230,7 @@ private:
         // run alternate check first. It should only ensure stability - so we catch exceptions here.
         try {
             checkCodeInternal(code, alternatefilename);
-        } catch (InternalError&) {
+        } catch (const InternalError&) {
         }
 
         return checkCodeInternal(code, filename);
@@ -434,10 +418,6 @@ private:
         checkCode("for( rl=reslist; rl!=NULL; rl=rl->next )");
     }
 
-    void garbageCode11() { // do not crash
-        checkCode("( ) &");
-    }
-
     void garbageCode12() { // do not crash
         checkCode("{ g; S (void) { struct } { } int &g; }");
     }
@@ -451,7 +431,7 @@ private:
     }
 
     void garbageCode15() { // Ticket #5203
-        checkCode("int f ( int* r ) { {  int s[2] ; f ( s ) ; if ( ) } }");
+        ASSERT_THROW(checkCode("int f ( int* r ) { {  int s[2] ; f ( s ) ; if ( ) } }"), InternalError);
     }
 
     void garbageCode16() {
@@ -468,11 +448,6 @@ private:
         ASSERT_THROW(checkCode("switch(){case}"), InternalError);
     }
 
-    void garbageCode19() {
-        // ticket #3512 - Don't crash on garbage code
-        ASSERT_EQUALS("p = const", checkCode("1 *p = const"));
-    }
-
     void garbageCode20() {
         // #3953 (valgrind errors on garbage code)
         ASSERT_EQUALS("void f ( 0 * ) ;", checkCode("void f ( 0 * ) ;"));
@@ -480,13 +455,13 @@ private:
 
     void garbageCode21() {
         // Ticket #3486 - Don't crash garbage code
-        checkCode("void f()\n"
-                  "{\n"
-                  "  (\n"
-                  "    x;\n"
-                  "    int a, a2, a2*x; if () ;\n"
-                  "  )\n"
-                  "}");
+        ASSERT_THROW(checkCode("void f()\n"
+                               "{\n"
+                               "  (\n"
+                               "    x;\n"
+                               "    int a, a2, a2*x; if () ;\n"
+                               "  )\n"
+                               "}"), InternalError);
     }
 
     void garbageCode22() {
@@ -508,13 +483,13 @@ private:
 
     void garbageCode24() {
         // don't crash (example from #6361)
-        checkCode("float buffer[64];\n"
-                  "main (void)\n"
-                  "{\n"
-                  "  char *cptr;\n"
-                  "  cptr = (char *)buffer;\n"
-                  "  cptr += (-(long int) buffer & (16 * sizeof (float) - 1));\n"
-                  "}\n");
+        ASSERT_THROW(checkCode("float buffer[64];\n"
+                               "main (void)\n"
+                               "{\n"
+                               "  char *cptr;\n"
+                               "  cptr = (char *)buffer;\n"
+                               "  cptr += (-(long int) buffer & (16 * sizeof (float) - 1));\n"
+                               "}\n"), InternalError);
     }
 
     void garbageCode25() {
@@ -551,11 +526,6 @@ private:
                   "};\n");
     }
 
-    void garbageCode29() {
-        // ticket #2601 segmentation fault
-        checkCode("|| #if #define <=");
-    }
-
     void garbageCode30() {
         // simply survive - a syntax error would be even better (#5867)
         checkCode("void f(int x) {\n"
@@ -567,16 +537,8 @@ private:
         ASSERT_THROW(checkCode("typedef struct{}x[([],)]typedef e y;(y,x 0){}"), InternalError);
     }
 
-    void garbageCode32() { // #6135
-        checkCode(" ( * const ( size_t ) ; foo )");
-    }
-
     void garbageCode33() { // #6613
         checkCode("main(()B{});");
-
-        checkCode("f::y:y : <x::");
-
-        checkCode("\xe2u.");
     }
 
     // Bug #6626 crash: Token::astOperand2() const ( do while )
@@ -589,9 +551,6 @@ private:
     }
 
     void garbageCode35() {
-        // ticket #2599 segmentation fault
-        checkCode("sizeof");
-
         // ticket #2604 segmentation fault
         checkCode("sizeof <= A");
     }
@@ -612,10 +571,6 @@ private:
 
     void garbageCode38() { // Ticket #6666
         checkCode("{ f2 { } } void f3 () { delete[] } { }");
-    }
-
-    void garbageCode39() { // #6686
-        checkCode("({ (); strcat(strcat(() ()) ()) })");
     }
 
     void garbageCode40() { // #6620
@@ -659,16 +614,8 @@ private:
         checkCode(" ( ( ) ) { } ( { ( __builtin_va_arg_pack ( ) ) ; } ) { ( int { ( ) ( ( ) ) } ( ) { } ( ) ) += ( ) }");
     }
 
-    void garbageCode50() { // #6718
-        checkCode(" enum struct");
-    }
-
     void garbageCode51() { // #6719
         checkCode(" (const \"C\" ...); struct base { int f2; base (int arg1, int arg2); }; global_base(0x55, 0xff); { ((global_base.f1 0x55) (global_base.f2 0xff)) { } } base::base(int arg1, int arg2) { f2 = }");
-    }
-
-    void garbageCode52() { // #6720
-        checkCode("a \"b\" not_eq \"c\"");
     }
 
     void garbageCode53() { // #6721
@@ -708,10 +655,6 @@ private:
         ASSERT_THROW(checkCode("{ (const U&) }; { }; { }; struct U : virtual public"), InternalError);
     }
 
-    void garbageCode62() { // #6738
-        checkCode("(int arg2) { } { } typedef void (func_type) (int, int); typedef func_type&");
-    }
-
     void garbageCode63() { // #6739
         ASSERT_THROW(checkCode("{ } { } typedef int u_array[]; typedef u_array &u_array_ref; (u_array_ref arg) { } u_array_ref u_array_ref_gbl_obj0"), InternalError);
     }
@@ -726,10 +669,6 @@ private:
 
     void garbageCode66() { // #6742
         ASSERT_THROW(checkCode("{ { } }; { { } }; { }; class bar : public virtual"), InternalError);
-    }
-
-    void garbageCode67() { // #6744
-        checkCode("&g[0]; { (g[0] 0) } =", false);
     }
 
     void garbageCode68() { // #6745
@@ -757,15 +696,11 @@ private:
     }
 
     void garbageCode74() { // #6751
-        checkCode("_lenraw(const char* digits) { } typedef decltype(sizeof(0)) { } operator");
-    }
-
-    void garbageCode75() { // #6753
-        checkCode("{ { void foo() { struct }; { }; } }; struct S { } f =", false);
+        ASSERT_THROW(checkCode("_lenraw(const char* digits) { } typedef decltype(sizeof(0)) { } operator"), InternalError);
     }
 
     void garbageCode76() { // #6754
-        checkCode(" ( ) ( ) { ( ) [ ] } TEST ( ) { ( _broadcast_f32x4 ) ( ) ( ) ( ) ( ) if ( ) ( ) ; } E mask = ( ) [ ] ( ) res1.x =");
+        ASSERT_THROW(checkCode(" ( ) ( ) { ( ) [ ] } TEST ( ) { ( _broadcast_f32x4 ) ( ) ( ) ( ) ( ) if ( ) ( ) ; } E mask = ( ) [ ] ( ) res1.x ="), InternalError);
     }
 
     void garbageCode77() { // #6755
@@ -773,7 +708,7 @@ private:
     }
 
     void garbageCode78() { // #6756
-        checkCode("( ) { [ ] } ( ) { } const_array_of_int ( ) { } typedef int A [ ] [ ] ; A a = { { } { } }");
+        ASSERT_THROW(checkCode("( ) { [ ] } ( ) { } const_array_of_int ( ) { } typedef int A [ ] [ ] ; A a = { { } { } }"), InternalError);
     }
 
     void garbageCode79() { // #6757
@@ -814,10 +749,6 @@ private:
 
     void garbageCode88() { // #6786
         ASSERT_THROW(checkCode("( ) { ( 0 ) { ( ) } } g ( ) { i( ( false ?) ( ) : 1 ) ; } ;"), InternalError); // do not crash
-    }
-
-    void garbageCode89() { // #6772
-        checkCode("{ { ( ) } P ( ) ^ { } { } { } ( ) } 0"); // do not crash
     }
 
     void garbageCode90() { // #6790
@@ -921,10 +852,6 @@ private:
         TODO_ASSERT_THROW(checkCode("enum { FOO = ( , ) } {{ }}>> enum { FOO< = ( ) } { { } } ;"), InternalError);
     }
 
-    void garbageCode113() { //  #6858
-        checkCode("*(*const<> (size_t); foo) { } *(*const (size_t)() ; foo) { }");
-    }
-
     void garbageCode114() { // #2118
         ASSERT_THROW(checkCode("Q_GLOBAL_STATIC_WITH_INITIALIZER(Qt4NodeStaticData, qt4NodeStaticData, {\n"
                                "    for (unsigned i = 0 ; i < count; i++) {\n"
@@ -987,13 +914,8 @@ private:
                                "}"), InternalError);
     }
 
-    void garbageCode124() {
-        checkCode("+---+");
-    }
-
     void garbageCode125() {
-        ASSERT_THROW(checkCode("{ T struct B : T valueA_AA ; } T : [ T > ( ) { B } template < T > struct A < > : ] { ( ) { return valueA_AC struct { : } } b A < int > AC ( ) a_aa.M ; ( ) ( ) }"),
-                     InternalError);
+        checkCode("{ T struct B : T valueA_AA ; } T : [ T > ( ) { B } template < T > struct A < > : ] { ( ) { return valueA_AC struct { : } } b A < int > AC ( ) a_aa.M ; ( ) ( ) }");
         ASSERT_THROW(checkCode("template < Types > struct S :{ ( S < ) S >} { ( ) { } } ( ) { return S < void > ( ) }"),
                      InternalError);
     }
@@ -1073,7 +995,7 @@ private:
                 tokenizer.tokenize(istr, "test.cpp");
                 assertThrowFail(__FILE__, __LINE__);
             } catch (InternalError& e) {
-                ASSERT_EQUALS("Invalid number of character '(' when these macros are defined: ''.", e.errorMessage);
+                ASSERT_EQUALS("Invalid number of character '(' when no macros are defined.", e.errorMessage);
                 ASSERT_EQUALS("syntaxError", e.id);
                 ASSERT_EQUALS(2, e.token->linenr());
             }
@@ -1082,8 +1004,7 @@ private:
 
     void garbageCode134() {
         // Ticket #5605, #5759, #5762, #5774, #5823, #6059
-        checkCode("template<>\n");
-        checkCode("foo() template<typename T1 = T2 = typename = unused, T5 = = unused> struct tuple Args> tuple<Args...> { } main() { foo<int,int,int,int,int,int>(); }");
+        ASSERT_THROW(checkCode("foo() template<typename T1 = T2 = typename = unused, T5 = = unused> struct tuple Args> tuple<Args...> { } main() { foo<int,int,int,int,int,int>(); }"), InternalError);
         checkCode("( ) template < T1 = typename = unused> struct Args { } main ( ) { foo < int > ( ) ; }");
         checkCode("() template < T = typename = x > struct a {} { f <int> () }");
         checkCode("template < T = typename = > struct a { f <int> }");
@@ -1176,10 +1097,6 @@ private:
         //ASSERT_THROW(checkCode("template < typename > struct A { } ; template < typename > struct A < INVALID > : A < int[ > { }] ;"), InternalError);
     }
 
-    void garbageCode145() { // #7074
-        checkCode("++4++ +  + E++++++++++ + ch " "tp.oed5[.]");
-    }
-
     void garbageCode146() { // #7081
         ASSERT_THROW(checkCode("void foo() {\n"
                                "    ? std::cout << pow((, 1) << std::endl;\n"
@@ -1227,15 +1144,14 @@ private:
                                "}\n"), InternalError);
     }
 
-    void garbageCode151() { // #4175
-        checkCode(">{ x while (y) z int = }");
-        checkCode("void f() {\n" // #4911 - bad simplification => don't crash
+    void garbageCode151() { // #4911 - bad simplification => don't crash
+        checkCode("void f() {\n"
                   "    int a;\n"
                   "    do { a=do_something() } while (a);\n"
                   "}");
     }
 
-    void garbageCode152() { // happened in travis, originaly from llvm clang code
+    void garbageCode152() { // happened in travis, originally from llvm clang code
         const char* code = "template <bool foo = std::value &&>\n"
                            "static std::string foo(char *Bla) {\n"
                            "    while (Bla[1] && Bla[1] != ',') }\n";
@@ -1248,10 +1164,6 @@ private:
 
     void garbageCode154() {
         checkCode("\"abc\"[];");
-    }
-
-    void garbageCode155() { // #7118
-        checkCode("&p(!{}e x){({(0?:?){({})}()})}");
     }
 
     void garbageCode156() { // #7120
@@ -1314,11 +1226,9 @@ private:
     }
 
     void garbageAST() {
-        checkCode("--"); // don't crash
-
-        checkCode("N 1024 float a[N], b[N + 3], c[N]; void N; (void) i;\n"
-                  "int #define for (i = avx_test i < c[i]; i++)\n"
-                  "b[i + 3] = a[i] * {}"); // Don't hang (#5787)
+        ASSERT_THROW(checkCode("N 1024 float a[N], b[N + 3], c[N]; void N; (void) i;\n"
+                               "int #define for (i = avx_test i < c[i]; i++)\n"
+                               "b[i + 3] = a[i] * {}"), InternalError); // Don't hang (#5787)
 
         checkCode("START_SECTION([EXTRA](bool isValid(const String &filename)))"); // Don't crash (#5991)
     }
@@ -1361,8 +1271,6 @@ private:
             "}\n"
         );
 
-        checkCode(" > template < . > struct Y < T > { = } ;\n"); // #6108
-
         checkCode( // #6117
             "template <typename ...> struct something_like_tuple\n"
             "{};\n"
@@ -1400,9 +1308,6 @@ private:
                       checkCode("template<typename T> struct A;\n"
                                 "struct B { template<typename T> struct C };\n"
                                 "{};"));
-
-        // #4169
-        checkCode("volatile true , test < test < #ifdef __ppc__ true ,");
     }
     void garbageCode161() {
         //7200
@@ -1421,17 +1326,12 @@ private:
 
     void garbageCode164() {
         //7234
-        ASSERT_THROW(checkCode("class d{k p;}(){d::d():B<()}", false), InternalError);
+        checkCode("class d{k p;}(){d::d():B<()}", false);
     }
 
     void garbageCode165() {
         //7235
         checkCode("for(;..)", false);
-    }
-
-    void garbageCode166() {
-        //7236
-        checkCode("d a(){f s=0()8[]s?():0}*()?:0", false);
     }
 
     void garbageCode167() {
@@ -1487,27 +1387,6 @@ private:
         checkCode("class t { { struct } enum class f : unsigned { q } b ; operator= ( T ) { switch ( b ) { case f::q: } } { assert ( b ) ; } } { ; & ( t ) ( f::t ) ; } ;");
     }
 
-    void garbageCode177() { // #7321
-        checkCode("{(){(())}}r&const");
-    }
-
-    void garbageCode178() { // #3441
-        checkCode("%: return ; ()");
-    }
-
-    void garbageCode179() { // #3533
-        checkCode("<class T>\n"
-                  "{\n"
-                  "    struct {\n"
-                  "        typename D4:typename Base<T*>\n"
-                  "    };\n"
-                  "};");
-    }
-
-    void garbageCode180() {
-        checkCode("int");
-    }
-
     void garbageCode181() {
         checkCode("int test() { int +; }");
     }
@@ -1521,6 +1400,76 @@ private:
         ASSERT_THROW(checkCode("= { int } enum return { r = f() f(); }"), InternalError);
     }
 
+    void garbageCode184() { // #7699
+        checkCode("unsigned int AquaSalSystem::GetDisplayScreenCount() {\n"
+                  "    NSArray* pScreens = [NSScreen screens];\n"
+                  "    return pScreens ? [pScreens count] : 1;\n"
+                  "}");
+    }
+
+    void garbageCode185() { // #6011 crash in libreoffice failure to create proper AST
+        checkCode(
+            "namespace binfilter\n"
+            "{\n"
+            "       BOOL EnhWMFReader::ReadEnhWMF()\n"
+            "       {\n"
+            "               pOut->CreateObject( nIndex, GDI_BRUSH, new WinMtfFillStyle( ReadColor(), ( nStyle == BS_HOLLOW ) ? TRUE : FALSE ) );\n"
+            "               return bStatus;\n"
+            "       };\n"
+            "}\n");
+    }
+
+    void syntaxErrorFirstToken() {
+        ASSERT_THROW(checkCode("&operator(){[]};"), InternalError); // #7818
+        ASSERT_THROW(checkCode("*(*const<> (size_t); foo) { } *(*const (size_t)() ; foo) { }"), InternalError); // #6858
+        ASSERT_THROW(checkCode(">{ x while (y) z int = }"), InternalError); // #4175
+        ASSERT_THROW(checkCode("&p(!{}e x){({(0?:?){({})}()})}"), InternalError); // #7118
+        ASSERT_THROW(checkCode("<class T> { struct { typename D4:typename Base<T*> }; };"), InternalError); // #3533
+        ASSERT_THROW(checkCode(" > template < . > struct Y < T > { = } ;\n"), InternalError); // #6108
+
+    }
+
+    void syntaxErrorLastToken() {
+        ASSERT_THROW(checkCode("int *"), InternalError); // #7821
+        ASSERT_THROW(checkCode("x[y]"), InternalError); // #2986
+        ASSERT_THROW(checkCode("( ) &"), InternalError);
+        ASSERT_THROW(checkCode("|| #if #define <="), InternalError); // #2601
+        ASSERT_THROW(checkCode("f::y:y : <x::"), InternalError); // #6613
+        ASSERT_THROW(checkCode("\xe2u."), InternalError); // #6613
+        ASSERT_THROW(checkCode("a \"b\" not_eq \"c\""), InternalError); // #6720
+        ASSERT_THROW(checkCode("(int arg2) { } { } typedef void (func_type) (int, int); typedef func_type&"), InternalError); // #6738
+        ASSERT_THROW(checkCode("&g[0]; { (g[0] 0) } =", false), InternalError); // #6744
+        ASSERT_THROW(checkCode("{ { void foo() { struct }; { }; } }; struct S { } f =", false), InternalError); // #6753
+        ASSERT_THROW(checkCode("{ { ( ) } P ( ) ^ { } { } { } ( ) } 0"), InternalError); // #6772
+        ASSERT_THROW(checkCode("+---+"), InternalError); // #6948
+        ASSERT_THROW(checkCode("template<>\n"), InternalError);
+        ASSERT_THROW(checkCode("++4++ +  + E++++++++++ + ch " "tp.oed5[.]"), InternalError); // #7074
+        ASSERT_THROW(checkCode("d a(){f s=0()8[]s?():0}*()?:0", false), InternalError); // #7236
+        ASSERT_THROW(checkCode("!2 : #h2 ?:", false), InternalError); // #7769
+        ASSERT_THROW(checkCode("--"), InternalError);
+        ASSERT_THROW(checkCode("volatile true , test < test < #ifdef __ppc__ true ,"), InternalError); // #4169
+        ASSERT_THROW(checkCode("a,b--\n"), InternalError); // #2847
+        ASSERT_THROW(checkCode("x a[0] ="), InternalError); // #2682
+        ASSERT_THROW(checkCode("auto_ptr<x>\n"), InternalError); // #2967
+        ASSERT_THROW(checkCode("char a[1]\n"), InternalError); // #2865
+        ASSERT_THROW(checkCode("<><<"), InternalError); // #2612
+        ASSERT_THROW(checkCode("z<y<x>"), InternalError); // #2831
+        ASSERT_THROW(checkCode("><,f<i,"), InternalError); // #2835
+        ASSERT_THROW(checkCode("0; (a) < (a)"), InternalError); // #2875
+        ASSERT_THROW(checkCode(" ( * const ( size_t ) ; foo )"), InternalError); // #6135
+        ASSERT_THROW(checkCode("({ (); strcat(strcat(() ()) ()) })"), InternalError); // #6686
+        ASSERT_THROW(checkCode("%: return ; ()"), InternalError); // #3441
+        ASSERT_THROW(checkCode("__attribute__((destructor)) void"), InternalError); // #7816
+        ASSERT_THROW(checkCode("1 *p = const"), InternalError); // #3512
+        ASSERT_THROW(checkCode("sizeof"), InternalError); // #2599
+        ASSERT_THROW(checkCode(" enum struct"), InternalError); // #6718
+        ASSERT_THROW(checkCode("{(){(())}}r&const"), InternalError); // #7321
+        ASSERT_THROW(checkCode("int"), InternalError);
+        ASSERT_THROW(checkCode("struct A :\n"), InternalError); // #2591
+        ASSERT_THROW(checkCode("{} const const\n"), InternalError); // #2637
+
+        // ASSERT_THROW(  , InternalError)
+    }
 };
 
 REGISTER_TEST(TestGarbage)

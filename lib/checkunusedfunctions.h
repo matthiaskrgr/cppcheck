@@ -25,6 +25,10 @@
 #include "config.h"
 #include "check.h"
 
+namespace tinyxml2 {
+    class XMLElement;
+}
+
 /// @addtogroup Checks
 /** @brief Check for functions never called */
 /// @{
@@ -43,7 +47,7 @@ public:
     // Parse current tokens and determine..
     // * Check what functions are used
     // * What functions are declared
-    void parseTokens(const Tokenizer &tokenizer, const char FileName[], const Settings *settings);
+    void parseTokens(const Tokenizer &tokenizer, const char FileName[], const Settings *settings, bool clear=true);
 
     void check(ErrorLogger * const errorLogger, const Settings& settings);
 
@@ -54,6 +58,11 @@ public:
     void analyseWholeProgram(const std::list<Check::FileInfo*> &fileInfo, const Settings& settings, ErrorLogger &errorLogger);
 
     static CheckUnusedFunctions instance;
+
+    std::string analyzerInfo() const;
+
+    /** @brief Combine and analyze all analyzerInfos for all TUs */
+    static void analyseWholeProgram(ErrorLogger * const errorLogger, const std::string &buildDir);
 
 private:
 
@@ -72,9 +81,7 @@ private:
     /**
      * Dummy implementation, just to provide error for --errorlist
      */
-    void runSimplifiedChecks(const Tokenizer *, const Settings *, ErrorLogger *) {
-
-    }
+    void runSimplifiedChecks(const Tokenizer *, const Settings *, ErrorLogger *) {}
 
     static std::string myName() {
         return "Unused functions";
@@ -96,6 +103,15 @@ private:
     };
 
     std::map<std::string, FunctionUsage> _functions;
+
+    class CPPCHECKLIB FunctionDecl {
+    public:
+        explicit FunctionDecl(const Function *f);
+        std::string functionName;
+        unsigned int lineNumber;
+    };
+    std::list<FunctionDecl> _functionDecl;
+    std::set<std::string> _functionCalls;
 };
 /// @}
 //---------------------------------------------------------------------------
