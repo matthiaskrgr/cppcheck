@@ -465,7 +465,7 @@ void CheckStl::eraseCheckLoopVar(const Scope &scope, const Variable *var)
             continue;
         if (!Token::Match(tok->tokAt(-2), ". erase ( ++| %varid% )", var->declarationId()))
             continue;
-        if (Token::simpleMatch(tok->astParent(), "="))
+        if (tok->astParent() && tok->astParent()->str() == "=")
             continue;
         // Iterator is invalid..
         unsigned int indentlevel = 0U;
@@ -483,7 +483,7 @@ void CheckStl::eraseCheckLoopVar(const Scope &scope, const Variable *var)
                 continue;
             }
             if (tok2->varId() == var->declarationId()) {
-                if (Token::simpleMatch(tok2->next(), "="))
+                if (tok2->next() && tok2->next()->str() == "=")
                     break;
                 dereferenceErasedError(tok, tok2, tok2->str());
                 break;
@@ -1079,7 +1079,7 @@ void CheckStl::string_c_str()
                 if (Token::Match(tok2, "std :: string|wstring (") &&
                     Token::Match(tok2->linkAt(3), ") . c_str|data ( ) ;")) {
                     err = true;
-                } else if (Token::simpleMatch(tok2, "(") &&
+                } else if ((tok2 && tok2->str() == "(") &&
                            Token::Match(tok2->link(), ") . c_str|data ( ) ;")) {
                     // Check for "+ localvar" or "+ std::string(" inside the bracket
                     bool is_implicit_std_string = printInconclusive;

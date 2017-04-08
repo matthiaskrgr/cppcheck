@@ -4997,7 +4997,7 @@ void SymbolDatabase::setValueTypeInTokenList()
             else if (tok->previous()) {
                 const std::string& typestr(_settings->library.returnValueType(tok->previous()));
                 if (typestr.empty() || typestr == "iterator") {
-                    if (Token::simpleMatch(tok->astOperand1(), ".") &&
+                    if (tok->astOperand1() && (tok->astOperand1()->str() == ".") &&
                         tok->astOperand1()->astOperand1() &&
                         tok->astOperand1()->astOperand2() &&
                         tok->astOperand1()->astOperand1()->valueType() &&

@@ -324,7 +324,7 @@ bool isReturnScope(const Token * const endToken)
     if (prev && Token::simpleMatch(prev->previous(), "} ;"))
         prev = prev->previous();
 
-    if (Token::simpleMatch(prev, "}")) {
+    if (prev && prev->str() == "}") {
         if (Token::simpleMatch(prev->link()->tokAt(-2), "} else {"))
             return isReturnScope(prev) && isReturnScope(prev->link()->tokAt(-2));
         if (Token::simpleMatch(prev->link()->previous(), ") {") &&
@@ -338,7 +338,7 @@ bool isReturnScope(const Token * const endToken)
         }
         if (Token::Match(prev->link()->previous(), "[;{}] {"))
             return isReturnScope(prev);
-    } else if (Token::simpleMatch(prev, ";")) {
+    } else if (prev && (prev->str() == ";")) {
         // noreturn function
         if (Token::simpleMatch(prev->previous(), ") ;") && Token::Match(prev->linkAt(-1)->tokAt(-2), "[;{}] %name% ("))
             return true;
@@ -357,7 +357,7 @@ bool isVariableChangedByFunctionCall(const Token *tok, const Settings *settings,
         return false;
 
     // address of variable
-    const bool addressOf = tok && Token::simpleMatch(tok->previous(), "&");
+    const bool addressOf = tok && tok->previous() && (tok->previous()->str() == "&");
 
     // passing variable to subfunction?
     if (Token::Match(tok->tokAt(-2), ") & %name% [,)]") && Token::Match(tok->linkAt(-2)->previous(), "[,(] ("))

@@ -95,7 +95,7 @@ bool CheckAutoVariables::isAutoVarArray(const Token *tok)
         return false;
 
     // &x[..]
-    if (tok->str() == "&" && Token::simpleMatch(tok->astOperand1(), "[") && !tok->astOperand2())
+    if (tok->str() == "&" && tok->astOperand1() && tok->astOperand1()->str() == "[" && !tok->astOperand2())
         return isAutoVarArray(tok->astOperand1()->astOperand1());
 
     // x+y

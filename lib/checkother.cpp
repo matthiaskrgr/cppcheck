@@ -1208,7 +1208,7 @@ void CheckOther::checkVariableScope()
                 continue;
         }
         // bailout if initialized with function call that has possible side effects
-        if (Token::Match(tok, "[(=]") && Token::simpleMatch(tok->astOperand2(), "("))
+        if (Token::Match(tok, "[(=]") && (tok->astOperand2() && tok->astOperand2()->str() == "("))
             continue;
         bool reduce = true;
         bool used = false; // Don't warn about unused variables
@@ -1592,7 +1592,7 @@ void CheckOther::checkCharVariable()
                 }
 
                 // is the result stored in a short|int|long?
-                if (warn && Token::simpleMatch(tok->astParent(), "=")) {
+                if (warn && tok->astParent() && tok->astParent()->str() == "=") {
                     const Token *lhs = tok->astParent()->astOperand1();
                     if (lhs && lhs->valueType() && lhs->valueType()->type >= ValueType::Type::SHORT)
                         charBitOpError(tok); // This is an error..
@@ -2836,7 +2836,7 @@ void CheckOther::checkFuncArgNamesDifferent()
                     declarations[j] = decl;
                 decl = decl->next();
             }
-            if (Token::simpleMatch(decl, ","))
+            if (decl && decl->str() == ",")
                 decl = decl->next();
         }
         // check for different argument order

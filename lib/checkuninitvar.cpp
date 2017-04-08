@@ -384,7 +384,7 @@ bool CheckUninitVar::checkScopeForVariable(const Token *tok, const Variable& var
                 const Token *rhs = condition->astOperand2();
                 const Token *vartok = rhs && rhs->isNumber() ? lhs : rhs;
                 const Token *numtok = rhs && rhs->isNumber() ? rhs : lhs;
-                while (Token::simpleMatch(vartok, "."))
+                while (vartok && vartok->str() ==  ".")
                     vartok = vartok->astOperand2();
                 if (vartok && vartok->varId() && numtok) {
                     std::map<unsigned int,VariableValue>::const_iterator it = variableValue.find(vartok->varId());
@@ -962,7 +962,7 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, Alloc al
         const Token *prev = vartok->tokAt(-2);
         while (Token::Match(prev, "%name%|*"))
             prev = prev->previous();
-        if (!Token::simpleMatch(prev, "&"))
+        if (!(prev && prev->str() == "&"))
             return true;
     }
 
@@ -980,7 +980,7 @@ bool CheckUninitVar::isVariableUsage(const Token *vartok, bool pointer, Alloc al
         const Token *parent = vartok->next()->astParent();
         while (Token::Match(parent, "[|."))
             parent = parent->astParent();
-        if (Token::simpleMatch(parent, "&") && !parent->astOperand2())
+        if ((parent && parent->str() == "&") && !parent->astOperand2())
             return false;
         if (parent && Token::Match(parent->previous(), "if|while|switch ("))
             return true;

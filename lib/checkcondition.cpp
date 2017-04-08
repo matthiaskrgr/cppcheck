@@ -880,10 +880,10 @@ void CheckCondition::checkModuloAlwaysTrueFalse()
             if (!tok->isComparisonOp())
                 continue;
             const Token *num, *modulo;
-            if (Token::simpleMatch(tok->astOperand1(), "%") && Token::Match(tok->astOperand2(), "%num%")) {
+            if (tok->astOperand1() && tok->astOperand1()->str() == "%" && Token::Match(tok->astOperand2(), "%num%")) {
                 modulo = tok->astOperand1();
                 num = tok->astOperand2();
-            } else if (Token::Match(tok->astOperand1(), "%num%") && Token::simpleMatch(tok->astOperand2(), "%")) {
+            } else if (Token::Match(tok->astOperand1(), "%num%") && tok->astOperand2() && tok->astOperand2()->str() ==  "%") {
                 num = tok->astOperand1();
                 modulo = tok->astOperand2();
             } else {
@@ -941,7 +941,7 @@ void CheckCondition::clarifyCondition()
                         // This might be a template
                         if (!isC && tok2->link())
                             break;
-                        if (Token::simpleMatch(tok2->astParent(), "?"))
+                        if (tok2->astParent() && tok2->astParent()->str() == "?")
                             break;
                         clarifyConditionError(tok, tok->strAt(2) == "=", false);
                         break;

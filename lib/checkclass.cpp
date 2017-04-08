@@ -1059,7 +1059,7 @@ void CheckClass::checkMemset()
                     if (var && arg1->strAt(1) == ",") {
                         if (var->isArrayOrPointer()) {
                             const Token *endTok = var->typeEndToken();
-                            while (Token::simpleMatch(endTok, "*")) {
+                            while (endTok && endTok->str() == "*") {
                                 ++numIndirToVariableType;
                                 endTok = endTok->previous();
                             }

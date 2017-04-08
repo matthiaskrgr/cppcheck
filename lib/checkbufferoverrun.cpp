@@ -289,7 +289,7 @@ static bool bailoutIfSwitch(const Token *tok, const unsigned int varid)
     const Token* end = tok->linkAt(1)->linkAt(1);
     if (Token::simpleMatch(end, "} else {")) // scan the else-block
         end = end->linkAt(2);
-    if (Token::simpleMatch(end, "{")) // Ticket #5203: Invalid code, bailout
+    if (end && end->str() == "{") // Ticket #5203: Invalid code, bailout
         return true;
 
     // Used later to check if the body belongs to a "if"
@@ -604,7 +604,7 @@ void CheckBufferOverrun::checkScope(const Token *tok, const std::vector<const st
                 const MathLib::bigint index = MathLib::toLongNumber(tok2->strAt(4));
                 indexes.push_back(index);
             }
-            if (indexes.empty() && arrayInfo.num().size() == 1U && Token::simpleMatch(tok2, "[") && tok2->astOperand2()) {
+            if (indexes.empty() && arrayInfo.num().size() == 1U && tok2 && tok2->str() == "[" && tok2->astOperand2()) {
                 const ValueFlow::Value *value = tok2->astOperand2()->getMaxValue(false);
                 if (value) {
                     indexes.push_back(value->intvalue);
@@ -763,7 +763,7 @@ static std::vector<ValueFlow::Value> valueFlowGetArrayIndexes(const Token * cons
     unsigned int indexvarid = 0;
     const std::vector<ValueFlow::Value> empty;
     std::vector<ValueFlow::Value> indexes;
-    for (const Token *tok2 = tok; indexes.size() < dimensions && Token::simpleMatch(tok2, "["); tok2 = tok2->link()->next()) {
+    for (const Token *tok2 = tok; indexes.size() < dimensions && tok2 && tok2->str() == "["; tok2 = tok2->link()->next()) {
         if (!tok2->astOperand2())
             return empty;
 
@@ -793,7 +793,7 @@ void CheckBufferOverrun::valueFlowCheckArrayIndex(const Token * const tok, const
             const Token *parent = tok->astParent();
             while (Token::Match(parent, "%name%|::|*|&"))
                 parent = parent->astParent();
-            if (parent && !Token::simpleMatch(parent, "="))
+            if (parent && !parent->str() ==  "=")
                 return;
         }
     */

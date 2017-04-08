@@ -5491,7 +5491,7 @@ void Tokenizer::simplifyVarDecl(Token * tokBegin, const Token * const tokEnd, co
                 --typelen;
             //skip all the pointer part
             bool isPointerOrRef = false;
-            while (Token::simpleMatch(varName, "*") || Token::Match(varName, "& %name% ,")) {
+            while ((varName && (varName->str() == "*")) || Token::Match(varName, "& %name% ,")) {
                 isPointerOrRef = true;
                 varName = varName->next();
             }
