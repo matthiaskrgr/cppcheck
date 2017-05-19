@@ -32,7 +32,8 @@ void CheckBoost::checkBoostForeachModification()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token *tok = scope->classStart->next(); tok && tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token *tok = scope->classStart->next(); tok && tok != classEnd; tok = tok->next()) {
             if (!Token::simpleMatch(tok, "BOOST_FOREACH ("))
                 continue;
 

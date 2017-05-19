@@ -80,8 +80,8 @@ void CheckBufferOverrun::arrayIndexOutOfBoundsError(const Token *tok, const Arra
 {
     bool inconclusive = false;
     const Token *condition = nullptr;
-    for (std::size_t i = 0; i < index.size(); ++i) {
-        inconclusive |= index[i].inconclusive;
+    const unsigned int indexSize = index.size();
+    for (std::size_t i = 0; i < indexSize; ++i) {
         if (condition == nullptr)
             condition = index[i].condition;
     }
@@ -113,13 +113,15 @@ void CheckBufferOverrun::arrayIndexOutOfBoundsError(const Token *tok, const Arra
 
         std::ostringstream errmsg;
         errmsg << ValueFlow::eitherTheConditionIsRedundant(condition) << " or the array '" << arrayInfo.varname();
-        for (std::size_t i = 0; i < arrayInfo.num().size(); ++i)
+        const unsigned int arraySize = arrayInfo.num().size();
+        for (std::size_t i = 0; i < arraySize; ++i)
             errmsg << "[" << arrayInfo.num(i) << "]";
         if (index.size() == 1)
             errmsg << "' is accessed at index " << index[0].intvalue << ", which is out of bounds.";
         else {
             errmsg << "' index " << arrayInfo.varname();
-            for (std::size_t i = 0; i < index.size(); ++i)
+            const unsigned int _indexSize = index.size();
+            for (std::size_t i = 0; i < _indexSize; ++i)
                 errmsg << "[" << index[i].intvalue << "]";
             errmsg << " is out of bounds.";
         }
@@ -128,13 +130,15 @@ void CheckBufferOverrun::arrayIndexOutOfBoundsError(const Token *tok, const Arra
     } else {
         std::ostringstream errmsg;
         errmsg << "Array '" << arrayInfo.varname();
-        for (std::size_t i = 0; i < arrayInfo.num().size(); ++i)
+        const unsigned int arraySize = arrayInfo.num().size();
+        for (std::size_t i = 0; i < arraySize; ++i)
             errmsg << "[" << arrayInfo.num(i) << "]";
         if (index.size() == 1)
             errmsg << "' accessed at index " << index[0].intvalue << ", which is out of bounds.";
         else {
             errmsg << "' index " << arrayInfo.varname();
-            for (std::size_t i = 0; i < index.size(); ++i)
+            const unsigned int _indexSize = index.size();
+            for (std::size_t i = 0; i < _indexSize; ++i)
                 errmsg << "[" << index[i].intvalue << "]";
             errmsg << " out of bounds.";
         }
@@ -411,7 +415,8 @@ void CheckBufferOverrun::checkFunctionParameter(const Token &ftok, unsigned int 
         MathLib::bigint arraySize = arrayInfo.element_size();
         if (arraySize == 0)
             return;
-        for (std::size_t i = 0; i < arrayInfo.num().size(); ++i)
+        const unsigned int arrayNumSize = arrayInfo.num().size();
+        for (std::size_t i = 0; i < arrayNumSize; ++i)
             arraySize *= arrayInfo.num(i);
 
         // dimension is 0 or unknown => bailout
@@ -517,7 +522,8 @@ void CheckBufferOverrun::checkFunctionParameter(const Token &ftok, unsigned int 
                 MathLib::bigint arraysize = arrayInfo.element_size();
                 if (arraysize == 100) // unknown size
                     arraysize = 0;
-                for (std::size_t i = 0; i < arrayInfo.num().size(); i++)
+                const unsigned int arrayNumSize = arrayInfo.num().size();
+                for (std::size_t i = 0; i < arrayNumSize; i++)
                     arraysize *= arrayInfo.num(i);
 
                 if (Token::Match(tok2, "[,)]") && arraysize > 0 && argsize > arraysize)
@@ -577,7 +583,8 @@ void CheckBufferOverrun::checkScope(const Token *tok, const std::vector<const st
     const unsigned int declarationId = arrayInfo.declarationId();
 
     std::string varnames;
-    for (std::size_t i = 0; i < varname.size(); ++i)
+    const unsigned long long variableSize = varname.size();
+    for (std::size_t i = 0; i < variableSize; ++i)
         varnames += (i == 0 ? "" : " . ") + *varname[i];
 
     const int varcount = varname.empty() ? 0 : static_cast<int>((varname.size() - 1) * 2U);

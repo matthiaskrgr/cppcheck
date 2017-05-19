@@ -53,7 +53,8 @@ void CheckBool::checkIncrementBoolean()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token* tok = scope->classStart->next(); tok != classEnd; tok = tok->next()) {
             if (Token::Match(tok, "%var% ++")) {
                 const Variable *var = tok->variable();
                 if (isBool(var))
@@ -93,7 +94,8 @@ void CheckBool::checkBitwiseOnBoolean()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token* tok = scope->classStart->next(); tok != classEnd; tok = tok->next()) {
             if (Token::Match(tok, "(|.|return|&&|%oror%|throw|, %var% [&|]")) {
                 const Variable *var = tok->next()->variable();
                 if (isBool(var)) {
@@ -132,7 +134,8 @@ void CheckBool::checkComparisonOfBoolWithInt()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token* tok = scope->classStart->next(); tok != classEnd; tok = tok->next()) {
             const Token* const left = tok->astOperand1();
             const Token* const right = tok->astOperand2();
             if (left && right && tok->isComparisonOp()) {
@@ -187,7 +190,8 @@ void CheckBool::checkComparisonOfFuncReturningBool()
     const std::size_t functionsCount = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functionsCount; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token* tok = scope->classStart->next(); tok != classEnd; tok = tok->next()) {
             if (tok->tokType() != Token::eComparisonOp || tok->str() == "==" || tok->str() == "!=")
                 continue;
             const Token *firstToken = tok->previous();
@@ -251,7 +255,8 @@ void CheckBool::checkComparisonOfBoolWithBool()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token* tok = scope->classStart->next(); tok != classEnd; tok = tok->next()) {
             if (tok->tokType() != Token::eComparisonOp || tok->str() == "==" || tok->str() == "!=")
                 continue;
             bool firstTokenBool = false;
@@ -295,7 +300,8 @@ void CheckBool::checkAssignBoolToPointer()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token* tok = scope->classStart; tok != classEnd; tok = tok->next()) {
             if (tok->str() == "=" && astIsBool(tok->astOperand2())) {
                 const Token *lhs = tok->astOperand1();
                 while (lhs && (lhs->str() == "." || lhs->str() == "::"))
@@ -327,7 +333,8 @@ void CheckBool::checkComparisonOfBoolExpressionWithInt()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token* tok = scope->classStart->next(); tok != classEnd; tok = tok->next()) {
             if (!tok->isComparisonOp())
                 continue;
 
@@ -443,7 +450,8 @@ void CheckBool::checkAssignBoolToFloat()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token* tok = scope->classStart; tok != classEnd; tok = tok->next()) {
             if (tok->str() == "=" && astIsBool(tok->astOperand2())) {
                 const Token *lhs = tok->astOperand1();
                 while (lhs && (lhs->str() == "." || lhs->str() == "::"))
