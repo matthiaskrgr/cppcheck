@@ -54,8 +54,8 @@ void CheckAssert::assertWithSideEffects()
                 else {
                     const Scope* scope = f->functionScope;
                     if (!scope) continue;
-
-                    for (const Token *tok2 = scope->classStart; tok2 != scope->classEnd; tok2 = tok2->next()) {
+                    const Token* classEnd = scope->classEnd;
+                    for (const Token *tok2 = scope->classStart; tok2 != classEnd; tok2 = tok2->next()) {
                         if (tok2->tokType() != Token::eAssignmentOp && tok2->tokType() != Token::eIncDecOp)
                             continue;
 
@@ -66,7 +66,7 @@ void CheckAssert::assertWithSideEffects()
                             continue; // Pointers need to be dereferenced, otherwise there is no error
 
                         bool noReturnInScope = true;
-                        for (const Token *rt = scope->classStart; rt != scope->classEnd; rt = rt->next()) {
+                        for (const Token *rt = scope->classStart; rt != classEnd; rt = rt->next()) {
                             if (rt->str() != "return") continue; // find all return statements
                             if (inSameScope(rt, tok2)) {
                                 noReturnInScope = false;

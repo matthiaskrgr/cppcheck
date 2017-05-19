@@ -153,8 +153,8 @@ static bool variableIsUsedInScope(const Token* start, unsigned int varId, const 
 {
     if (!start) // Ticket #5024
         return false;
-
-    for (const Token *tok = start; tok && tok != scope->classEnd; tok = tok->next()) {
+    const Token *classEnd = scope->classEnd;
+    for (const Token *tok = start; tok && tok != classEnd; tok = tok->next()) {
         if (tok->varId() == varId)
             return true;
         const Scope::ScopeType scopeType = tok->scope()->type;
@@ -177,7 +177,8 @@ void CheckAutoVariables::assignFunctionArg()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token *tok = scope->classStart; tok && tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token *tok = scope->classStart; tok && tok != classEnd; tok = tok->next()) {
             // TODO: What happens if this is removed?
             if (tok->astParent())
                 continue;
@@ -204,7 +205,8 @@ void CheckAutoVariables::autoVariables()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token *tok = scope->classStart; tok && tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token *tok = scope->classStart; tok && tok != classEnd; tok = tok->next()) {
             // Critical assignment
             if (Token::Match(tok, "[;{}] %var% = & %var%") && isRefPtrArg(tok->next()) && isAutoVar(tok->tokAt(4))) {
                 if (checkRvalueExpression(tok->tokAt(4)))
@@ -280,10 +282,10 @@ void CheckAutoVariables::returnPointerToLocalArray()
             continue;
 
         const Token *tok = scope->function->tokenDef;
-
+        const Token *classEnd = scope->classEnd;
         // have we reached a function that returns a pointer
         if (tok->previous() && tok->previous()->str() == "*") {
-            for (const Token *tok2 = scope->classStart->next(); tok2 && tok2 != scope->classEnd; tok2 = tok2->next()) {
+            for (const Token *tok2 = scope->classStart->next(); tok2 && tok2 != classEnd; tok2 = tok2->next()) {
                 // Return pointer to local array variable..
                 if (tok2 ->str() == "return" && isAutoVarArray(tok2->astOperand1())) {
                     errorReturnPointerToLocalArray(tok2);
@@ -467,6 +469,7 @@ void CheckAutoVariables::returnReference()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
+        const Token * classEnd = scope->classEnd;
         if (!scope->function)
             continue;
 
@@ -474,7 +477,7 @@ void CheckAutoVariables::returnReference()
 
         // have we reached a function that returns a reference?
         if (tok->previous() && tok->previous()->str() == "&") {
-            for (const Token *tok2 = scope->classStart->next(); tok2 && tok2 != scope->classEnd; tok2 = tok2->next()) {
+            for (const Token *tok2 = scope->classStart->next(); tok2 && tok2 != classEnd; tok2 = tok2->next()) {
                 if (!tok2->scope()->isExecutable()) {
                     tok2 = tok2->scope()->classEnd;
                     continue;

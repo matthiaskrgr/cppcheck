@@ -45,6 +45,7 @@ void Check64BitPortability::pointerassignment()
     const std::size_t functions = symbolDatabase->functionScopes.size();
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
+        const Token * classEnd = scope->classEnd;
         if (scope->function == 0 || !scope->function->hasBody()) // We only look for functions with a body
             continue;
 
@@ -55,8 +56,8 @@ void Check64BitPortability::pointerassignment()
             ;
         else
             continue;
-
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
+        
+        for (const Token* tok = scope->classStart->next(); tok != classEnd; tok = tok->next()) {
             // skip nested functions
             if (tok->str() == "{") {
                 if (tok->scope()->type == Scope::ScopeType::eFunction || tok->scope()->type == Scope::ScopeType::eLambda)
@@ -84,7 +85,8 @@ void Check64BitPortability::pointerassignment()
     // Check assignments
     for (std::size_t i = 0; i < functions; ++i) {
         const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token *tok = scope->classStart; tok && tok != scope->classEnd; tok = tok->next()) {
+        const Token * classEnd = scope->classEnd;
+        for (const Token *tok = scope->classStart; tok && tok != classEnd; tok = tok->next()) {
             if (tok->str() != "=")
                 continue;
 
