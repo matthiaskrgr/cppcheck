@@ -21,21 +21,23 @@
 #define tokenH
 //---------------------------------------------------------------------------
 
+#include "config.h"
+#include "mathlib.h"
+#include "valueflow.h"
+
+#include <cstddef>
 #include <list>
+#include <ostream>
 #include <string>
 #include <vector>
-#include <ostream>
-#include "config.h"
-#include "valueflow.h"
-#include "mathlib.h"
 
-class Scope;
-class Type;
-class Function;
-class Variable;
-class ValueType;
-class Settings;
 class Enumerator;
+class Function;
+class Scope;
+class Settings;
+class Type;
+class ValueType;
+class Variable;
 
 /// @addtogroup Core
 /// @{
@@ -891,7 +893,7 @@ private:
      * @return true if flag set or false in flag not set
      */
     bool getFlag(unsigned int flag_) const {
-        return bool((_flags & flag_) != 0);
+        return ((_flags & flag_) != 0);
     }
 
     /**

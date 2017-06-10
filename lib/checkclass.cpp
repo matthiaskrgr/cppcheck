@@ -19,15 +19,18 @@
 //---------------------------------------------------------------------------
 #include "checkclass.h"
 
-#include "tokenize.h"
-#include "token.h"
 #include "errorlogger.h"
+#include "library.h"
+#include "settings.h"
+#include "standards.h"
 #include "symboldatabase.h"
+#include "token.h"
+#include "tokenize.h"
 #include "utils.h"
 
-#include <string>
 #include <algorithm>
-
+#include <cstdlib>
+#include <utility>
 //---------------------------------------------------------------------------
 
 // Register CheckClass..
@@ -562,7 +565,12 @@ void CheckClass::initializeVarList(const Function &func, std::list<const Functio
         }
 
         // Before a new statement there is "[{};()=[]" or ::
-        if (! Token::Match(ftok, "{|}|;|(|)|=|[|::"))
+        // We can also have a new statement after any operators or comparisons
+        if (! Token::Match(ftok, "%op%|%comp%|{|}|;|(|)|=|[|::"))
+            continue;
+
+        // If assignment comes after an && or || this is really inconclusive because of short circuiting
+        if (Token::Match(ftok, "%oror%|&&"))
             continue;
 
         if (Token::simpleMatch(ftok, "( !"))

@@ -17,15 +17,26 @@
  */
 
 #include "valueflow.h"
+
 #include "astutils.h"
 #include "errorlogger.h"
+#include "library.h"
 #include "mathlib.h"
+#include "platform.h"
 #include "settings.h"
+#include "standards.h"
 #include "symboldatabase.h"
 #include "token.h"
 #include "tokenlist.h"
 #include "utils.h"
+
+#include <algorithm>
+#include <cstddef>
+#include <limits>
+#include <map>
+#include <set>
 #include <stack>
+#include <vector>
 
 namespace {
     struct ProgramMemory {
@@ -1306,6 +1317,13 @@ static bool valueFlowForward(Token * const               startToken,
                         bailout(tokenlist, errorLogger, tok2, "variable " + var->name() + " valueFlowForward, conditional return is assumed to be executed");
                     return false;
                 }
+            } else if (indentlevel <= 0 &&
+                       Token::simpleMatch(tok2->link()->previous(), "else {") &&
+                       !isReturnScope(tok2->link()->tokAt(-2)) &&
+                       isVariableChanged(tok2->link(), tok2, varid, settings)) {
+                std::list<ValueFlow::Value>::iterator it;
+                for (it = values.begin(); it != values.end(); ++it)
+                    it->changeKnownToPossible();
             }
         }
 

@@ -17,23 +17,27 @@
  */
 
 #include "cmdlineparser.h"
-#include "cppcheck.h"
+
+#include "check.h"
 #include "cppcheckexecutor.h"
 #include "filelister.h"
+#include "importproject.h"
 #include "path.h"
+#include "platform.h"
 #include "settings.h"
-#include "timer.h"
-#include "check.h"
+#include "standards.h"
+#include "suppressions.h"
 #include "threadexecutor.h" // Threading model
+#include "timer.h"
 #include "utils.h"
 
 #include <algorithm>
-#include <iostream>
-#include <sstream>
-#include <fstream>
-#include <string>
-#include <cstring>
+#include <cstdio>
 #include <cstdlib> // EXIT_FAILURE
+#include <cstring>
+#include <iostream>
+#include <list>
+#include <set>
 
 #ifdef HAVE_RULES
 // xml is used for rules
@@ -267,6 +271,10 @@ bool CmdLineParser::ParseFromArgs(int argc, const char* const argv[])
                     return false;
                 }
             }
+
+            // Write results in file
+            else if (std::strncmp(argv[i], "--output-file=", 14) == 0)
+                _settings->outputFile = Path::simplifyPath(Path::fromNativeSeparators(argv[i] + 14));
 
             // Write results in results.plist
             else if (std::strncmp(argv[i], "--plist-output=", 15) == 0) {
@@ -919,6 +927,7 @@ void CmdLineParser::PrintHelp()
               "                         distributed with Cppcheck is loaded automatically.\n"
               "                         For more information about library files, read the\n"
               "                         manual.\n"
+              "    --output-file=<file> Write results to file, rather than standard error.\n"
               "    --project=<file>     Run Cppcheck on project. The <file> can be a Visual\n"
               "                         Studio Solution (*.sln), Visual Studio Project\n"
               "                         (*.vcxproj), or compile database\n"

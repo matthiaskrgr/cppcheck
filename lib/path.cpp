@@ -21,15 +21,19 @@
 #endif
 #include "path.h"
 #include "utils.h"
+
 #include <algorithm>
-#include <vector>
-#include <sstream>
-#include <cstring>
 #include <cctype>
+#include <cstdlib>
+#include <sstream>
+
 #ifndef _WIN32
 #include <unistd.h>
 #else
 #include <direct.h>
+#endif
+#if defined(__CYGWIN__)
+#include <strings.h>
 #endif
 
 /** Is the filesystem case insensitive? */
@@ -78,9 +82,9 @@ std::string Path::simplifyPath(std::string originalPath)
     std::vector<std::string> pathParts;
     for (std::size_t i = 0; i < originalPath.size(); ++i) {
         if (originalPath[i] == '/' || originalPath[i] == '\\') {
-            if (subPath.length() > 0) {
+            if (!subPath.empty()) {
                 pathParts.push_back(subPath);
-                subPath = "";
+                subPath.clear();
             }
 
             pathParts.push_back(std::string(1 , originalPath[i]));
@@ -88,7 +92,7 @@ std::string Path::simplifyPath(std::string originalPath)
             subPath.append(1, originalPath[i]);
     }
 
-    if (subPath.length() > 0)
+    if (!subPath.empty())
         pathParts.push_back(subPath);
 
     // First filter out all double slashes
@@ -142,13 +146,13 @@ std::string Path::getPathFromFilename(const std::string &filename)
 bool Path::sameFileName(const std::string &fname1, const std::string &fname2)
 {
 #if defined(__linux__) || defined(__sun) || defined(__hpux)
-    return bool(fname1 == fname2);
+    return (fname1 == fname2);
 #elif defined(_MSC_VER) || (defined(__GNUC__) && defined(_WIN32))
-    return bool(_stricmp(fname1.c_str(), fname2.c_str()) == 0);
+    return (_stricmp(fname1.c_str(), fname2.c_str()) == 0);
 #elif defined(__GNUC__)
-    return bool(strcasecmp(fname1.c_str(), fname2.c_str()) == 0);
+    return (strcasecmp(fname1.c_str(), fname2.c_str()) == 0);
 #elif defined(__BORLANDC__)
-    return bool(stricmp(fname1.c_str(), fname2.c_str()) == 0);
+    return (stricmp(fname1.c_str(), fname2.c_str()) == 0);
 #else
 #error Platform filename compare function needed
 #endif
@@ -247,20 +251,16 @@ bool Path::isC(const std::string &path)
 bool Path::isCPP(const std::string &path)
 {
     const std::string extension = getFilenameExtensionInLowerCase(path);
-    if (extension == ".cpp" ||
-        extension == ".cxx" ||
-        extension == ".cc" ||
-        extension == ".c++" ||
-        extension == ".hpp" ||
-        extension == ".hxx" ||
-        extension == ".hh" ||
-        extension == ".tpp" ||
-        extension == ".txx") {
-        return true;
-    }
-
-    // In unix, ".C" is considered C++ file
-    return (getFilenameExtension(path) == ".C");
+    return extension == ".cpp" ||
+           extension == ".cxx" ||
+           extension == ".cc" ||
+           extension == ".c++" ||
+           extension == ".hpp" ||
+           extension == ".hxx" ||
+           extension == ".hh" ||
+           extension == ".tpp" ||
+           extension == ".txx" ||
+           getFilenameExtension(path) == ".C"; // In unix, ".C" is considered C++ file
 }
 
 bool Path::acceptFile(const std::string &path, const std::set<std::string> &extra)

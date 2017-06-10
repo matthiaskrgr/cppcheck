@@ -16,11 +16,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "testsuite.h"
-#include "tokenize.h"
-#include "token.h"
-#include "settings.h"
 #include "check.h"
+#include "errorlogger.h"
+#include "settings.h"
+#include "testsuite.h"
+#include "token.h"
+#include "tokenize.h"
+
+#include <list>
 
 
 class TestGarbage : public TestFixture {
@@ -359,7 +362,7 @@ private:
 
         ASSERT_THROW(checkCode("void f() {switch (n) { case 0?1;:{2} : z(); break;}}"), InternalError);
 
-        checkCode("void f() {switch (n) { case 0?(1?{3:4}):2 : z(); break;}}");
+        ASSERT_THROW(checkCode("void f() {switch (n) { case 0?(1?{3:4}):2 : z(); break;}}"), InternalError);
 
         //ticket #4234
         ASSERT_THROW(checkCode("( ) { switch break ; { switch ( x ) { case } y break ; : } }"), InternalError);

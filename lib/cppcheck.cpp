@@ -17,23 +17,28 @@
  */
 #include "cppcheck.h"
 
-#include "preprocessor.h" // Preprocessor
-#include "tokenize.h" // Tokenizer
-
 #include "check.h"
-#include "path.h"
-
 #include "checkunusedfunctions.h"
+#include "library.h"
+#include "mathlib.h"
+#include "path.h"
+#include "platform.h"
+#include "preprocessor.h" // Preprocessor
+#include "suppressions.h"
 #include "timer.h"
+#include "token.h"
+#include "tokenize.h" // Tokenizer
+#include "tokenlist.h"
 #include "version.h"
 
 #include <simplecpp.h>
-
-#include <algorithm>
-#include <fstream>
-#include <sstream>
-#include <stdexcept>
 #include <tinyxml2.h>
+#include <algorithm>
+#include <cstring>
+#include <new>
+#include <set>
+#include <stdexcept>
+#include <vector>
 
 #ifdef HAVE_RULES
 #define PCRE_STATIC
@@ -139,15 +144,34 @@ unsigned int CppCheck::processFile(const std::string& filename, const std::strin
         simplecpp::OutputList outputList;
         std::vector<std::string> files;
         simplecpp::TokenList tokens1(fileStream, files, filename, &outputList);
+
+        // If there is a syntax error, report it and stop
+        for (simplecpp::OutputList::const_iterator it = outputList.begin(); it != outputList.end(); ++it) {
+            if (it->type != simplecpp::Output::SYNTAX_ERROR)
+                continue;
+            const ErrorLogger::ErrorMessage::FileLocation loc1(it->location.file(), it->location.line);
+            std::list<ErrorLogger::ErrorMessage::FileLocation> callstack;
+            callstack.push_back(loc1);
+
+            ErrorLogger::ErrorMessage errmsg(callstack,
+                                             "",
+                                             Severity::error,
+                                             it->msg,
+                                             "syntaxError",
+                                             false);
+            _errorLogger.reportErr(errmsg);
+            return 1;
+        }
+
         preprocessor.loadFiles(tokens1, files);
 
         if (!_settings.plistOutput.empty()) {
             std::string filename2;
-            if (filename.find("/") != std::string::npos)
-                filename2 = filename.substr(filename.rfind("/") + 1);
+            if (filename.find('/') != std::string::npos)
+                filename2 = filename.substr(filename.rfind('/') + 1);
             else
                 filename2 = filename;
-            filename2 = _settings.plistOutput + filename2.substr(0, filename2.find(".")) + ".plist";
+            filename2 = _settings.plistOutput + filename2.substr(0, filename2.find('.')) + ".plist";
             plistFile.open(filename2);
             plistFile << ErrorLogger::plistHeader(version(), files);
         }

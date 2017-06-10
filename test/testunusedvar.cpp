@@ -16,10 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "checkunusedvar.h"
+#include "settings.h"
 #include "testsuite.h"
 #include "tokenize.h"
-#include "checkunusedvar.h"
 
+#include <string>
 
 class TestUnusedVar : public TestFixture {
 public:
@@ -123,6 +125,7 @@ private:
         TEST_CASE(localvararray2);  // ticket #3438
         TEST_CASE(localvararray3);  // ticket #3980
         TEST_CASE(localvararray4);  // ticket #4839
+        TEST_CASE(localvararray5);  // ticket #7092
         TEST_CASE(localvarstring1);
         TEST_CASE(localvarstring2); // ticket #2929
         TEST_CASE(localvarconst1);
@@ -3720,6 +3723,14 @@ private:
                               "    int *pp[0];\n"
                               "    p[0] = 1;\n"
                               "    *pp[0] = p[0];\n"
+                              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void localvararray5() {
+        functionVariableUsage("int foo() {\n"
+                              "    int p[5][5];\n"
+                              "    dostuff(*p);\n"
                               "}");
         ASSERT_EQUALS("", errout.str());
     }

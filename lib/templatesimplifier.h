@@ -22,17 +22,18 @@
 #define templatesimplifierH
 //---------------------------------------------------------------------------
 
-#include <set>
-#include <list>
-#include <string>
-#include <ctime>
-#include <vector>
 #include "config.h"
 
-class Token;
-class TokenList;
+#include <ctime>
+#include <list>
+#include <set>
+#include <string>
+#include <vector>
+
 class ErrorLogger;
 class Settings;
+class Token;
+class TokenList;
 
 
 /// @addtogroup Core
@@ -151,6 +152,20 @@ public:
         const std::time_t maxtime,
         std::list<Token *> &templateInstantiations,
         std::set<std::string> &expandedtemplates);
+
+    /**
+     * Replace all matching template usages  'Foo < int >' => 'Foo<int>'
+     * @param instantiationToken Template instantiation token
+     * @param templateMatchPattern Pattern compatible with Token::simpleMatch
+     * @param newName The new type name
+     * @param typesUsedInTemplateInstantiation template instantiation parameters
+     * @param templateInstantiations All seen instantiations
+     */
+    static void replaceTemplateUsage(Token *const instantiationToken,
+                                     const std::string &templateMatchPattern,
+                                     const std::string &newName,
+                                     const std::vector<const Token *> &typesUsedInTemplateInstantiation,
+                                     std::list<Token *> &templateInstantiations);
 
     /**
      * Simplify templates

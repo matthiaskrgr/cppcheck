@@ -22,18 +22,23 @@
 
 #include "checkbufferoverrun.h"
 
-#include "tokenize.h"
-#include "mathlib.h"
-#include "symboldatabase.h"
 #include "astutils.h"
+#include "library.h"
+#include "mathlib.h"
+#include "settings.h"
+#include "symboldatabase.h"
+#include "token.h"
+#include "tokenize.h"
+#include "tokenlist.h"
 #include "utils.h"
+#include "valueflow.h"
 
-#include <algorithm>
-#include <sstream>
-#include <list>
-#include <cstdlib>
-#include <stack>
 #include <tinyxml2.h>
+#include <algorithm>
+#include <cstdlib>
+#include <sstream>
+#include <stack>
+#include <utility>
 
 //---------------------------------------------------------------------------
 
@@ -1647,7 +1652,7 @@ MathLib::biguint CheckBufferOverrun::countSprintfLength(const std::string &input
                 input_string_size += tempDigits;
 
             parameterLength = 0;
-            digits_string = "";
+            digits_string.clear();
             i_d_x_f_found = false;
             percentCharFound = false;
             handleNextParameter = false;

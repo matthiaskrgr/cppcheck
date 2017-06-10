@@ -16,16 +16,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "library.h"
+#include "platform.h"
+#include "settings.h"
 #include "testsuite.h"
-#include "testutils.h"
-#include "valueflow.h"
-#include "tokenize.h"
 #include "token.h"
+#include "tokenize.h"
+#include "valueflow.h"
 
 #include <simplecpp.h>
-#include <vector>
-#include <string>
 #include <cmath>
+#include <list>
+#include <map>
+#include <ostream>
+#include <string>
+#include <utility>
+#include <vector>
 
 class TestValueFlow : public TestFixture {
 public:
@@ -2238,6 +2244,13 @@ private:
         value = valueOfTok(code, "+");
         ASSERT_EQUALS(9, value.intvalue);
         ASSERT(value.isPossible());
+
+        code = "void f(int c) {\n"
+               "  int x = 0;\n"
+               "  if (c) {} else { x++; }\n"
+               "  return x + 2;\n" // <- possible value
+               "}";
+        ASSERT(isNotKnownValues(code, "+"));
 
         code = "void f() {\n"
                "  int x = 0;\n"

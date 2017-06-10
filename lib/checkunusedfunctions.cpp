@@ -19,12 +19,20 @@
 
 //---------------------------------------------------------------------------
 #include "checkunusedfunctions.h"
-#include "tokenize.h"
-#include "token.h"
+
+#include "errorlogger.h"
+#include "library.h"
+#include "settings.h"
 #include "symboldatabase.h"
-#include "analyzerinfo.h"
-#include <cctype>
+#include "token.h"
+#include "tokenize.h"
+#include "tokenlist.h"
+
 #include <tinyxml2.h>
+#include <cstdlib>
+#include <cstring>
+#include <istream>
+#include <utility>
 //---------------------------------------------------------------------------
 
 
@@ -87,10 +95,13 @@ void CheckUnusedFunctions::parseTokens(const Tokenizer &tokenizer, const char Fi
         // parsing of library code to find called functions
         if (settings->library.isexecutableblock(FileName, tok->str())) {
             const Token * markupVarToken = tok->tokAt(settings->library.blockstartoffset(FileName));
+            // not found
+            if (!markupVarToken)
+                continue;
             int scope = 0;
             bool start = true;
             // find all function calls in library code (starts with '(', not if or while etc)
-            while (scope || start) {
+            while ((scope || start) && markupVarToken) {
                 if (markupVarToken->str() == settings->library.blockstart(FileName)) {
                     scope++;
                     if (start) {
@@ -165,7 +176,7 @@ void CheckUnusedFunctions::parseTokens(const Tokenizer &tokenizer, const char Fi
                     if (funcToken->str()==",") {
                         if (++index == argIndex)
                             break;
-                        value = "";
+                        value.clear();
                     } else
                         value += funcToken->str();
                     funcToken = funcToken->next();

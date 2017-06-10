@@ -17,16 +17,20 @@
  */
 
 #include "library.h"
-#include "path.h"
-#include "tinyxml2.h"
-#include "tokenlist.h"
-#include "mathlib.h"
-#include "token.h"
-#include "symboldatabase.h"
+
 #include "astutils.h"
+#include "mathlib.h"
+#include "path.h"
+#include "symboldatabase.h"
+#include "tinyxml2.h"
+#include "token.h"
+#include "tokenlist.h"
 #include "utils.h"
 
-#include <string>
+#include <cctype>
+#include <cstdlib>
+#include <cstring>
+#include <list>
 
 static std::vector<std::string> getnames(const char *names)
 {
@@ -68,7 +72,7 @@ Library::Error Library::load(const char exename[], const char path[])
     if (error == tinyxml2::XML_ERROR_FILE_NOT_FOUND) {
         // failed to open file.. is there no extension?
         std::string fullfilename(path);
-        if (Path::getFilenameExtension(fullfilename) == "") {
+        if (Path::getFilenameExtension(fullfilename).empty()) {
             fullfilename += ".cfg";
             error = doc.LoadFile(fullfilename.c_str());
             if (error != tinyxml2::XML_ERROR_FILE_NOT_FOUND)

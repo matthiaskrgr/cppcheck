@@ -16,10 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tokenize.h"
-#include "checkclass.h"
-#include "testsuite.h"
 #include <tinyxml2.h>
+
+#include "checkclass.h"
+#include "library.h"
+#include "settings.h"
+#include "testsuite.h"
+#include "tokenize.h"
 
 
 class TestClass : public TestFixture {
@@ -4433,7 +4436,7 @@ private:
                    "        x = 0;\n"
                    "    }\n"
                    "    bool isValid() {\n"
-                   "        return bool(x == 0x11224488);\n"
+                   "        return (x == 0x11224488);\n"
                    "    }\n"
                    "};");
         ASSERT_EQUALS("[test.cpp:9]: (style, inconclusive) Technically the member function 'Fred::isValid' can be const.\n", errout.str());

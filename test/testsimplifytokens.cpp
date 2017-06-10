@@ -16,10 +16,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "testsuite.h"
-#include "tokenize.h"
-#include "token.h"
+#include "platform.h"
 #include "settings.h"
+#include "testsuite.h"
+#include "token.h"
+#include "tokenize.h"
+#include "tokenlist.h"
+
+#include <ostream>
+#include <string>
 
 
 class TestSimplifyTokens : public TestFixture {
@@ -2618,6 +2623,19 @@ private:
                                 "}\n";
 
             ASSERT_EQUALS("void f ( ) { ; }", tok(code));
+        }
+
+        {
+            // #7849
+            const char code[] =
+                "void f() {\n"
+                "if (-1e-2 == -0.01) \n"
+                "    g();\n"
+                "else\n"
+                "    h();\n"
+                "}";
+            ASSERT_EQUALS("void f ( ) { if ( -1e-2 == -0.01 ) { g ( ) ; } else { h ( ) ; } }",
+                          tok(code));
         }
     }
 

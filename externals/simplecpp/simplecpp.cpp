@@ -19,21 +19,16 @@
 #include "simplecpp.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdlib>
-#include <limits>
-#include <list>
-#include <map>
-#include <set>
-#include <stdexcept>
-#include <vector>
 #include <cstring>
-#include <cstdlib> // strtoll, etc
-#include <sstream>
+#include <exception>
 #include <fstream>
 #include <iostream>
+#include <limits>
+#include <sstream>
 #include <stack>
-#include <string>
+#include <stdexcept>
+#include <utility>
 
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(__MINGW32__)
 #define NOMINMAX
@@ -43,91 +38,90 @@
 #define SIMPLECPP_WINDOWS
 #endif
 
-static bool isHex(const std::string &s) {
+static bool isHex(const std::string &s)
+{
     return s.size()>2 && (s.compare(0,2,"0x")==0 || s.compare(0,2,"0X")==0);
 }
 
-namespace {
-    const simplecpp::TokenString DEFINE("define");
-    const simplecpp::TokenString UNDEF("undef");
 
-    const simplecpp::TokenString INCLUDE("include");
+static const simplecpp::TokenString DEFINE("define");
+static const simplecpp::TokenString UNDEF("undef");
 
-    const simplecpp::TokenString ERROR("error");
-    const simplecpp::TokenString WARNING("warning");
+static const simplecpp::TokenString INCLUDE("include");
 
-    const simplecpp::TokenString IF("if");
-    const simplecpp::TokenString IFDEF("ifdef");
-    const simplecpp::TokenString IFNDEF("ifndef");
-    const simplecpp::TokenString DEFINED("defined");
-    const simplecpp::TokenString ELSE("else");
-    const simplecpp::TokenString ELIF("elif");
-    const simplecpp::TokenString ENDIF("endif");
+static const simplecpp::TokenString ERROR("error");
+static const simplecpp::TokenString WARNING("warning");
 
-    const simplecpp::TokenString PRAGMA("pragma");
-    const simplecpp::TokenString ONCE("once");
+static const simplecpp::TokenString IF("if");
+static const simplecpp::TokenString IFDEF("ifdef");
+static const simplecpp::TokenString IFNDEF("ifndef");
+static const simplecpp::TokenString DEFINED("defined");
+static const simplecpp::TokenString ELSE("else");
+static const simplecpp::TokenString ELIF("elif");
+static const simplecpp::TokenString ENDIF("endif");
 
-    template<class T> std::string toString(T t)
-    {
-        std::ostringstream ostr;
-        ostr << t;
-        return ostr.str();
-    }
+static const simplecpp::TokenString PRAGMA("pragma");
+static const simplecpp::TokenString ONCE("once");
 
-    long long stringToLL(const std::string &s)
-    {
-        long long ret;
-        const bool hex = isHex(s);
-        std::istringstream istr(hex ? s.substr(2) : s);
-        if (hex)
-            istr >> std::hex;
-        istr >> ret;
-        return ret;
-    }
+template<class T> static std::string toString(T t)
+{
+    std::ostringstream ostr;
+    ostr << t;
+    return ostr.str();
+}
 
-    unsigned long long stringToULL(const std::string &s)
-    {
-        unsigned long long ret;
-        const bool hex = isHex(s);
-        std::istringstream istr(hex ? s.substr(2) : s);
-        if (hex)
-            istr >> std::hex;
-        istr >> ret;
-        return ret;
-    }
+static long long stringToLL(const std::string &s)
+{
+    long long ret;
+    const bool hex = isHex(s);
+    std::istringstream istr(hex ? s.substr(2) : s);
+    if (hex)
+        istr >> std::hex;
+    istr >> ret;
+    return ret;
+}
 
-    bool startsWith(const std::string &str, const std::string &s)
-    {
-        return (str.size() >= s.size() && str.compare(0, s.size(), s) == 0);
-    }
+static unsigned long long stringToULL(const std::string &s)
+{
+    unsigned long long ret;
+    const bool hex = isHex(s);
+    std::istringstream istr(hex ? s.substr(2) : s);
+    if (hex)
+        istr >> std::hex;
+    istr >> ret;
+    return ret;
+}
 
-    bool endsWith(const std::string &s, const std::string &e)
-    {
-        return (s.size() >= e.size() && s.compare(s.size() - e.size(), e.size(), e) == 0);
-    }
+static bool startsWith(const std::string &str, const std::string &s)
+{
+    return (str.size() >= s.size() && str.compare(0, s.size(), s) == 0);
+}
 
-    bool sameline(const simplecpp::Token *tok1, const simplecpp::Token *tok2)
-    {
-        return tok1 && tok2 && tok1->location.sameline(tok2->location);
-    }
+static bool endsWith(const std::string &s, const std::string &e)
+{
+    return (s.size() >= e.size() && s.compare(s.size() - e.size(), e.size(), e) == 0);
+}
 
+static bool sameline(const simplecpp::Token *tok1, const simplecpp::Token *tok2)
+{
+    return tok1 && tok2 && tok1->location.sameline(tok2->location);
+}
 
-    static bool isAlternativeBinaryOp(const simplecpp::Token *tok, const std::string &alt)
-    {
-        return (tok->name &&
-                tok->str == alt &&
-                tok->previous &&
-                tok->next &&
-                (tok->previous->number || tok->previous->name || tok->previous->op == ')') &&
-                (tok->next->number || tok->next->name || tok->next->op == '('));
-    }
+static bool isAlternativeBinaryOp(const simplecpp::Token *tok, const std::string &alt)
+{
+    return (tok->name &&
+            tok->str == alt &&
+            tok->previous &&
+            tok->next &&
+            (tok->previous->number || tok->previous->name || tok->previous->op == ')') &&
+            (tok->next->number || tok->next->name || tok->next->op == '('));
+}
 
-    static bool isAlternativeUnaryOp(const simplecpp::Token *tok, const std::string &alt)
-    {
-        return ((tok->name && tok->str == alt) &&
-                (!tok->previous || tok->previous->op == '(') &&
-                (tok->next && (tok->next->name || tok->next->number)));
-    }
+static bool isAlternativeUnaryOp(const simplecpp::Token *tok, const std::string &alt)
+{
+    return ((tok->name && tok->str == alt) &&
+            (!tok->previous || tok->previous->op == '(') &&
+            (tok->next && (tok->next->name || tok->next->number)));
 }
 
 void simplecpp::Location::adjust(const std::string &str)
@@ -353,7 +347,7 @@ static unsigned short getAndSkipBOM(std::istream &istr)
     return 0;
 }
 
-bool isNameChar(unsigned char ch)
+static bool isNameChar(unsigned char ch)
 {
     return std::isalnum(ch) || ch == '_' || ch == '$';
 }
@@ -534,6 +528,18 @@ void simplecpp::TokenList::readfile(std::istream &istr, const std::string &filen
             if (currentToken.size() < 2U)
                 // TODO report
                 return;
+
+            std::string s = currentToken;
+            std::string::size_type pos;
+            while ((pos = s.find_first_of("\r\n")) != std::string::npos) {
+                s.erase(pos,1);
+            }
+
+            push_back(new Token(s, location)); // push string without newlines
+
+            location.adjust(currentToken);
+
+            continue;
         }
 
         else {
@@ -591,12 +597,12 @@ void simplecpp::TokenList::constFold()
     }
 }
 
-static bool isFloatSuffix(const simplecpp::Token *tok) {
-    if (!tok || tok->str.size() > 2)
+static bool isFloatSuffix(const simplecpp::Token *tok)
+{
+    if (!tok || tok->str.size() != 1U)
         return false;
-    std::string s = tok->str;
-    std::transform(s.begin(), s.end(), s.begin(), static_cast<int (*)(int)>(std::tolower));
-    return s == "lf" || s == "f";
+    const char c = std::tolower(tok->str[0]);
+    return c == 'f' || c == 'l';
 }
 
 void simplecpp::TokenList::combineOperators()
@@ -901,12 +907,25 @@ std::string simplecpp::TokenList::readUntil(std::istream &istr, const Location &
     std::string ret;
     ret += start;
 
+    bool backslash = false;
     char ch = 0;
     while (ch != end && ch != '\r' && ch != '\n' && istr.good()) {
         ch = (unsigned char)istr.get();
+        if (backslash && ch == '\n') {
+            ch = 0;
+            backslash = false;
+            continue;
+        }
+        backslash = false;
         ret += ch;
-        if (ch == '\\')
-            ret += (unsigned char)istr.get();
+        if (ch == '\\') {
+            const char next = (unsigned char)istr.get();
+            if (next == '\r' || next == '\n') {
+                ret.erase(ret.size()-1U);
+                backslash = (next == '\r');
+            }
+            ret += next;
+        }
     }
 
     if (!istr.good() || ch != end) {
@@ -1452,6 +1471,25 @@ namespace simplecpp {
                 return tok2->next;
             }
 
+            else if (tok->str == DEFINED) {
+                const Token *tok2 = tok->next;
+                const Token *tok3 = tok2 ? tok2->next : NULL;
+                const Token *tok4 = tok3 ? tok3->next : NULL;
+                const Token *defToken = NULL;
+                const Token *lastToken = NULL;
+                if (sameline(tok, tok4) && tok2->op == '(' && tok3->name && tok4->op == ')') {
+                    defToken = tok3;
+                    lastToken = tok4;
+                } else if (sameline(tok,tok2) && tok2->name) {
+                    defToken = lastToken = tok2;
+                }
+                if (defToken) {
+                    const bool def = (macros.find(defToken->str) != macros.end());
+                    output->push_back(newMacroToken(def ? "1" : "0", loc, true));
+                    return lastToken->next;
+                }
+            }
+
             output->push_back(newMacroToken(tok->str, loc, true));
             return tok->next;
         }
@@ -1661,6 +1699,10 @@ namespace simplecpp {
         std::ostringstream ostr;
         std::string::size_type sep = 0;
         while ((sep = f.find_first_of("\\/", sep + 1U)) != std::string::npos) {
+            if (sep >= 2 && f.compare(sep-2,2,"..",0,2) == 0) {
+                ostr << "../";
+                continue;
+            }
             buf[sep] = 0;
             if (!realFileName(buf,ostr))
                 return f;
@@ -1685,23 +1727,23 @@ namespace simplecpp {
         // replace backslash separators
         std::replace(path.begin(), path.end(), '\\', '/');
 
-        // "./" at the start
-        if (path.size() > 3 && path.compare(0,2,"./") == 0 && path[2] != '/')
-            path.erase(0,2);
-
-        // remove "/./"
+        // remove "./"
         pos = 0;
-        while ((pos = path.find("/./",pos)) != std::string::npos) {
-            path.erase(pos,2);
+        while ((pos = path.find("./",pos)) != std::string::npos) {
+            if (pos == 0 || path[pos - 1U] == '/')
+                path.erase(pos,2);
+            else
+                pos += 2;
         }
 
         // remove "xyz/../"
         pos = 1U;
         while ((pos = path.find("/../", pos)) != std::string::npos) {
             const std::string::size_type pos1 = path.rfind('/', pos - 1U);
-            if (pos1 == std::string::npos)
-                pos++;
-            else {
+            if (pos1 == std::string::npos) {
+                path.erase(0,pos+4);
+                pos = 0;
+            } else {
                 path.erase(pos1,pos-pos1+3);
                 pos = std::min((std::string::size_type)1, pos1);
             }
@@ -2016,7 +2058,6 @@ void simplecpp::preprocess(simplecpp::TokenList &output, const simplecpp::TokenL
     std::stack<int> ifstates;
     ifstates.push(TRUE);
 
-    std::list<TokenList *> includes;
     std::stack<const Token *> includetokenstack;
 
     std::set<std::string> pragmaOnce;

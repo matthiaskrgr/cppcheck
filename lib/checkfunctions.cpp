@@ -21,9 +21,19 @@
 //---------------------------------------------------------------------------
 
 #include "checkfunctions.h"
+
 #include "astutils.h"
+#include "mathlib.h"
+#include "standards.h"
 #include "symboldatabase.h"
+#include "token.h"
+#include "tokenize.h"
+#include "valueflow.h"
+
 #include <cmath>
+#include <cstddef>
+#include <ostream>
+#include <vector>
 
 //---------------------------------------------------------------------------
 
@@ -172,7 +182,7 @@ void CheckFunctions::checkIgnoredReturnValue()
             // skip c++11 initialization, ({...})
             if (Token::Match(tok, "%var%|(|, {"))
                 tok = tok->linkAt(1);
-            else if (tok->str() == "(")
+            else if (Token::Match(tok, "[(<]") && tok->link())
                 tok = tok->link();
 
             if (tok->varId() || !Token::Match(tok, "%name% ("))
@@ -186,11 +196,7 @@ void CheckFunctions::checkIgnoredReturnValue()
                 continue;
             }
 
-            const Token* parent = tok;
-            while (parent->astParent() && parent->astParent()->str() == "::")
-                parent = parent->astParent();
-
-            if (CHECK_WRONG_DATA(tok->next()->astOperand1()) && !tok->next()->astParent() && (!tok->function() || !Token::Match(tok->function()->retDef, "void %name%")) && _settings->library.isUseRetVal(tok))
+            if ((!tok->function() || !Token::Match(tok->function()->retDef, "void %name%")) && _settings->library.isUseRetVal(tok) && !WRONG_DATA(!tok->next()->astOperand1(), tok))
                 ignoredReturnValueError(tok, tok->next()->astOperand1()->expressionString());
         }
     }
@@ -317,7 +323,7 @@ void CheckFunctions::memsetZeroBytes()
         for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
             if (Token::Match(tok, "memset|wmemset (") && (numberOfArguments(tok)==3)) {
                 const std::vector<const Token *> &arguments = getArguments(tok);
-                if (!CHECK_WRONG_DATA(arguments.size() == 3U))
+                if (WRONG_DATA(arguments.size() != 3U, tok))
                     continue;
                 const Token* lastParamTok = arguments[2];
                 if (lastParamTok->str() == "0")

@@ -16,11 +16,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "testsuite.h"
-#include "tokenize.h"
-#include "token.h"
+
+#include "config.h"
+#include "platform.h"
 #include "settings.h"
 #include "templatesimplifier.h"
+#include "testsuite.h"
+#include "token.h"
+#include "tokenize.h"
+
+struct InternalError;
 
 
 class TestSimplifyTemplate : public TestFixture {
@@ -90,6 +95,8 @@ private:
         TEST_CASE(template55);  // #6604 - simplify "const const" to "const" in template instantiations
         TEST_CASE(template56);  // #7117 - const ternary operator simplification as template parameter
         TEST_CASE(template57);  // #7891
+        TEST_CASE(template58);  // #6021 - use after free (deleted tokens in simplifyCalculations)
+        TEST_CASE(template59);  // #8051 - TemplateSimplifier::simplifyTemplateInstantiation failure
         TEST_CASE(template_enum);  // #6299 Syntax error in complex enum declaration (including template)
         TEST_CASE(template_unhandled);
         TEST_CASE(template_default_parameter);
@@ -1039,6 +1046,49 @@ private:
                             "Test<unsigned long> test( 0 );";
         const char exp [] = "Test < unsigned long > test ( 0 ) ; "
                             "struct Test < unsigned long > { Test < unsigned long > ( long ) ; } ;";
+        ASSERT_EQUALS(exp, tok(code));
+    }
+
+    void template58() { // #6021
+        const char code[] = "template <typename A>\n"
+                            "void TestArithmetic() {\n"
+                            "  x(1 * CheckedNumeric<A>());\n"
+                            "}\n"
+                            "void foo() {\n"
+                            "  TestArithmetic<int>();\n"
+                            "}";
+        const char exp[] = "void foo ( ) {"
+                           " TestArithmetic < int > ( ) ; "
+                           "} "
+                           "void TestArithmetic < int > ( ) {"
+                           " x ( CheckedNumeric < int > ( ) ) ; "
+                           "}";
+        ASSERT_EQUALS(exp, tok(code));
+    }
+
+    void template59() { // #8051
+        const char code[] = "template<int N>\n"
+                            "struct Factorial {\n"
+                            "    enum FacHelper { value = N * Factorial<N - 1>::value };\n"
+                            "};\n"
+                            "template <>\n"
+                            "struct Factorial<0> {\n"
+                            "    enum FacHelper { value = 1 };\n"
+                            "};\n"
+                            "template<int DiagonalDegree>\n"
+                            "int diagonalGroupTest() {\n"
+                            "    return Factorial<DiagonalDegree>::value;\n"
+                            "}\n"
+                            "int main () {\n"
+                            "    return diagonalGroupTest<4>();\n"
+                            "}";
+        const char exp[] = "struct Factorial < 0 > { enum FacHelper { value = 1 } ; } ; "
+                           "int main ( ) { return diagonalGroupTest < 4 > ( ) ; } "
+                           "int diagonalGroupTest < 4 > ( ) { return Factorial < 4 > :: value ; } "
+                           "struct Factorial < 4 > { enum FacHelper { value = 4 * Factorial < 3 > :: value } ; } ; "
+                           "struct Factorial < 3 > { enum FacHelper { value = 3 * Factorial < 2 > :: value } ; } ; "
+                           "struct Factorial < 2 > { enum FacHelper { value = 2 * Factorial < 1 > :: value } ; } ; "
+                           "struct Factorial < 1 > { enum FacHelper { value = Factorial < 0 > :: value } ; } ;";
         ASSERT_EQUALS(exp, tok(code));
     }
 

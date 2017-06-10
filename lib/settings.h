@@ -21,18 +21,19 @@
 #define settingsH
 //---------------------------------------------------------------------------
 
-#include <list>
-#include <vector>
-#include <string>
-#include <set>
 #include "config.h"
+#include "errorlogger.h"
+#include "importproject.h"
 #include "library.h"
 #include "platform.h"
-#include "importproject.h"
-#include "suppressions.h"
 #include "standards.h"
-#include "errorlogger.h"
+#include "suppressions.h"
 #include "timer.h"
+
+#include <list>
+#include <set>
+#include <string>
+#include <vector>
 
 namespace ValueFlow {
     class Value;
@@ -131,7 +132,10 @@ public:
     /** @brief Paths used as base for conversion to relative paths. */
     std::vector<std::string> basePaths;
 
-    /** @brief write XML results (--plist-output=<dir>) */
+    /** @brief write results (--output-file=&lt;file&gt;) */
+    std::string outputFile;
+
+    /** @brief plist output (--plist-output=&lt;dir&gt;) */
     std::string plistOutput;
 
     /** @brief write XML results (--xml) */

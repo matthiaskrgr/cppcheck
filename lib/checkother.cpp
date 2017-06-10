@@ -19,13 +19,25 @@
 
 //---------------------------------------------------------------------------
 #include "checkother.h"
+
 #include "astutils.h"
+#include "errorlogger.h"
+#include "library.h"
 #include "mathlib.h"
+#include "settings.h"
+#include "standards.h"
 #include "symboldatabase.h"
+#include "token.h"
+#include "tokenize.h"
 #include "utils.h"
 
-#include <stack>
 #include <algorithm> // find_if()
+#include <list>
+#include <map>
+#include <ostream>
+#include <set>
+#include <stack>
+#include <utility>
 //---------------------------------------------------------------------------
 
 // Register this check class (by creating a static instance of it)
@@ -1332,7 +1344,7 @@ static std::size_t estimateSize(const Type* type, const Settings* settings, cons
         else if (i->type() && i->type()->classScope)
             size = estimateSize(i->type(), settings, symbolDatabase, recursionDepth+1);
         else if (i->isStlStringType() || (i->isStlType() && Token::Match(i->typeStartToken(), "std :: %type% <") && !Token::simpleMatch(i->typeStartToken()->linkAt(3), "> ::")))
-            size = 16; // Just guess
+            size = 3 * settings->sizeof_pointer; // Just guess
         else
             size = symbolDatabase->sizeOfType(i->typeStartToken());
 
@@ -1373,7 +1385,7 @@ void CheckOther::checkPassByReference()
             // Ensure that it is a large object.
             if (!var->type()->classScope)
                 inconclusive = true;
-            else if (estimateSize(var->type(), _settings, symbolDatabase) <= 8)
+            else if (estimateSize(var->type(), _settings, symbolDatabase) <= 2 * _settings->sizeof_pointer)
                 continue;
         } else
             continue;

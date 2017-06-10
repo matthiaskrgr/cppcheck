@@ -21,24 +21,26 @@
 #define symboldatabaseH
 //---------------------------------------------------------------------------
 
-#include <string>
-#include <list>
-#include <vector>
-#include <set>
-#include <algorithm>
-#include <map>
-
 #include "config.h"
-#include "token.h"
-#include "mathlib.h"
 #include "library.h"
+#include "mathlib.h"
+#include "token.h"
 
-class Tokenizer;
-class Settings;
+#include <cstddef>
+#include <list>
+#include <map>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
+
 class ErrorLogger;
-
+class Function;
 class Scope;
+class Settings;
 class SymbolDatabase;
+class Tokenizer;
+class ValueType;
 
 /**
  * @brief Access control enumerations.
@@ -183,7 +185,7 @@ class CPPCHECKLIB Variable {
      * @return true if flag set or false in flag not set
      */
     bool getFlag(unsigned int flag_) const {
-        return bool((_flags & flag_) != 0);
+        return ((_flags & flag_) != 0);
     }
 
     /**
@@ -654,7 +656,7 @@ class CPPCHECKLIB Function {
      * @return true if flag set or false in flag not set
      */
     bool getFlag(unsigned int flag) const {
-        return bool((flags & flag) != 0);
+        return ((flags & flag) != 0);
     }
 
     /**

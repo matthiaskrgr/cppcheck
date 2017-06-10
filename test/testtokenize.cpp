@@ -16,14 +16,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "testsuite.h"
-#include "tokenize.h"
-#include "token.h"
-#include "settings.h"
-#include "path.h"
+#include "config.h"
+#include "platform.h"
 #include "preprocessor.h" // usually tests here should not use preprocessor...
-#include <cstring>
+#include "settings.h"
+#include "standards.h"
+#include "testsuite.h"
+#include "token.h"
+#include "tokenize.h"
+#include "tokenlist.h"
+
+#include <list>
+#include <set>
 #include <sstream>
+#include <string>
+
+struct InternalError;
 
 class TestTokenizer : public TestFixture {
 public:
@@ -437,6 +445,7 @@ private:
 
         // AST data
         TEST_CASE(astexpr);
+        TEST_CASE(astexpr2); // limit large expressions
         TEST_CASE(astpar);
         TEST_CASE(astnewdelete);
         TEST_CASE(astbrackets);
@@ -445,6 +454,7 @@ private:
         TEST_CASE(asttemplate);
         TEST_CASE(astcast);
         TEST_CASE(astlambda);
+        TEST_CASE(astcase);
 
         TEST_CASE(startOfExecutableScope);
 
@@ -2351,6 +2361,20 @@ private:
                                     "strcpy ( str2 , \"abc\" ) ;\n"
                                     "}";
             ASSERT_EQUALS(expected, tokenizeAndStringify(code, true));
+        }
+
+        {
+            const char code[] = "void f() {\n"
+                                "   char a[10];\n"
+                                "   strcpy(a, \"hello\");\n"
+                                "   strcat(a, \"!\");\n"
+                                "}";
+            const char expected[] = "void f ( ) {\n"
+                                    "char a [ 10 ] ;\n"
+                                    "strcpy ( a , \"hello\" ) ;\n"
+                                    "strcat ( a , \"!\" ) ;\n"
+                                    "}";
+            ASSERT_EQUALS(expected, tokenizeAndStringify(code, true, true, Settings::Native, "test.c"));
         }
 
         {
@@ -5731,6 +5755,18 @@ private:
         ASSERT_EQUALS("void foo ( char str [ ] ) { char x ; x = * str ; }",
                       tokenizeAndStringify("void foo ( char str [ ] ) { char x = 0 | ( * str ) ; }", true));
         ASSERT_EQUALS("void foo ( ) { if ( b ) { } }",
+                      tokenizeAndStringify("void foo ( ) { if (b + 0) { } }", true));
+        ASSERT_EQUALS("void foo ( ) { if ( b ) { } }",
+                      tokenizeAndStringify("void foo ( ) { if (0 + b) { } }", true));
+        ASSERT_EQUALS("void foo ( ) { if ( b ) { } }",
+                      tokenizeAndStringify("void foo ( ) { if (b - 0) { } }", true));
+        ASSERT_EQUALS("void foo ( ) { if ( b ) { } }",
+                      tokenizeAndStringify("void foo ( ) { if (b * 1) { } }", true));
+        ASSERT_EQUALS("void foo ( ) { if ( b ) { } }",
+                      tokenizeAndStringify("void foo ( ) { if (1 * b) { } }", true));
+        //ASSERT_EQUALS("void foo ( ) { if ( b ) { } }",
+        //              tokenizeAndStringify("void foo ( ) { if (b / 1) { } }", true));
+        ASSERT_EQUALS("void foo ( ) { if ( b ) { } }",
                       tokenizeAndStringify("void foo ( ) { if (b | 0) { } }", true));
         ASSERT_EQUALS("void foo ( ) { if ( b ) { } }",
                       tokenizeAndStringify("void foo ( ) { if (0 | b) { } }", true));
@@ -7844,6 +7880,8 @@ private:
         tokenList.prepareTernaryOpForAST();
         tokenList.list.createAst();
 
+        tokenList.list.validateAst();
+
         // Basic AST validation
         for (const Token *tok = tokenList.list.front(); tok; tok = tok->next()) {
             if (tok->astOperand2() && !tok->astOperand1() && tok->str() != ";" && tok->str() != ":")
@@ -7963,6 +8001,69 @@ private:
         ASSERT_EQUALS("DerivedDerived::(", testAst("Derived::~Derived() {}"));
 
         ASSERT_EQUALS("ifCA_FarReadfilenew(,sizeofobjtype(,(!(", testAst("if (!CA_FarRead(file, (void far *)new, sizeof(objtype)))")); // #5910 - don't hang if C code is parsed as C++
+    }
+
+    void astexpr2() { // limit for large expressions
+        // #7724 - wrong AST causes hang
+        // Ideally a proper AST is created for this code.
+        const char code[] = "const char * a(int type) {\n"
+                            "  return (\n"
+                            "   (type == 1) ? \"\"\n"
+                            " : (type == 2) ? \"\"\n"
+                            " : (type == 3) ? \"\"\n"
+                            " : (type == 4) ? \"\"\n"
+                            " : (type == 5) ? \"\"\n"
+                            " : (type == 6) ? \"\"\n"
+                            " : (type == 7) ? \"\"\n"
+                            " : (type == 8) ? \"\"\n"
+                            " : (type == 9) ? \"\"\n"
+                            " : (type == 10) ? \"\"\n"
+                            " : (type == 11) ? \"\"\n"
+                            " : (type == 12) ? \"\"\n"
+                            " : (type == 13) ? \"\"\n"
+                            " : (type == 14) ? \"\"\n"
+                            " : (type == 15) ? \"\"\n"
+                            " : (type == 16) ? \"\"\n"
+                            " : (type == 17) ? \"\"\n"
+                            " : (type == 18) ? \"\"\n"
+                            " : (type == 19) ? \"\"\n"
+                            " : (type == 20) ? \"\"\n"
+                            " : (type == 21) ? \"\"\n"
+                            " : (type == 22) ? \"\"\n"
+                            " : (type == 23) ? \"\"\n"
+                            " : (type == 24) ? \"\"\n"
+                            " : (type == 25) ? \"\"\n"
+                            " : (type == 26) ? \"\"\n"
+                            " : (type == 27) ? \"\"\n"
+                            " : (type == 28) ? \"\"\n"
+                            " : (type == 29) ? \"\"\n"
+                            " : (type == 30) ? \"\"\n"
+                            " : (type == 31) ? \"\"\n"
+                            " : (type == 32) ? \"\"\n"
+                            " : (type == 33) ? \"\"\n"
+                            " : (type == 34) ? \"\"\n"
+                            " : (type == 35) ? \"\"\n"
+                            " : (type == 36) ? \"\"\n"
+                            " : (type == 37) ? \"\"\n"
+                            " : (type == 38) ? \"\"\n"
+                            " : (type == 39) ? \"\"\n"
+                            " : (type == 40) ? \"\"\n"
+                            " : (type == 41) ? \"\"\n"
+                            " : (type == 42) ? \"\"\n"
+                            " : (type == 43) ? \"\"\n"
+                            " : (type == 44) ? \"\"\n"
+                            " : (type == 45) ? \"\"\n"
+                            " : (type == 46) ? \"\"\n"
+                            " : (type == 47) ? \"\"\n"
+                            " : (type == 48) ? \"\"\n"
+                            " : (type == 49) ? \"\"\n"
+                            " : (type == 50) ? \"\"\n"
+                            " : (type == 51) ? \"\"\n"
+                            " : \"\");\n"
+                            "}\n";
+        // Ensure that the AST is validated for the simplified token list
+        tokenizeAndStringify(code); // this does not crash/hang
+        ASSERT_THROW(tokenizeAndStringify(code,true), InternalError); // when parentheses are simplified the AST will be wrong
     }
 
     void astnewdelete() {
@@ -8091,6 +8192,8 @@ private:
         ASSERT_EQUALS("abc12,{d:?=", testAst("a=b?c<X>{1,2}:d;"));
         ASSERT_EQUALS("a::12,{", testAst("::a{1,2};")); // operator precedence
         ASSERT_EQUALS("Abc({newreturn", testAst("return new A {b(c)};"));
+        ASSERT_EQUALS("a{{return", testAst("return{{a}};"));
+        ASSERT_EQUALS("a{b{,{return", testAst("return{{a},{b}};"));
     }
 
     void astbrackets() { // []
@@ -8181,6 +8284,12 @@ private:
         ASSERT_EQUALS("x{([= 0return", testAst("x = [](){return 0; };"));
 
         ASSERT_EQUALS("ab{[(= cd=", testAst("a = b([&]{c=d;});"));
+    }
+
+    void astcase() {
+        ASSERT_EQUALS("0case", testAst("case 0:"));
+        ASSERT_EQUALS("12+case", testAst("case 1+2:"));
+        ASSERT_EQUALS("xyz:?case", testAst("case (x?y:z):"));
     }
 
     void compileLimits() {

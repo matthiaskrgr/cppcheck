@@ -17,10 +17,20 @@
  */
 
 #include "checkstl.h"
-#include "symboldatabase.h"
+
 #include "checknullpointer.h"
+#include "errorlogger.h"
+#include "settings.h"
+#include "standards.h"
+#include "symboldatabase.h"
+#include "token.h"
 #include "utils.h"
+
+#include <cstddef>
+#include <list>
+#include <set>
 #include <sstream>
+#include <utility>
 
 // Register this check class (by creating a static instance of it)
 namespace {
@@ -600,7 +610,7 @@ void CheckStl::pushback()
                 } else {
                     vectorid = 0;
                 }
-                invalidIterator = "";
+                invalidIterator.clear();
             }
 
             // push_back on vector..

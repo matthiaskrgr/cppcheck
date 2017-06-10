@@ -22,25 +22,21 @@
 //---------------------------------------------------------------------------
 
 #include "config.h"
+#include "errorlogger.h"
+#include "settings.h"
 #include "token.h"
 #include "tokenize.h"
-#include "settings.h"
-#include "errorlogger.h"
+#include "valueflow.h"
 
 #include <list>
-#include <set>
-
-/**
- * Use this macro Cppcheck data can be wrong and you need a to check if that happens to avoid crash/hang
- * Using this macro we can make sure that released binaries don't crash/hang but the problem is not hidden
- * in debug builds.
- */
-//#define CHECK_WRONG_DATA(X)   (X)  // Release (don't crash/hang)
-#define CHECK_WRONG_DATA(X)   (1)  // Debug (crash/hang)
+#include <string>
 
 namespace tinyxml2 {
     class XMLElement;
 }
+
+/** Use WRONG_DATA in checkers to mark conditions that check that data is correct */
+#define WRONG_DATA(COND, TOK)  (wrongData((TOK), (COND), #COND))
 
 /// @addtogroup Core
 /// @{
@@ -182,6 +178,11 @@ protected:
         return errorPath;
     }
 
+    /**
+     * Use WRONG_DATA in checkers when you check for wrong data. That
+     * will call this method
+     */
+    bool wrongData(const Token *tok, bool condition, const char *str);
 private:
     const std::string _name;
 

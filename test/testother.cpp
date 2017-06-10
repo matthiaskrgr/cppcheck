@@ -16,14 +16,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "preprocessor.h"
-#include "tokenize.h"
-#include "symboldatabase.h"
 #include "checkother.h"
+#include "library.h"
+#include "platform.h"
+#include "settings.h"
+#include "standards.h"
 #include "testsuite.h"
-#include "testutils.h"
-#include <tinyxml2.h>
+#include "tokenize.h"
+
 #include <simplecpp.h>
+#include <tinyxml2.h>
+#include <map>
+#include <string>
+#include <vector>
 
 class TestOther : public TestFixture {
 public:
@@ -227,11 +232,15 @@ private:
         }
     }
 
-    void checkP(const char code[], const char *filename = "test.cpp", Settings* settings = 0) {
+    void check(const char code[], Settings *s) {
+        check(code,"test.cpp",false,true,true,s);
+    }
+
+    void checkP(const char code[], const char *filename = "test.cpp") {
         // Clear the error buffer..
         errout.str("");
 
-        settings = &_settings;
+        Settings* settings = &_settings;
         settings->addEnabled("style");
         settings->addEnabled("warning");
         settings->addEnabled("portability");
@@ -1546,14 +1555,46 @@ private:
         ASSERT_EQUALS("", errout.str());
 
         check("class X {\n"
-              "    uint64_t i;\n"
+              "    char a[1024];\n"
               "};\n"
               "class Y : X {\n"
-              "    uint64_t j;\n"
+              "    char b;\n"
+              "};\n"
+              "void f(Y y) {\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:7]: (performance) Function parameter 'y' should be passed by reference.\n", errout.str());
+
+        check("class X {\n"
+              "    void* a;\n"
+              "    void* b;\n"
+              "};\n"
+              "class Y {\n"
+              "    void* a;\n"
+              "    void* b;\n"
+              "    char c;\n"
               "};\n"
               "void f(X x, Y y) {\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:7]: (performance) Function parameter 'y' should be passed by reference.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:10]: (performance) Function parameter 'y' should be passed by reference.\n", errout.str());
+
+        {
+            // 8-byte data should be passed by reference on 32-bit platform but not on 64-bit platform
+            const char code[] = "class X {\n"
+                                "    uint64_t a;\n"
+                                "    uint64_t b;\n"
+                                "};\n"
+                                "void f(X x) {}";
+
+            Settings s32(_settings);
+            s32.platform(cppcheck::Platform::Unix32);
+            check(code, &s32);
+            ASSERT_EQUALS("[test.cpp:5]: (performance) Function parameter 'x' should be passed by reference.\n", errout.str());
+
+            Settings s64(_settings);
+            s64.platform(cppcheck::Platform::Unix64);
+            check(code, &s64);
+            ASSERT_EQUALS("", errout.str());
+        }
     }
 
     void switchRedundantAssignmentTest() {

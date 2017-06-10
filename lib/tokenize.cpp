@@ -18,22 +18,30 @@
 
 //---------------------------------------------------------------------------
 #include "tokenize.h"
-#include "mathlib.h"
-#include "settings.h"
+
 #include "check.h"
+#include "library.h"
+#include "mathlib.h"
 #include "path.h"
+#include "platform.h"
+#include "settings.h"
+#include "standards.h"
 #include "symboldatabase.h"
 #include "templatesimplifier.h"
 #include "timer.h"
+#include "token.h"
 #include "utils.h"
+#include "valueflow.h"
 
-#include <cstring>
-#include <sstream>
+#include <algorithm>
 #include <cassert>
 #include <cctype>
-#include <stack>
+#include <cstring>
+#include <ctime>
 #include <iostream>
-
+#include <stack>
+#include <utility>
+#include <vector>
 //---------------------------------------------------------------------------
 
 namespace {
@@ -2361,7 +2369,7 @@ static bool setVarIdParseDeclaration(const Token **tok, const std::map<std::stri
             return false;
     }
 
-    return bool(typeCount >= 2 && tok2 && Token::Match(tok2->tokAt(-2), "!!:: %type%"));
+    return (typeCount >= 2 && tok2 && Token::Match(tok2->tokAt(-2), "!!:: %type%"));
 }
 
 
@@ -3797,8 +3805,8 @@ bool Tokenizer::simplifyTokenList2()
     Token::assignProgressValues(list.front());
 
     list.createAst();
-    // skipping this here may help improve performance. Might be enabled later on demand. #7208
-    // list.validateAst();
+    // needed for #7208 (garbage code) and #7724 (ast max depth limit)
+    list.validateAst();
 
     // Create symbol database and then remove const keywords
     createSymbolDatabase();
@@ -4769,8 +4777,13 @@ bool Tokenizer::simplifyConditions()
                     bool eq = false;
                     if (MathLib::isInt(op1) && MathLib::isInt(op2))
                         eq = (MathLib::toLongNumber(op1) == MathLib::toLongNumber(op2));
-                    else
+                    else {
                         eq = (op1 == op2);
+
+                        // It is inconclusive whether two unequal float representations are numerically equal
+                        if (!eq && MathLib::isFloat(op1))
+                            cmp.clear();
+                    }
 
                     if (cmp == "==")
                         result = eq;
@@ -4788,7 +4801,7 @@ bool Tokenizer::simplifyConditions()
                     else if (cmp == "<")
                         result = (op1 < op2);
                     else
-                        cmp = "";
+                        cmp.clear();
                 }
             } else {
                 // Compare boolean
@@ -4808,7 +4821,7 @@ bool Tokenizer::simplifyConditions()
                 else if (cmp == "<")
                     result = (op1 < op2);
                 else
-                    cmp = "";
+                    cmp.clear();
             }
 
             if (! cmp.empty()) {
@@ -7358,9 +7371,6 @@ bool Tokenizer::IsScopeNoReturn(const Token *endScopeToken, bool *unknown) const
 
 bool Tokenizer::isFunctionParameterPassedByValue(const Token *fpar) const
 {
-    if (isC()) // C does not support references
-        return true;
-
     // TODO: If symbol database is available, use it.
     const Token *ftok;
 
@@ -8120,6 +8130,18 @@ void Tokenizer::validate() const
         cppcheckError(lastTok);
 }
 
+static const std::set<std::string> controlFlowKeywords = make_container< std::set<std::string> > () <<
+        "goto" <<
+        "do" <<
+        "if" <<
+        "else" <<
+        "for" <<
+        "while" <<
+        "switch" <<
+        "case" <<
+        "break" <<
+        "continue" <<
+        "return";
 
 const Token * Tokenizer::findGarbageCode() const
 {
@@ -8168,23 +8190,14 @@ const Token * Tokenizer::findGarbageCode() const
         return list.back();
     if (list.back()->str() == ")" && !Token::Match(list.back()->link()->previous(), "%name% ("))
         return list.back();
-    if (Token::Match(list.back(), "void|char|short|int|long|float|double|const|volatile|static|inline|struct|class|enum|union|template|sizeof|break|continue|typedef"))
+    if (Token::Match(list.back(), "void|char|short|int|long|float|double|const|volatile|static|inline|struct|class|enum|union|template|sizeof|case|break|continue|typedef"))
         return list.back();
+    if ((list.back()->str()==")"||list.back()->str()=="}") && list.back()->previous() && controlFlowKeywords.find(list.back()->previous()->str()) != controlFlowKeywords.end())
+        return list.back()->previous();
 
     return nullptr;
 }
 
-static const std::set<std::string> controlFlowKeywords = make_container< std::set<std::string> > () <<
-        "goto" <<
-        "do" <<
-        "if" <<
-        "else" <<
-        "for" <<
-        "while" <<
-        "switch" <<
-        "break" <<
-        "continue" <<
-        "return";
 
 bool Tokenizer::isGarbageExpr(const Token *start, const Token *end)
 {

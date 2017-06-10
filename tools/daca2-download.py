@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # Downloads all daca2 source code packages.
 #
@@ -11,16 +11,15 @@ import sys
 import shutil
 import glob
 import os
-import datetime
 import time
 
-DEBIAN = ['ftp://ftp.se.debian.org/debian/',
-          'ftp://ftp.debian.org/debian/']
+DEBIAN = ('ftp://ftp.se.debian.org/debian/',
+          'ftp://ftp.debian.org/debian/')
 
 
 def wget(filepath):
     filename = filepath
-    if filepath.find('/') >= 0:
+    if '/' in filepath:
         filename = filename[filename.rfind('/') + 1:]
     for d in DEBIAN:
         subprocess.call(
@@ -53,7 +52,7 @@ def getpackages():
             filename = None
         elif line[:12] == './pool/main/':
             path = line[2:-1]
-        elif path and line.find('.orig.tar.') > 0:
+        elif path and '.orig.tar.' in line:
             filename = line[1 + line.rfind(' '):]
 
     for a in archives:
@@ -75,7 +74,7 @@ def handleRemoveReadonly(func, path, exc):
 def removeAll():
     count = 5
     while count > 0:
-        count = count - 1
+        count -= 1
 
         filenames = []
         for g in glob.glob('[#_A-Za-z0-9]*'):
@@ -121,7 +120,8 @@ def removeLargeFiles(path):
                 os.remove(g)
 
             # remove non-source files
-            elif g[-2:] != '.C' and g[-2:] != '.c' and g[-4:] != '.cc' and g[-4:] != '.cpp' and g[-4:] != '.cxx' and g[-2:] != '.h' and g[-2:] != '.H' and g[-4:] != '.c++' and g[-4:] != '.hpp' and g[-4:] != '.tpp' and g[-4:] != '.t++':
+            elif g[-2:] not in {'.C', '.c', '.H', '.h'} and g[-3:] != '.cc' and\
+                    g[-4:] not in {'.cpp', '.cxx', '.c++', '.hpp', '.tpp', '.t++'}:
                 os.remove(g)
 
 
