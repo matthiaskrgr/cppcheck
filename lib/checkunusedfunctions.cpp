@@ -55,7 +55,8 @@ void CheckUnusedFunctions::parseTokens(const Tokenizer &tokenizer, const char Fi
     // Function declarations..
     if (clear)
         _functionDecl.clear();
-    for (std::size_t i = 0; i < symbolDatabase->functionScopes.size(); i++) {
+    const unsigned int funSize = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < funSize; i++) {
         const Scope* scope = symbolDatabase->functionScopes[i];
         const Function* func = scope->function;
         if (!func || !func->token || scope->classStart->fileIndex() != 0)
