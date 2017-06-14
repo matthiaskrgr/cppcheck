@@ -3995,50 +3995,53 @@ const Function* Scope::findFunction(const Token *tok, bool requireConst) const
 
             // check for a match with a numeric literal
             else if (Token::Match(arguments[j], "%num% ,|)")) {
+                const std::string argStr = arguments[j]->str();
+                const Token * typeStartTok = funcarg->typeStartToken();
                 if (MathLib::isInt(arguments[j]->str()) && (!funcarg->isPointer() || MathLib::isNullValue(arguments[j]->str()))) {
                     bool exactMatch = false;
-                    if (arguments[j]->str().find("ll") != std::string::npos ||
-                        arguments[j]->str().find("LL") != std::string::npos) {
-                        if (arguments[j]->str().find('u') != std::string::npos ||
-                            arguments[j]->str().find('U') != std::string::npos) {
-                            if (funcarg->typeStartToken()->isLong() &&
-                                funcarg->typeStartToken()->isUnsigned() &&
-                                funcarg->typeStartToken()->str() == "long") {
+
+                    if (argStr.find("ll") != std::string::npos ||
+                        argStr.find("LL") != std::string::npos) {
+                        if (argStr.find('u') != std::string::npos ||
+                            argStr.find('U') != std::string::npos) {
+                            if (typeStartTok->isLong() &&
+                                typeStartTok->isUnsigned() &&
+                                typeStartTok->str() == "long") {
                                 exactMatch = true;
                             }
                         } else {
-                            if (funcarg->typeStartToken()->isLong() &&
-                                !funcarg->typeStartToken()->isUnsigned() &&
-                                funcarg->typeStartToken()->str() == "long") {
+                            if (typeStartTok->isLong() &&
+                                !typeStartTok->isUnsigned() &&
+                                typeStartTok->str() == "long") {
                                 exactMatch = true;
                             }
                         }
-                    } else if (arguments[j]->str().find('l') != std::string::npos ||
-                               arguments[j]->str().find('L') != std::string::npos) {
-                        if (arguments[j]->str().find('u') != std::string::npos ||
-                            arguments[j]->str().find('U') != std::string::npos) {
-                            if (!funcarg->typeStartToken()->isLong() &&
-                                funcarg->typeStartToken()->isUnsigned() &&
-                                funcarg->typeStartToken()->str() == "long") {
+                    } else if (argStr.find('l') != std::string::npos ||
+                               argStr.find('L') != std::string::npos) {
+                        if (argStr.find('u') != std::string::npos ||
+                            argStr.find('U') != std::string::npos) {
+                            if (!typeStartTok->isLong() &&
+                                typeStartTok->isUnsigned() &&
+                                typeStartTok->str() == "long") {
                                 exactMatch = true;
                             }
                         } else {
-                            if (!funcarg->typeStartToken()->isLong() &&
-                                !funcarg->typeStartToken()->isUnsigned() &&
-                                funcarg->typeStartToken()->str() == "long") {
+                            if (!typeStartTok->isLong() &&
+                                !typeStartTok->isUnsigned() &&
+                                typeStartTok->str() == "long") {
                                 exactMatch = true;
                             }
                         }
-                    } else if (arguments[j]->str().find('u') != std::string::npos ||
-                               arguments[j]->str().find('U') != std::string::npos) {
-                        if (funcarg->typeStartToken()->isUnsigned() &&
-                            funcarg->typeStartToken()->str() == "int") {
+                    } else if (argStr.find('u') != std::string::npos ||
+                               argStr.find('U') != std::string::npos) {
+                        if (typeStartTok->isUnsigned() &&
+                            typeStartTok->str() == "int") {
                             exactMatch = true;
-                        } else if (Token::Match(funcarg->typeStartToken(), "char|short")) {
+                        } else if (Token::Match(typeStartTok, "char|short")) {
                             exactMatch = true;
                         }
                     } else {
-                        if (Token::Match(funcarg->typeStartToken(), "wchar_t|char|short|int|long")) {
+                        if (Token::Match(typeStartTok, "wchar_t|char|short|int|long")) {
                             exactMatch = true;
                         }
                     }
@@ -4049,22 +4052,23 @@ const Function* Scope::findFunction(const Token *tok, bool requireConst) const
                         else
                             same++;
                     else {
-                        if (funcarg->isPointer() || Token::Match(funcarg->typeStartToken(), "wchar_t|char|short|int|long"))
+                        if (funcarg->isPointer() || Token::Match(typeStartTok, "wchar_t|char|short|int|long"))
                             fallback1++;
-                        else if (Token::Match(funcarg->typeStartToken(), "float|double"))
+                        else if (Token::Match(typeStartTok, "float|double"))
                             fallback2++;
                     }
                 } else if (!funcarg->isPointer()) {
                     bool exactMatch = false;
-                    if (arguments[j]->str().find('f') != std::string::npos ||
-                        arguments[j]->str().find('F') != std::string::npos) {
-                        if (funcarg->typeStartToken()->str() == "float") {
+                    if (argStr.find('f') != std::string::npos ||
+                        argStr.find('F') != std::string::npos) {
+                        if (typeStartTok)->str() == "float") {
                             exactMatch = true;
                         }
-                    } else if (arguments[j]->str().find('l') != std::string::npos ||
-                               arguments[j]->str().find('L') != std::string::npos) {
-                        if (funcarg->typeStartToken()->isLong() &&
-                            funcarg->typeStartToken()->str() == "double")  {
+                      // @TODO @CONTINUE HERE
+                    } else if (argStr.find('l') != std::string::npos ||
+                               argStr.find('L') != std::string::npos) {
+                        if (typeStartTok->isLong() &&
+                            typeStartTok->str() == "double")  {
                             exactMatch = true;
                         }
                     } else {
