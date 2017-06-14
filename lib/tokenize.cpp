@@ -1041,8 +1041,8 @@ void Tokenizer::simplifyTypedef()
                         if (classLevel > 0 && tok2 == spaceInfo[classLevel - 1].classEnd) {
                             --classLevel;
                             pattern.clear();
-
-                            for (std::size_t i = classLevel; i < spaceInfo.size(); ++i)
+                            const unsigned int spaceInfoSize = spaceInfo.size();
+                            for (std::size_t i = classLevel; i < spaceInfoSize; ++i)
                                 pattern += (spaceInfo[i].className + " :: ");
 
                             pattern += typeName->str();
@@ -1087,7 +1087,8 @@ void Tokenizer::simplifyTypedef()
                                 spaceInfo[classLevel].classEnd = tok2->link();
                                 ++classLevel;
                                 pattern.clear();
-                                for (std::size_t i = classLevel; i < spaceInfo.size(); ++i)
+                                const unsigned int spaceInfoSize = spaceInfo.size();
+                                for (std::size_t i = classLevel; i < spaceInfoSize; ++i)
                                     pattern += (spaceInfo[i].className + " :: ");
 
                                 pattern += typeName->str();
@@ -1162,7 +1163,8 @@ void Tokenizer::simplifyTypedef()
                             }
 
                             // remove qualification if present
-                            for (std::size_t i = classLevel; i < spaceInfo.size(); ++i) {
+                            const unsigned int spaceInfoSize = spaceInfo.size();
+                            for (std::size_t i = classLevel; i < spaceInfoSize; ++i) {
                                 tok2->deleteNext(2);
                             }
                             simplifyType = true;
@@ -1278,8 +1280,8 @@ void Tokenizer::simplifyTypedef()
                             tok2->insertToken("::");
                             tok2 = tok2->next();
                         }
-
-                        for (std::size_t i = classLevel; i < spaceInfo.size(); ++i) {
+						const unsigned int spaceInfoSize = spaceInfo.size();
+                        for (std::size_t i = classLevel; i < spaceInfoSize; ++i) {
                             tok2->insertToken(spaceInfo[i].className);
                             tok2 = tok2->next();
                             tok2->insertToken("::");

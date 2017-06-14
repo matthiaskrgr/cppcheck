@@ -147,7 +147,8 @@ bool Token::isUpperCaseName() const
 {
     if (!isName())
         return false;
-    for (size_t i = 0; i < _str.length(); ++i) {
+    const unsigned int _strLen = _str.length();
+    for (size_t i = 0; i < _strLen; ++i) {
         if (std::islower(_str[i]))
             return false;
     }
@@ -720,7 +721,8 @@ std::size_t Token::getStrSize(const Token *tok)
     assert(tok != nullptr && tok->tokType() == eString);
     const std::string &str = tok->str();
     unsigned int sizeofstring = 1U;
-    for (unsigned int i = 1U; i < str.size() - 1U; i++) {
+    const unsigned int size = str.size() - 1U;
+    for (unsigned int i = 1U; i < size; i++) {
         if (str[i] == '\\')
             ++i;
         ++sizeofstring;
@@ -993,7 +995,8 @@ void Token::stringify(std::ostream& os, bool varid, bool attributes, bool macro)
     if (_str[0] != '\"' || _str.find('\0') == std::string::npos)
         os << _str;
     else {
-        for (std::size_t i = 0U; i < _str.size(); ++i) {
+		const unsigned int _strSize = _str.size();
+        for (std::size_t i = 0U; i < _strSize; ++i) {
             if (_str[i] == '\0')
                 os << "\\0";
             else

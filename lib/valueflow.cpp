@@ -2764,7 +2764,8 @@ static void valueFlowSubFunction(TokenList *tokenlist, ErrorLogger *errorLogger,
             continue;
 
         const std::vector<const Token *> &callArguments = getArguments(tok);
-        for (unsigned int argnr = 0U; argnr < callArguments.size(); ++argnr) {
+        const unsigned int callArgSize = callArguments.size();
+        for (unsigned int argnr = 0U; argnr < callArgSize; ++argnr) {
             const Token *argtok = callArguments[argnr];
             // Get function argument
             const Variable * const argvar = calledFunction->getArgumentVar(argnr);
