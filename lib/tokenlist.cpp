@@ -301,7 +301,8 @@ unsigned long long TokenList::calculateChecksum() const
         for (std::size_t i = 0; i < tokStrSize; i++)
             subchecksum2 += (unsigned int)tok->str()[i];
         if (!tok->originalName().empty()) {
-            for (std::size_t i = 0; i < tok->originalName().size(); i++)
+			const unsigned int nameSize = tok->originalName().size();
+            for (std::size_t i = 0; i < nameSize; i++)
                 subchecksum2 += (unsigned int) tok->originalName()[i];
         }
 

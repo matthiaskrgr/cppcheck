@@ -63,7 +63,7 @@ void Check64BitPortability::pointerassignment()
             ;
         else
             continue;
-        
+
         for (const Token* tok = scope->classStart->next(); tok != classEnd; tok = tok->next()) {
             // skip nested functions
             if (tok->str() == "{") {

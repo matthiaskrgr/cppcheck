@@ -2819,7 +2819,8 @@ static void valueFlowFunctionDefaultParameter(TokenList *tokenlist, SymbolDataba
         const Function* function = scope->function;
         if (!function)
             continue;
-        for (std::size_t arg = function->minArgCount(); arg < function->argCount(); arg++) {
+        const unsigned int funArgCount = function->argCount();
+        for (std::size_t arg = function->minArgCount(); arg < funArgCount; arg++) {
             const Variable* var = function->getArgumentVar(arg);
             if (var && var->hasDefault() && Token::Match(var->nameToken(), "%var% = %num%|%str% [,)]")) {
                 const std::list<ValueFlow::Value> &values = var->nameToken()->tokAt(2)->values();
@@ -2877,7 +2878,8 @@ static void valueFlowFunctionReturn(TokenList *tokenlist, ErrorLogger *errorLogg
         }
 
         ProgramMemory programMemory;
-        for (std::size_t i = 0; i < parvalues.size(); ++i) {
+        const unsigned int valueSize = parvalues.size();
+        for (std::size_t i = 0; i < valueSize; ++i) {
             const Variable * const arg = function->getArgumentVar(i);
             if (!arg || !Token::Match(arg->typeStartToken(), "%type% %name% ,|)")) {
                 if (tokenlist->getSettings()->debugwarnings)
