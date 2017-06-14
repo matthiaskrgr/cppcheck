@@ -3855,7 +3855,8 @@ void Tokenizer::printDebugOutput(unsigned int simplification) const
         printUnknownTypes();
 
         // the typeStartToken() should come before typeEndToken()
-        for (unsigned int varid = 1; varid < _symbolDatabase->getVariableListSize(); varid++) {
+        const unsigned int SDBVarListSize = _symbolDatabase->getVariableListSize();
+        for (unsigned int varid = 1; varid < SDBVarListSize; varid++) {
             const Variable *var = _symbolDatabase->getVariableFromVarId(varid);
             if (!var)
                 continue;
@@ -5817,7 +5818,8 @@ void Tokenizer::simplifyStaticConst()
 
     // Move 'const' before all other qualifiers and types and then
     // move 'static' before all other qualifiers and types, ...
-    for (size_t i = 0; i < sizeof(qualifiers)/sizeof(qualifiers[0]); i++) {
+    const unsigned int ratio = sizeof(qualifiers)/sizeof(qualifiers[0]);
+    for (size_t i = 0; i < ratio; i++) {
         for (Token *tok = list.front(); tok; tok = tok->next()) {
 
             // Keep searching for a qualifier
@@ -6692,7 +6694,8 @@ bool Tokenizer::simplifyKnownVariablesSimplify(Token **tok2, Token *tok3, unsign
                 // don't simplify buffer value
                 "memcmp","memcpy","memmove","memset","strcpy","strncmp","strncpy"
             };
-            for (unsigned int i = 0; i < (sizeof(functionName) / sizeof(*functionName)); ++i) {
+            const unsigned int ratio = sizeof(functionName) / sizeof(*functionName);
+            for (unsigned int i = 0; i < ratio; ++i) {
                 if (valueVarId == 0U && i >= 2)
                     break;
                 if (tok3->str() == functionName[i]) {
