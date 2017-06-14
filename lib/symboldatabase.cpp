@@ -3966,6 +3966,8 @@ const Function* Scope::findFunction(const Token *tok, bool requireConst) const
                 break;
             }
             const Variable *funcarg = func->getArgumentVar(j);
+            const std::string argStr = arguments[j]->str();
+            const Token *typeStartTok = funcarg->typeStartToken();
             // check for a match with a variable
             if (Token::Match(arguments[j], "%var% ,|)")) {
                 const Variable * callarg = check->getVariableFromVarId(arguments[j]->varId());
@@ -3974,13 +3976,14 @@ const Function* Scope::findFunction(const Token *tok, bool requireConst) const
 
             // check for a match with address of a variable
             else if (Token::Match(arguments[j], "& %var% ,|)")) {
-                const Variable * callarg = check->getVariableFromVarId(arguments[j]->next()->varId());
+                const Variable *callarg = check->getVariableFromVarId(arguments[j]->next()->varId());
+                const Token *callArgTyStartTok = callarg->typeStartToken();
                 if (callarg) {
-                    bool funcargptr = (funcarg->typeEndToken()->str() == "*");
+                    const bool funcargptr = (funcarg->typeEndToken()->str() == "*");
                     if (funcargptr &&
-                        (callarg->typeStartToken()->str() == funcarg->typeStartToken()->str() &&
-                         callarg->typeStartToken()->isUnsigned() == funcarg->typeStartToken()->isUnsigned() &&
-                         callarg->typeStartToken()->isLong() == funcarg->typeStartToken()->isLong())) {
+                        (callArgTyStartTok->str() == typeStartTok->str() &&
+                         callArgTyStartTok->isUnsigned() == typeStartTok->isUnsigned() &&
+                         callArgTyStartTok->isLong() == typeStartTok->isLong())) {
                         same++;
                     } else if (funcargptr && funcarg->typeStartToken()->str() == "void") {
                         fallback1++;
@@ -3995,8 +3998,6 @@ const Function* Scope::findFunction(const Token *tok, bool requireConst) const
 
             // check for a match with a numeric literal
             else if (Token::Match(arguments[j], "%num% ,|)")) {
-                const std::string argStr = arguments[j]->str();
-                const Token * typeStartTok = funcarg->typeStartToken();
                 if (MathLib::isInt(arguments[j]->str()) && (!funcarg->isPointer() || MathLib::isNullValue(arguments[j]->str()))) {
                     bool exactMatch = false;
 
@@ -4061,7 +4062,7 @@ const Function* Scope::findFunction(const Token *tok, bool requireConst) const
                     bool exactMatch = false;
                     if (argStr.find('f') != std::string::npos ||
                         argStr.find('F') != std::string::npos) {
-                        if (typeStartTok)->str() == "float") {
+                        if (typeStartTok->str() == "float") {
                             exactMatch = true;
                         }
                       // @TODO @CONTINUE HERE
@@ -4072,17 +4073,17 @@ const Function* Scope::findFunction(const Token *tok, bool requireConst) const
                             exactMatch = true;
                         }
                     } else {
-                        if (!funcarg->typeStartToken()->isLong() &&
-                            funcarg->typeStartToken()->str() == "double") {
+                        if (!typeStartTok->isLong() &&
+                            typeStartTok->str() == "double") {
                             exactMatch = true;
                         }
                     }
                     if (exactMatch)
                         same++;
                     else {
-                        if (Token::Match(funcarg->typeStartToken(), "float|double"))
+                        if (Token::Match(typeStartTok, "float|double"))
                             fallback1++;
-                        else if (Token::Match(funcarg->typeStartToken(), "wchar_t|char|short|int|long"))
+                        else if (Token::Match(typeStartTok, "wchar_t|char|short|int|long"))
                             fallback2++;
                     }
                 }
@@ -4091,10 +4092,10 @@ const Function* Scope::findFunction(const Token *tok, bool requireConst) const
             // check for a match with a string literal
             else if (Token::Match(arguments[j], "%str% ,|)")) {
                 if (funcarg->typeStartToken() != funcarg->typeEndToken() &&
-                    ((!arguments[j]->isLong() && Token::simpleMatch(funcarg->typeStartToken(), "char *")) ||
-                     (arguments[j]->isLong() && Token::simpleMatch(funcarg->typeStartToken(), "wchar_t *"))))
+                    ((!arguments[j]->isLong() && Token::simpleMatch(typeStartTok, "char *")) ||
+                     (arguments[j]->isLong() && Token::simpleMatch(typeStartTok, "wchar_t *"))))
                     same++;
-                else if (Token::simpleMatch(funcarg->typeStartToken(), "void *"))
+                else if (Token::simpleMatch(typeStartTok, "void *"))
                     fallback1++;
                 else if (funcarg->isStlStringType())
                     fallback2++;
@@ -4102,19 +4103,19 @@ const Function* Scope::findFunction(const Token *tok, bool requireConst) const
 
             // check for a match with a char literal
             else if (!funcarg->isArrayOrPointer() && Token::Match(arguments[j], "%char% ,|)")) {
-                if (arguments[j]->isLong() && funcarg->typeStartToken()->str() == "wchar_t")
+                if (arguments[j]->isLong() && typeStartTok->str() == "wchar_t")
                     same++;
-                else if (!arguments[j]->isLong() && funcarg->typeStartToken()->str() == "char")
+                else if (!arguments[j]->isLong() && typeStartTok->str() == "char")
                     same++;
-                else if (Token::Match(funcarg->typeStartToken(), "wchar_t|char|short|int|long"))
+                else if (Token::Match(typeStartTok, "wchar_t|char|short|int|long"))
                     fallback1++;
             }
 
             // check for a match with a boolean literal
             else if (!funcarg->isArrayOrPointer() && Token::Match(arguments[j], "%bool% ,|)")) {
-                if (Token::Match(funcarg->typeStartToken(), "bool|_Bool"))
+                if (Token::Match(typeStartTok, "bool|_Bool"))
                     same++;
-                else if (Token::Match(funcarg->typeStartToken(), "wchar_t|char|short|int|long"))
+                else if (Token::Match(typeStartTok, "wchar_t|char|short|int|long"))
                     fallback1++;
             }
 
@@ -4139,19 +4140,19 @@ const Function* Scope::findFunction(const Token *tok, bool requireConst) const
                 }
                 if (argtok && argtok->valueType() && !funcarg->isArrayOrPointer()) { // TODO: Pointers
                     if (argtok->valueType()->type == ValueType::BOOL) {
-                        if (funcarg->typeStartToken()->str() == "bool")
+                        if (typeStartTok->str() == "bool")
                             same++;
-                        else if (Token::Match(funcarg->typeStartToken(), "wchar_t|char|short|int|long"))
+                        else if (Token::Match(typeStartTok, "wchar_t|char|short|int|long"))
                             fallback1++;
                     } else if (argtok->valueType()->isIntegral()) {
-                        if (Token::Match(funcarg->typeStartToken(), "wchar_t|char|short|int|long"))
+                        if (Token::Match(typeStartTok, "wchar_t|char|short|int|long"))
                             same++;
-                        else if (Token::Match(funcarg->typeStartToken(), "float|double"))
+                        else if (Token::Match(typeStartTok, "float|double"))
                             fallback1++;
                     } else if (argtok->valueType()->isFloat()) {
-                        if (Token::Match(funcarg->typeStartToken(), "float|double"))
+                        if (Token::Match(typeStartTok, "float|double"))
                             same++;
-                        else if (Token::Match(funcarg->typeStartToken(), "wchar_t|char|short|int|long"))
+                        else if (Token::Match(typeStartTok, "wchar_t|char|short|int|long"))
                             fallback1++;
                     }
                 } else {
