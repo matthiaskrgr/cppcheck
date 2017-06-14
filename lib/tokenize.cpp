@@ -1740,7 +1740,8 @@ bool Tokenizer::simplifyTokens1(const std::string &configuration)
     createSymbolDatabase();
 
     // Use symbol database to identify rvalue references. Split && to & &. This is safe, since it doesn't delete any tokens (which might be referenced by symbol database)
-    for (std::size_t i = 0; i < _symbolDatabase->getVariableListSize(); i++) {
+	const unsigned int SDBVarListSize = _symbolDatabase->getVariableListSize();
+    for (std::size_t i = 0; i < SDBVarListSize; i++) {
         const Variable* var = _symbolDatabase->getVariableFromVarId(i);
         if (var && var->isRValueReference()) {
             Token* endTok = const_cast<Token*>(var->typeEndToken());

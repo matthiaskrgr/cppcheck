@@ -75,7 +75,8 @@ void TokenList::deallocateTokens()
 unsigned int TokenList::appendFileIfNew(const std::string &fileName)
 {
     // Has this file been tokenized already?
-    for (std::size_t i = 0; i < _files.size(); ++i)
+    const unsigned int filesize = _files.size();
+    for (std::size_t i = 0; i < filesize; ++i)
         if (Path::sameFileName(_files[i], fileName))
             return (unsigned int)i;
 
@@ -280,7 +281,8 @@ void TokenList::createTokens(const simplecpp::TokenList *tokenList)
     }
 
     if (_settings && _settings->relativePaths) {
-        for (std::size_t i = 0; i < _files.size(); i++)
+		const unsigned int filesize = _files.size();
+        for (std::size_t i = 0; i < filesize; i++)
             _files[i] = Path::getRelativePath(_files[i], _settings->basePaths);
     }
 
@@ -295,7 +297,8 @@ unsigned long long TokenList::calculateChecksum() const
     for (const Token* tok = front(); tok; tok = tok->next()) {
         const unsigned int subchecksum1 = tok->flags() + tok->varId() + tok->tokType();
         unsigned int subchecksum2 = 0;
-        for (std::size_t i = 0; i < tok->str().size(); i++)
+        const unsigned tokStrSize = tok->str().size();
+        for (std::size_t i = 0; i < tokStrSize; i++)
             subchecksum2 += (unsigned int)tok->str()[i];
         if (!tok->originalName().empty()) {
             for (std::size_t i = 0; i < tok->originalName().size(); i++)
