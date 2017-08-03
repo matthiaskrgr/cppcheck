@@ -1,14 +1,30 @@
+contains(SRCDIR, build) {
+    LIBDIR = build
+    if(VERIFY) {
+        message("Using matchcompiler in verify mode")
+        system(cd ../ ; python tools/matchcompiler.py --verify)
+    } else {
+        message("Using matchcompiler in default mode")
+        system(cd ../ ; python tools/matchcompiler.py)
+    }
+} else {
+    LIBDIR = lib
+}
+
+message("libdir is: $$LIBDIR")
 TEMPLATE = app
 TARGET = cppcheck-gui
 CONFIG += warn_on debug
 DEPENDPATH += . \
-    ../lib
+    ../LIBDIR
 INCLUDEPATH += . \
-    ../lib
+    ../LIBDIR
 greaterThan(QT_MAJOR_VERSION, 4) {
     QT += widgets # In Qt 5 widgets are in separate module
     QT += printsupport # In Qt 5 QPrinter/QPrintDialog are in separate module
 }
+
+
 
 contains(LINKCORE, [yY][eE][sS]) {
     LIBS += -l../bin/cppcheck-core
@@ -80,7 +96,7 @@ CONFIG += embed_manifest_exe
 
 contains(LINKCORE, [yY][eE][sS]) {
 } else {
-    BASEPATH = ../lib/
+    BASEPATH = ../LIBDIR/
     include($$PWD/../lib/lib.pri)
 }
 
@@ -171,3 +187,5 @@ contains(QMAKE_CC, gcc) {
 contains(QMAKE_CXX, clang++) {
     QMAKE_CXXFLAGS += -std=c++11
 }
+
+
