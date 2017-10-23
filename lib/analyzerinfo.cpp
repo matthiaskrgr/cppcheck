@@ -30,7 +30,7 @@ AnalyzerInformation::~AnalyzerInformation()
 {
     close();
 }
-
+}
 static std::string getFilename(const std::string &fullpath)
 {
     std::string::size_type pos1 = fullpath.find_last_of("/\\");
