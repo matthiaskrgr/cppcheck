@@ -50,7 +50,7 @@ script:
 # check if dmake needs to be rerun but if yes, don't fail the build but notify us.
 # to update dmake: "make dmake; ./dmake; and commit
   - echo "If the following commmand fails, run 'make dmake; make run-dmake' and commit the resulting change."
-  - if [[ "$CHECK_MAKEFILE_REGEN" == "true ]]; then make -s dmake; make -s run-dmake ; git diff --exit-code; exit; fi
+  - if [[ "$CHECK_MAKEFILE_REGEN" == "true" ]]; then make -s dmake; make -s run-dmake ; git diff --exit-code; exit; fi
 # check with TEST_MATHLIB_VALUE enabled
   - touch lib/mathlib.cpp test/testmathlib.cpp
   - echo $CXXFLAGS
