@@ -297,6 +297,10 @@ ifdef CFGDIR
 	install -m 644 cfg/* ${DESTDIR}${CFGDIR}
 endif
 
+
+
+
+
 # Validation of library files:
 ConfigFiles := $(wildcard cfg/*.cfg)
 ConfigFilesCHECKED := $(patsubst %.cfg,%.checked,$(ConfigFiles))
