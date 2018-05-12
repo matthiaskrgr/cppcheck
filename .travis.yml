@@ -1,7 +1,10 @@
 language: cpp
 dist: trusty
 sudo: required
-cache: ccache
+
+# use ccache to cache compiler object files
+cache:
+  - ccache: true
 
 compiler:
   - gcc
@@ -20,6 +23,8 @@ env:
     - SRCDIR=build CHECK_CLANG=yes VERIFY=1
     - SRCDIR=build CHECK_LLVM=yes VERIFY=1
     - CHECK_MAKEFILE_REGEN=true
+
+
 
 matrix:
 # do notify immediately about it when a job of a build fails.
