@@ -212,6 +212,7 @@ bool Tokenizer::duplicateTypedef(Token **tokPtr, const Token *name, const Token 
     // check for an end of definition
     const Token * tok = *tokPtr;
     if (tok && Token::Match(tok->next(), ";|,|[|=|)|>|(|{")) {
+		
         const Token * end = tok->next();
 
         if (end->str() == "[") {
