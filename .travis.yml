@@ -105,7 +105,7 @@ matrix:
     - name: "check clang sources with cppcheck"
       compiler: clang
       script:
-        - wget "https://github.com/llvm-mirror/clang/archive/a1f8bd3778cc5a53236a53500c6ab184e945eefa.zip" & SRCDIR=build VERIFY=1 make -j 2 & wait
+        - wget "https://github.com/llvm-mirror/clang/archive/a1f8bd3778cc5a53236a53500c6ab184e945eefa.zip" & SRCDIR=build VERIFY=1 CXXFLAGS="-O3 -g3 -fsanitize=address -march=native" make -j 2 & wait
         - unzip a1f8bd3778cc5a53236a53500c6ab184e945eefa.zip > /dev/null
         - touch /tmp/clang.cppcheck
         - cd ./clang-a1f8bd3778cc5a53236a53500c6ab184e945eefa
@@ -118,7 +118,7 @@ matrix:
     - name: "check llvm sources with cppcheck"
       compiler: clang
       script:
-        - wget "https://github.com/llvm-mirror/llvm/archive/6fa6453210fa34c1c28bd73a431d04734549f0d6.zip"  & SRCDIR=build VERIFY=1 make -j 2 & wait
+        - wget "https://github.com/llvm-mirror/llvm/archive/6fa6453210fa34c1c28bd73a431d04734549f0d6.zip"  & SRCDIR=build VERIFY=1 CXXFLAGS="-O3 -g3 -fsanitize=address -march=native" make -j 2 & wait
         - unzip 6fa6453210fa34c1c28bd73a431d04734549f0d6.zip > /dev/null
         - touch /tmp/llvm.cppcheck
         - cd ./llvm-6fa6453210fa34c1c28bd73a431d04734549f0d6
